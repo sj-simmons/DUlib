@@ -81,13 +81,13 @@ page; instead you can do this.
   and see all the documentation for `du.lib` (which is where basic functions like
   `train` live).  Similarly you can type `pydoc3 du.wordlib` if you have version 0.2
   installed.
-* In the Python interpreter you can get help on just the `train` function:
-  ``` python
-  >>> from du.lib import train
-  >>> help(train)
-  Help on function train in module du.lib:
 
-  train(model, crit, feats, targs, feats_lengths=None, lr=0.1, mo=0.0, bs=-1, eps=10, print_init=7, print_last=17, verb=3, device='cpu')
+  To see the documentation for, say, just the `train` function:
+  ```
+  > pydoc3 du.lib.train
+  Help on function train in du.lib:
+
+  du.lib.train = train(model, crit, feats, targs, **kwargs)
       Return the model trained with the given hyper-parameters.
 
       Args:
@@ -101,8 +101,8 @@ page; instead you can do this.
 
       Kwargs:
         feats_lengths (torch.LongTensor): One-dimensional tensor holding
-            the lengths of sequences in `feats`. This relevant only for
-            variable-length (i.e,, sequence) features. Default: None.
+            the lengths of sequences in `feats`. Likely, relevant only
+            for variable-length (i.e,, sequence) features. Default: None.
         lr (float): The learning rate during training. Default: 0.1.
         mo (float): The momentum during training. Default: 0.0.
         bs (int): The mini-batch size where -1 means (full) batch gradient
@@ -118,6 +118,11 @@ page; instead you can do this.
 
       Returns:
         nn.Module. The trained model.
+  ```
+* If you are in the Python interpreter, you can get help on the `train` function:
+  ``` python
+  >>> from du.lib import train
+  >>> help(train)
   ```
 ---
 
