@@ -2,15 +2,12 @@
 '''NLP utilities and recurrent net classes, per the DL@DU project.
 
 Notes:
-  - Run this file at the commandline to quickly obtain the signatures
-    of the local functions defined herein:
+  - You can run this file at the commandline to quickly obtain the
+    signatures of the local functions defined herein:
         python3 wordlib.py
   - Also, you can type check these functions with:
         mypy worldlib.py
-  - For more detailed usage information try:
-        pydoc3 wordlib
-  - Or, if you are in the Python interpreter, just type:
-       _>>> help(wordlib)
+Todo:
   - Consider calling function like e.g. line2chars something like line_to_chars
     and then keep using token2index etc for a dict in actual programs.
   - also change make_tokens to line_to_tokens  and make_token to tokenize, so
