@@ -15,8 +15,33 @@
 **0.2** (November 6, 2019)
   * added [wordlib.py](du/wordlib.py) for NLP applications.
   * the functionality and functions (like `train`) in the original library
-    have been enhanced and tweaked.  Some refactoring of your code might be
-    required to transition from version 0.1 to 0.2.
+    have been enhanced and tweaked.  Slight refactoring of your code might be
+    required when transition from version 0.1 to 0.2. Namely:
+    * If you were importing `device` in version 0.1 and doing something like
+      ``` python
+      print('running on', device)
+      ```
+      you would, in version 0.2, do this:
+      ``` python
+      from du.lib import get_device
+      ...
+      device = get_device()
+      print('running on', device)
+      ```
+    * If you were using keyworded arguments when calling `train` in version 0.1
+      with a line similar to this:
+      ``` python
+      train(model, ..., features = xss, targets = yss, ... , momemtum = args.mo, ...)
+      ```
+      then, in version 0.2, you would use 
+      ``` python
+      from du.lib import train
+      ...
+      train(model, feats = xss, targs = yss, ... , mo = args.mo, ...)
+      ```
+      In other words, some of the keywords for arguments passed to `train` have
+      been shortened.
+    * All of the code in the DL@DU projects has been refactored to version 0.2.
   * Quick install: `pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.2`
 
 ---
@@ -56,6 +81,44 @@ page; instead you can do this.
   and see all the documentation for `du.lib` (which is where basic functions like
   `train` live).  Similarly you can type `pydoc3 du.wordlib` if you have version 0.2
   installed.
+* In the Python interpreter you can get help on just the `train` function:
+  ``` python
+  >>> from du.lib import train
+  >>> help(train)
+  Help on function train in module du.lib:
+
+  train(model, crit, feats, targs, feats_lengths=None, lr=0.1, mo=0.0, bs=-1, eps=10, print_init=7, print_last=17, verb=3, device='cpu')
+      Return the model trained with the given hyper-parameters.
+
+      Args:
+        model (nn.Module): The instance of nn.Module to be trained.
+        crit (nn.modules.loss): The loss function to be used for training.
+        feats (torch.Tensor): The training data features (inputs); must
+            be a tensor of dimension at least two with the first dimension
+            indexing all of the example features for the training data.
+        targs (torch.Tensor): The training data outputs; must be a tensor
+            with the first dimension indexing the training targets.
+
+      Kwargs:
+        feats_lengths (torch.LongTensor): One-dimensional tensor holding
+            the lengths of sequences in `feats`. This relevant only for
+            variable-length (i.e,, sequence) features. Default: None.
+        lr (float): The learning rate during training. Default: 0.1.
+        mo (float): The momentum during training. Default: 0.0.
+        bs (int): The mini-batch size where -1 means (full) batch gradient
+            descent. Default: -1.
+        eps (int): The number of epochs to train over. Default: 10.
+        print_init (int): The number of loss lines to print initially when
+            training (put -1 here for normal printing). Default: 7.
+        print_last (int): The number of loss lines to print lastly when
+            training.  Default: 17.
+        verb (int): Set the verbosity to 0 for no printing while training.
+            Default: 3.
+        device (str): The device to run on. Default: 'cpu'.
+
+      Returns:
+        nn.Module. The trained model.
+  ```
 ---
 
 #### Installation
