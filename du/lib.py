@@ -2,7 +2,6 @@
 '''Core functions for working with neural nets.
 
 Todo:
-  - Added device to args for train.  Need to do this for others??
   - Try to catch last saved model or just continue on control-c
     for, well, everything.
     - fix catch_sigint_and_break or remove it. If it is working
@@ -27,16 +26,15 @@ __status__ = 'Development'
 __date__ = '11/6/19'
 
 def get_device(gpu = -1):
-  '''Get device to run on.
+  '''Get the best device to run on.
 
   Args:
-    gpu (int): the gpu to use. Set this to -1 to use the last gpu
-        found if there is a least one gput; set this to any int
-        less than -1 to override using a found gpu and use the cpu.
-        Default -1.
+    gpu (int): The gpu to use. Set this to -1 to use the last gpu
+        found when there is a least one gpu; set this to -2 to
+        override using a found gpu and use the cpu.  Default -1.
 
   Returns:
-    str. A string indicating the device to Torch.
+    str. A string to pass to Torch indicating the best device.
   '''
   if gpu > -2:
     return torch.device( "cuda:{0}".format(
@@ -230,7 +228,8 @@ def cross_validate_train(
     batchsize = -1,   # -1 means batch gradient descent
     spew_init = 7,    # number of loss lines to display initially when training
     spew_end = 17,    # number of loss lines to display lastly when training
-    verbosity = 1     # verbosity 0 means no printing
+    verbosity = 1,     # verbosity 0 means no printing
+    device = 'cpu'
 ):
   '''
   Returns the model (which has been partially -- for one epoch, by default --
@@ -270,14 +269,14 @@ def cross_validate_train(
 
     model = train(
         model = model,
-        criterion = criterion,
-        features = xss_train,
-        targets = yss_train,
-        epochs = epochs,
-        learning_rate = learning_rate,
-        momentum = momentum,
-        batchsize = batchsize,
-        verbosity = verbosity - 1
+        crit = criterion,
+        feats = xss_train,
+        targs = yss_train,
+        eps = epochs,
+        lr = learning_rate,
+        mo = momentum,
+        bs = batchsize,
+        verb = verbosity - 1
     )
 
     if cent_feats: xss_test.sub_(xss_train_means)
@@ -307,7 +306,8 @@ def cross_validate(
     batchsize = -1,   # -1 means (full) batch gradient descent
     spew_init = 7,    # number of loss lines to display initially when training
     spew_end = 17,    # number of loss lines to display lastly when training
-    verbosity = 1     # verbosity 0 means no printing
+    verbosity = 1,     # verbosity 0 means no printing
+    device = 'cpu'
 ):
   import copy
   no_improvement = 0
@@ -339,7 +339,8 @@ def cross_validate(
         learning_rate = learning_rate,
         momentum = momentum,
         batchsize = batchsize,
-        verbosity = verbosity
+        verbosity = verbosity,
+        device = device
     )
 
     total_epochs += k*epochs
