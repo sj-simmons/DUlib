@@ -24,7 +24,7 @@
 #### Installation
 
 First, install the library on your system using `pip3`. To install, for example,
-version 0.1, issue this command at the command prompt:
+version 0.2, issue this command at the command prompt:
 ``` bash
 pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.2
 ```
@@ -55,9 +55,9 @@ to a local repo on your machine:
 ``` bash
 git clone https://github.com/sj-simmons/DUlib.git@v0.2
 ```
-Suppose you clone or fork this repo and modify or add to the code, and you
-want to install (directly from your local repo) the modified libraries to your
-local machine:
+Suppose you clone to a local and modify or add to the code in the libraries, and
+then you want to install (directly from your local repo) the modified libraries
+to your local machine:
 ``` bash
 cd DUlib
 pip3 install -e .
