@@ -101,8 +101,7 @@ def coherent_split(proportion, *args, device = 'cpu'):
   return_args =[item.to(device) for sublist in split_args for item in sublist]
   return tuple(return_args)
 
-def train(model, crit, feats, targs, feats_lengths=None, lr=0.1, mo=0.0, bs=-1,
-    eps=10, print_init=7, print_last=17, verb=3, device='cpu'):
+def train(model, crit, feats, targs, **kwargs):
   '''Return the model trained with the given hyper-parameters.
 
   Args:
@@ -140,6 +139,17 @@ def train(model, crit, feats, targs, feats_lengths=None, lr=0.1, mo=0.0, bs=-1,
   catch_sigint()
   loss_len = 20
   num_examples = len(feats)
+  # fix this in such a way that it checks proper type is passed
+  feats_lengths = kwargs.get('feats_lengths', None)
+  lr = kwargs.get('lr', 0.1)
+  mo = kwargs.get('mo', 0.0)
+  bs = kwargs.get('bs', -1)
+  eps = kwargs.get('eps', 10)
+  print_init = kwargs.get('print_init', 7)
+  print_last = kwargs.get('print_last', 17)
+  verb = kwargs.get('verb', 3)
+  device = kwargs.get('device', 'cpu')
+
   if bs <= 0: bs = num_examples
   if print_init == -1: print_init = eps
 
