@@ -13,8 +13,7 @@
   * Quick install: `pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.1`
 
 **0.2** (November 6, 2019)
-  * added [wordlib.py](https://github.com/sj-simmons/DUlib/blob/version_0_2/du/wordlib.py)
-    for NLP applications.
+  * added [wordlib.py](du/wordlib.py) for NLP applications.
   * the functionality and functions (like `train`) in the original library
     have been enhanced and tweaked.  Some refactoring of your code might be
     required to transition from version 0.1 to 0.2.

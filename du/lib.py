@@ -1,123 +1,215 @@
-'''
-A library collecting functionality that the DL@DU group has implemented.
+#!/usr/bin/env python3
+'''Core functions for working with neural nets.
+
+Todo:
+  - Added device to args for train.  Need to do this for others??
+  - Try to catch last saved model or just continue on control-c
+    for, well, everything.
+    - fix catch_sigint_and_break or remove it. If it is working
+      in bash, check and see how it interacts with interrupt in
+      say IDLE.
+  - Implement stratified sampling at least when splitting out
+    testing data.  Maybe pass the relevant proportions to
+    coherent_split.
+  - add option to train to show progress on training / testing
+    data each epoch.
+  - consider consolidating print_init, print_last into a tuple
+    (called printlines)
+  - then put None for no printing of lines, thereby cleaning up
+    verbosity
 '''
 import torch
 import torch.nn as nn
 
 __author__ = 'Simmons'
-__version__ = '0.1'
+__version__ = '0.2'
 __status__ = 'Development'
-__date__ = "March 2019"
+__date__ = '11/6/19'
 
-# use (the last) gpu if there are gpus, otherwise use the cpu
-device = torch.device("cuda:{0}".format(torch.cuda.device_count()-1)\
-    if torch.cuda.is_available() else "cpu")
+def get_device(gpu = -1):
+  '''Get device to run on.
+
+  Args:
+    gpu (int): the gpu to use. Set this to -1 to use the last gpu
+        found if there is a least one gput; set this to any int
+        less than -1 to override using a found gpu and use the cpu.
+        Default -1.
+
+  Returns:
+    str. A string indicating the device to Torch.
+  '''
+  if gpu > -2:
+    return torch.device( "cuda:{0}".format(
+               (torch.cuda.device_count() + gpu) % torch.cuda.device_count()
+           )) if torch.cuda.is_available() else "cpu"
+  else:
+    return 'cpu'
 
 def center(xss):
-  '''
-  Return xss mean-centered xss w/r to its first dimension. Also returns the
-  means.
+  '''Mean-center.
+
+  :type xss: torch.Tensor
+  :return: Tuple of tensors the first of which is xss mean-centered
+      w/r to the first dimension; the second is a tensor the size of
+      the remaining dimensions that holds the means.
   '''
   means = xss.mean(0)
   return xss.sub_(means), means
 
 def normalize(xss):
-  '''
-  Normalize without dividing by zero.  Returns the xss with columns normalized
-  except that those columns with standard deviation less than a  threshold are
-  left unchanged.  The list of standard deviations with numbers less than the
-  threshold replaced by 1.0 is also returned.
+  '''Normalize.
+
+  Normalizes without dividing by zero.  Returns the xss with columns
+  normalized except that those columns with standard deviation less
+  than a threshold are left unchanged.  The list of standard devs, with
+  numbers less than the threshold replaced by 1.0, is also returned.
   '''
   stdevs = xss.std(0)
   stdevs[stdevs < 1e-7] = 1.0
   return xss.div_(stdevs), stdevs
 
-def train(
-    model,          # the model to be trained
-    criterion,      # the criterion to be used during training
-    features,       # the inputs of the training data
-    targets,        # the outputs of the training data
-    epochs,         # the number of epochs to train over
-    learning_rate,
-    momentum = 0.0,
-    batchsize = -1, # -1 means (full) batch gradient descent
-    spew_init = 7,  # number of loss lines to display initially when training
-    spew_end = 17,  # number of loss lines to display lastly when training
-    verbosity = 3   # verbosity 0 means no printing
-):
-  '''
-  Return the model trained with the given hyper-parameters (for epochs epochs).
-  '''
+def coherent_split(proportion, *args, device = 'cpu'):
+  '''Coherently randomize and split tensors into training and testing
+  tensors along the first dimension.
 
-  assert len(features) == len(targets),\
-      "Number of features must equal number of targets."
+  Args:
+    proportion (float): the proportion to split out.
+    *args (torch.tensor): The tensors to be randomized and split, all
+        of which must have the same length in the first dimension.
+  Returns:
+    Tuple(torch.tensor). A tuple length twice that of `args`, holding,
+        in turn, pairs each tensor in `args` split according to the
+        specified `proportion`, and sent to the specified `device`.
+
+
+  >>> coherent_split(0.6, torch.rand(2,3), torch.rand(3,3))
+  Traceback (most recent call last):
+    ...
+  AssertionError: all tensors must have same size in first dimension
+  >>> xss=torch.rand(3, 2); xss_lengths=torch.rand(3); yss=torch.rand(3, 3)
+  >>> coherent_split(0.6, xss, xss_lengths, yss) # doctest: +SKIP
+  >>> xss = torch.arange(12).view(3,4); yss = torch.arange(3)
+  >>> coherent_split(0.8, xss, yss) # doctest: +SKIP
+  '''
+  assert 0 <= proportion <= 1, "proportion ({}) must be between 0 and 1, "+\
+      "inclusive".format(proportion)
+  len_ = list(map(len, args))
+  assert all(len_[0] == x for x in len_), "all tensors must have same size "+\
+      "in first dimension"
+  indices = torch.randperm(len_[0])
+  rand_args = [tensor.index_select(0, indices) for tensor in args]
+  cutoff = int(proportion * len_[0])
+  split_args = [[tensor[:cutoff], tensor[cutoff:]] for tensor in rand_args]
+  return_args =[item.to(device) for sublist in split_args for item in sublist]
+  return tuple(return_args)
+
+def train(model, crit, feats, targs, feats_lengths=None, lr=0.1, mo=0.0, bs=-1,
+    eps=10, print_init=7, print_last=17, verb=3, device='cpu'):
+  '''Return the model trained with the given hyper-parameters.
+
+  Args:
+    model (nn.Module): The instance of nn.Module to be trained.
+    crit (nn.modules.loss): The loss function to be used for training.
+    feats (torch.Tensor): The training data features (inputs); must
+        be a tensor of dimension at least two with the first dimension
+        indexing all of the example features for the training data.
+    targs (torch.Tensor): The training data outputs; must be a tensor
+        with the first dimension indexing the training targets.
+
+  Kwargs:
+    feats_lengths (torch.LongTensor): One-dimensional tensor holding
+        the lengths of sequences in `feats`. Likely, relevant only
+        for variable-length (i.e,, sequence) features. Default: None.
+    lr (float): The learning rate during training. Default: 0.1.
+    mo (float): The momentum during training. Default: 0.0.
+    bs (int): The mini-batch size where -1 means (full) batch gradient
+        descent. Default: -1.
+    eps (int): The number of epochs to train over. Default: 10.
+    print_init (int): The number of loss lines to print initially when
+        training (put -1 here for normal printing). Default: 7.
+    print_last (int): The number of loss lines to print lastly when
+        training.  Default: 17.
+    verb (int): Set the verbosity to 0 for no printing while training.
+        Default: 3.
+    device (str): The device to run on. Default: 'cpu'.
+
+  Returns:
+    nn.Module. The trained model.
+  '''
+  assert len(feats) == len(targs),\
+      "Number of features ({}) must equal number of targets ({}).".\
+          format(len(feats), len(targs))
   catch_sigint()
   loss_len = 20
-  num_examples = len(features)
-  if batchsize == -1: batchsize = num_examples
+  num_examples = len(feats)
+  if bs <= 0: bs = num_examples
+  if print_init == -1: print_init = eps
 
-  if momentum != 0:
+  if mo > 0.0:
     z_params = []
     for param in model.parameters():
       z_params.append(param.data.clone())
     for param in z_params:
       param.zero_()
 
-  if verbosity > 2:
+  if verb > 2:
     print(model)
 
-  for epoch in range(epochs):
+  if verb > 1:
+    if lr < .005: lr_str = "learning rate: {:.4g}".format(lr)
+    else: lr_str = "learning rate: {:.5g}".format(lr)
+    if mo < .005: mo_str = ", momentum: {:.4g}".format(mo)
+    else: mo_str = ", momentum: {:.5g}".format(mo)
+    print(lr_str + mo_str + ", batchsize:", bs)
 
+  for epoch in range(eps):
     accum_loss = 0
-    indices = torch.randperm(len(features)).to(device)
+    indices = torch.randperm(len(feats)).to(device)
 
-    for idx in range(0, num_examples, batchsize):
+    for idx in range(0, num_examples, bs):
+      current_indices = indices[idx: idx + bs]
 
-      current_indices = indices[idx: idx + batchsize]
-      loss = criterion(
-          model(features.index_select(0, current_indices)),
-          targets.index_select(0, current_indices)
-      )
-
+      if isinstance(feats_lengths, torch.Tensor):
+        loss = crit(
+            model(
+                feats.index_select(0, current_indices),
+                feats_lengths.index_select(0, current_indices)
+            ),
+            targs.index_select(0, current_indices)
+        )
+      else:
+        loss = crit(
+            model(feats.index_select(0, current_indices)),
+            targs.index_select(0, current_indices)
+        )
       accum_loss += loss.item()
 
       model.zero_grad()
       loss.backward()
 
-      if momentum != 0:
+      if mo > 0.0:
         for i, (z_param, param) in enumerate(zip(z_params, model.parameters())):
-          z_params[i] = momentum * z_param + param.grad.data
-          param.data.sub_(z_params[i] * learning_rate)
+          z_params[i] = mo * z_param + param.grad.data
+          param.data.sub_(z_params[i] * lr)
       else:
         for param in model.parameters():
-          param.data.sub_(learning_rate * param.grad.data)
+          param.data.sub_(lr * param.grad.data)
 
-    if verbosity > 0:
-      base_str = "epoch {0}/{1}; loss ".format(epoch+1, epochs)
-      loss_str = "{0:<10g}".format(accum_loss*batchsize/num_examples)
-      if epochs < 20 or epoch < spew_init:
+    if verb > 0:
+      base_str = "epoch {0}/{1}; loss ".format(epoch+1, eps)
+      loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
+      if eps < 20 or epoch < print_init:
         print(base_str + loss_str)
-      elif epoch > epochs - spew_end:
+      elif epoch > eps - print_last:
         print(end='\b'*len(base_str))
         print(base_str + loss_str)
-      elif epoch == spew_init:
+      elif epoch == print_init:
         print("...")
       else:
         print(' '*loss_len, end='\b'*loss_len)
         print(end='\b'*len(base_str))
         loss_len = len(loss_str)
         print(base_str+loss_str, end='\b'*loss_len, flush=True)
-
-  if verbosity > 1:
-    if learning_rate < .005:
-      learning_rate_str = "learning rate: {:.4g}".format(learning_rate)
-    else:
-      learning_rate_str = "learning rate: {:.5g}".format(learning_rate)
-    if momentum < .005:
-      momentum_str = " momentum: {:.4g}".format(momentum)
-    else:
-      momentum_str = " momentum: {:.5g}".format(momentum)
-    print(learning_rate_str, momentum_str, " batchsize:", batchsize)
 
   return model
 
@@ -128,7 +220,7 @@ def cross_validate_train(
     norm_feats=True,  # whether or not to normalize the feature
     cent_targs=True,  # whether or not to mean-center the targets
     norm_targs=True,  # whether or not to normalize the targets
-    model = None,     # the model to be trained
+    model=None,       # the model to be trained
     criterion=None,   # the criterion to be used during training
     features=None,    # the inputs of the training data
     targets=None,     # the outputs of the training data
@@ -273,10 +365,10 @@ def cross_validate(
   return best_model, best_valids.mean()
 
 def optimize_ols(
-    features,
-    with_momentum = True,
-    warn = True,
-    sparse = False
+    features: torch.Tensor,
+    with_momentum: bool = True,
+    warn: bool = True,
+    sparse: bool = False
 ):
   '''
   This only applies to ordinary least squares regression -- in terms of a neural
@@ -287,6 +379,7 @@ def optimize_ols(
   from scipy.linalg import eigh
   from scipy.sparse.linalg import eigsh
   from scipy.sparse import issparse
+
 
   problematic = False
   print("optimizing ... ", end='')
@@ -340,51 +433,70 @@ def confusion_matrix(
     classes,    # a 1d tensor holding the classes; e.g. torch.arange(10)
     return_error = False,
     show = False,
+    class2name = None,
 ):
-  '''
-  Compute the confusion matrix with respect to given yhatss_prob and targets.
+  '''Compute the confusion matrix.
+
+  Compute the confusion matrix with respect to given yhatss_prob and
+  targets.  The columns in the returned tensor or in the diplayed
+  table correspond to the actual (correct) target class and the rows
+  are the class predicted by model.
 
   Note: the yhats_prob argument should be roughly model(xss), i.e., (a mini-
   batch of) probability distributions representing the prediction of a model.
   The argument yss holds the corresponding correct values.
 
-  The columns in the returned tensor or in the diplayed table correspond
-  to the actual (correct) target class and the rows are the class predicted
-  by model.
-
   Returns total ratio (a number between 0 and 1) correctly by the model or
   optional one minus that ratio; i.e., the error rate.
 
   Optionally prints the confusion matrix with percentages.
+
+  Args:
+    class2name (Dict[int, str]): A dictionary mapping each numerical
+        class to its classname.
   '''
   assert len(yhatss_prob) == len(yss),\
-      "Number of features must equal number of targets."
+      'Number of features ({}) must equal number of targets ({}).'\
+          .format(len(yhatss_prob), len(yss))
   assert classes.dim() == 1,\
-      "The classes argument should be a 1-dimensional tensor."
-
+      'The classes argument should be a 1-dimensional tensor.'
   cm_counts = torch.zeros(len(classes), len(classes))
-
   for yhats_prob, ys in zip(yhatss_prob, yss):
     cm_counts[torch.argmax(yhats_prob).item(), ys] += 1
 
   cm_pcts = cm_counts/len(yss)
+  counts = torch.bincount(yss)
 
   if show:
-    cell_length = 6
-    #fix this formatting and below, so generalizes to other len(classes)
+    cell_length = 5
     print(((cell_length*len(classes))//2+1)*' '+"Actual")
     print('     ',end='')
     for class_ in classes:
       print('{:{width}}'.format(class_.item(), width=cell_length),end='')
-    print("\n     ------------------------------------------------------------")
+    if class2name: print(' '*len(list(class2name.values())[0])+'   (correct)')
+    else: print(' (correct)')
+    print('     '+'-'*cell_length*len(classes))
     for i, row in enumerate(cm_pcts):
-      print(' ',i,end=' |')
+      print(str(i).rjust(3),end=' |')
       for entry in row:
         if entry == 0.0:
           print((cell_length-1)*' '+'0', end='')
+        elif entry == 100.0:
+          print((cell_length-3)*' '+'100', end='')
         else:
-          print('{:{width}.1f}'.format(100*entry, width=cell_length), end='')
-      print()
+          string = '{:.1f}'.format(100*entry).lstrip('0')
+          print(' '*(cell_length-len(string))+string, end='')
+          #string = '{:{width}.1f}'.format(100*entry, width=cell_length)
+          #print(string)
+          #print(type(string))
+          #quit()
+          #print(string.lstrip('0'), end='')
+      n_examples = cm_counts[:,i].sum()
+      pct = 100*(cm_counts[i,i]/n_examples)
+      if class2name:
+        print('  {} ({:.1f}% of {})'.format(class2name[i],pct,int(counts[i])))
+      else:
+        print(' ({:.1f}% of {})'.format(pct, int(counts[i])))
 
   if return_error:
     return 1-torch.trace(cm_pcts).item()
@@ -393,7 +505,7 @@ def confusion_matrix(
 
 def r_squared(yhatss, yss, return_error = False ):
   '''
-  Returns the the coefficient of determination of two 2d tensors (where the
+  Returns the coefficient of determination of two 2d tensors (where the
   first dimension indexes the examples) of predicted outputs, yhatss, and
   actual outputs, yss  .
 
@@ -409,10 +521,65 @@ def r_squared(yhatss, yss, return_error = False ):
   else:
     return 1.0-(SS_E/SS_T).item()
 
+def stand_args(desc='', lr=0.1, mo=0, bs=1, eps=20, seed=False, pt=1, gpu = -1):
+  '''Set standard hyper-parameters.
+
+  Setup argparse switches, etc. for standard hyper-paramenters, and
+  return the parser object so the calling program can add more switches.
+
+  Args:
+    desc (str): A short description of what the program does. Default: ''
+    lr (float): The learning rate.
+  '''
+  import argparse
+  parser = argparse.ArgumentParser( description = desc, formatter_class =\
+      argparse.ArgumentDefaultsHelpFormatter)
+  p = parser.add_argument
+  p('-lr', type=float, help='learning rate', default=lr)
+  p('-mo', type=float, help='momentum', default=mo)
+  hstr='the mini-batch size; set to -1 for (full) batch gradient descent'
+  p('-bs', type=int, help=hstr, default=bs)
+  p('-eps', type=int, help='num epochs to train', default=eps)
+  hstr="toggle setting random seed"
+  if seed:
+    p('-seed', dest='seed', help=hstr, action='store_false')
+  else:
+    p('-seed', dest='seed', help=hstr, action='store_true')
+  p('-ser', help='serialize the trained model', action='store_true')
+  p('-pt', type=float, help='proportion to train on', default=pt)
+  hstr='which gpu, if more than one is found; -1 for last gpu found; -2 for cpu'
+  p('-gpu', type=int, help=hstr, default=gpu)
+  return  parser
+
 def catch_sigint():
+  ''' Catch keyboard interrupt signal.  '''
   import signal
   def keyboardInterruptHandler(signal, frame):
     #print("KeyboardInterrupt (ID: {}) caught. Cleaning up...".format(signal))
     print("\n")
     exit(0)
   signal.signal(signal.SIGINT, keyboardInterruptHandler)
+
+def catch_sigint_and_break():
+  ''' Catch keyboard interrupt signal and break out of a `for` or
+  `while` loop.
+  '''
+  import signal
+  def keyboardInterruptHandler(signal, frame):
+    global interrupted
+    interrupted = True
+  signal.signal(signal.SIGINT, keyboardInterruptHandler)
+
+if __name__ == '__main__':
+  import doctest
+  failures, _ = doctest.testmod()
+
+  if failures == 0:
+    # Below prints only the signature of locally defined functions.
+    from inspect import signature
+    local_functions = [(name,ob) for (name, ob) in sorted(locals().items())\
+        if callable(ob) and ob.__module__ == __name__]
+    for name, ob in local_functions:
+      print(name,'\n  ',signature(ob))
+
+
