@@ -21,6 +21,43 @@
 
 ---
 
+#### Documentation
+
+Perusing this repo will only show you the code for the most recent release
+version (unless you try to dig through previous commits).  So if you are interested
+in the functionality of say version 0.1, Then don't click on the code on this web
+page; instead you can do this.
+* Install version 0.1 on your systems as above.
+* Then type `pydoc3 du` at the command line.  You'll see something like this:
+  ``` bash
+  Help on package du:
+
+  NAME
+      du
+
+  PACKAGE CONTENTS
+      lib
+      wordlib
+
+  VERSION
+      0.2
+
+  FILE
+      /home/ssimmons1331/Insync/Code/DUlib/du/__init__.py
+  ```
+  which tells you what modules the `du` package that you have installed contains.
+  Note that Simmons has version 0.2 installed which consists of 2 modules: one called
+  `lib` and the other called `wordlib`.
+
+  Then you can type, for example:
+  ``` bash
+  pydoc3 du.lib
+  ```
+  and see all the documentation for `du.lib` (which is where basic functions like
+  `train` live).  Similarly you can type `pydoc3 du.wordlib` if you have version 0.2
+  installed.
+---
+
 #### Installation
 
 First, install the library on your system using `pip3`. To install, for example,
