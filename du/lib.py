@@ -21,17 +21,17 @@ import torch
 import torch.nn as nn
 
 __author__ = 'Simmons'
-__version__ = '0.2'
+__version__ = '0.3dev'
 __status__ = 'Development'
-__date__ = '11/6/19'
+__date__ = '__'
 
 def get_device(gpu = -1):
   '''Get the best device to run on.
 
   Args:
-    gpu (int): The gpu to use. Set this to -1 to use the last gpu
-        found when there is a least one gpu; set this to -2 to
-        override using a found gpu and use the cpu.  Default -1.
+    gpu (int): The gpu to use. Set to -1 to use the last gpu
+        found when there is a least one gpu; set to -2 to over-
+        ride using a found gpu and use the cpu. Default -1.
 
   Returns:
     str. A string to pass to Torch indicating the best device.
@@ -43,62 +43,106 @@ def get_device(gpu = -1):
   else:
     return 'cpu'
 
-def center(xss):
-  '''Mean-center.
+def center(xss, new_center = None):
+  '''(Mean, by default) center a tensor.
 
-  :type xss: torch.Tensor
-  :return: Tuple of tensors the first of which is xss mean-centered
-      w/r to the first dimension; the second is a tensor the size of
-      the remaining dimensions that holds the means.
+  With this you can translate the data to anywhere. If the
+  ond argument is None, then this mean-centers the data w/r
+  to the first dimension.
+
+  >>> xss = torch.arange(12.).view(3,4)
+  >>> center(xss)
+  (tensor([[-4., -4., -4., -4.],
+          [ 0.,  0.,  0.,  0.],
+          [ 4.,  4.,  4.,  4.]]), tensor([4., 5., 6., 7.]))
+  >>> xss_, xss_means =  center(xss)
+  >>> xss__, _ = center(xss_, -xss_means)
+  >>> int(torch.all(torch.eq(xss, xss__)).item())
+  1
+
+  Args:
+    xss (torch.Tensor) The tensor to center.
+
+    new_center(torch.Tensor) A tensor the number of dimensions
+        of which is one less than that of `xss` and whose size
+        is in fact `torch.Size([d_1,...,d_n])` where `xss` has
+        `torch.Size([d_0, d_1,...,d_n])`.  The default `None`
+        is equivalent to `new_center` being the zero tensor.
+        Default: None.
+
+  Returns:
+    (torch.Tensor, torch.Tensor). A tuple of tensors the first
+        of which is xss centered with respect to the first dim-
+        ension; the second is a tensor the size of the remain-
+        ing dimensions that holds the means.
   '''
-  means = xss.mean(0)
-  return xss.sub_(means), means
+  # assert ... check that center is right dim.
+  if isinstance(new_center, torch.Tensor):
+    xss_means = xss.mean(0)
+    new_xss = xss.sub_(new_center)
+  else:
+    xss_means = xss.mean(0)
+    new_xss = xss.sub_(xss_means)
+  return new_xss, xss_means
 
 def normalize(xss):
-  '''Normalize.
+  '''Normalize without dividing by zero.
 
-  Normalizes without dividing by zero.  Returns the xss with columns
-  normalized except that those columns with standard deviation less
-  than a threshold are left unchanged.  The list of standard devs, with
-  numbers less than the threshold replaced by 1.0, is also returned.
+  Args:
+    xss (torch.Tensor)
+
+  Returns:
+    (torch.Tensor, torch.Tensor). A tuple of tensors the first of
+        which is xss normalized with respect to the first dimen-
+        sion, except that those columns with st. dev. less than
+        threshold are left unchanged. The list of standard devs,
+        with numbers less than the threshold replaced by 1.0, is
+        returned as the second tensor in the tuple.
   '''
   stdevs = xss.std(0)
   stdevs[stdevs < 1e-7] = 1.0
   return xss.div_(stdevs), stdevs
 
 def coherent_split(proportion, *args, device = 'cpu'):
-  '''Coherently randomize and split tensors into training and testing
-  tensors along the first dimension.
+  '''Coherently randomize and split tensors into training and
+  testing tensors.
+
+  This splits with respect to the first dimension.
 
   Args:
-    proportion (float): the proportion to split out.
-    *args (torch.tensor): The tensors to be randomized and split, all
-        of which must have the same length in the first dimension.
+    proportion (float): The proportion to split out.
+
+    *args (torch.tensor): The tensors to be randomized and split,
+        all of which must have the same length in the first dim-
+        ension.
+
+    device (str): The device to train on.
+
   Returns:
-    Tuple(torch.tensor). A tuple length twice that of `args`, holding,
-        in turn, pairs each tensor in `args` split according to the
-        specified `proportion`, and sent to the specified `device`.
+    Tuple(torch.tensor). A tuple of length twice that of `args`,
+        holding, in turn, pairs each of which is a tensor in
+        `args` split according to the specified `proportion`,
+        and sent to the specified `device`.
 
-
-  >>> coherent_split(0.6, torch.rand(2,3), torch.rand(3,3))
+  >>> from torch import rand
+  >>> coherent_split(0.6, rand(2,3), rand(3,3))
   Traceback (most recent call last):
     ...
-  AssertionError: all tensors must have same size in first dimension
-  >>> xss=torch.rand(3, 2); xss_lengths=torch.rand(3); yss=torch.rand(3, 3)
-  >>> coherent_split(0.6, xss, xss_lengths, yss) # doctest: +SKIP
-  >>> xss = torch.arange(12).view(3,4); yss = torch.arange(3)
-  >>> coherent_split(0.8, xss, yss) # doctest: +SKIP
+  AssertionError: all tensors must have same size in first dim
+  >>> xss=rand(3, 2); xss_lengths=rand(3); yss=rand(3, 3)
+  >>> len(coherent_split(0.6, xss, xss_lengths, yss))
+  6
   '''
   assert 0 <= proportion <= 1, "proportion ({}) must be between 0 and 1, "+\
       "inclusive".format(proportion)
   len_ = list(map(len, args))
   assert all(len_[0] == x for x in len_), "all tensors must have same size "+\
-      "in first dimension"
-  indices = torch.randperm(len_[0])
-  rand_args = [tensor.index_select(0, indices) for tensor in args]
+      "in first dim"
+  indices = torch.randperm(len_[0]).to(device)
+  rand_args = [tensor.to(device).index_select(0, indices) for tensor in args]
   cutoff = int(proportion * len_[0])
   split_args = [[tensor[:cutoff], tensor[cutoff:]] for tensor in rand_args]
-  return_args =[item.to(device) for sublist in split_args for item in sublist]
+  return_args =[item for sublist in split_args for item in sublist]
   return tuple(return_args)
 
 def train(model, crit, feats, targs, **kwargs):
@@ -497,11 +541,6 @@ def confusion_matrix(
         else:
           string = '{:.1f}'.format(100*entry).lstrip('0')
           print(' '*(cell_length-len(string))+string, end='')
-          #string = '{:{width}.1f}'.format(100*entry, width=cell_length)
-          #print(string)
-          #print(type(string))
-          #quit()
-          #print(string.lstrip('0'), end='')
       n_examples = cm_counts[:,i].sum()
       pct = 100*(cm_counts[i,i]/n_examples)
       if class2name:
