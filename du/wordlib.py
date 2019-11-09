@@ -23,9 +23,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 __author__ = 'Simmons'
-__version__ = '0.2'
+__version__ = '0.3dev'
 __status__ = 'Development'
-__date__ = '11/6/19'
+__date__ = '___'
 
 # define some type aliases
 Ngram = Tuple[List[str], str]
