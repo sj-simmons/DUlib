@@ -25,36 +25,38 @@ import torch.nn.functional as F
 __author__ = 'Simmons'
 __version__ = '0.3dev'
 __status__ = 'Development'
-__date__ = '___'
+__date__ = '11/10/19'
 
 # define some type aliases
 Ngram = Tuple[List[str], str]
 Tensor = torch.Tensor
 LongTensor = torch.LongTensor
 
-def file2lines(file_name: str) -> List[str]:
+def file_to_lines(file_name: str) -> List[str]:
   '''Read in lines of a file to a list.
 
   Args:
     file_name (list): The name of the file to read.
 
   Returns:
-    List[str]. A list whose items are the lines of the file.
+    List[str]. A list whose items are the lines of the file
+        that was read..
   '''
   with open(file_name) as f:
     corpus = f.read()
   return [line for line in corpus.split('\n') if line != '']
 
-def dir2lines(dir_name: str, small: int = -1) -> Dict[str, List]:
-  '''For each file (with extension '.txt') in a directory, read
-  its lines into a list.
+def dir_to_lines(dir_name: str, small: int = -1) -> Dict[str, List]:
+  '''For each file (with extension '.txt') in a directory,
+  read its lines into a list.
 
   Args:
     small (int): Read only this many lines from each file.
 
   Returns:
     Dict[str, List[str]]. A dict of the lists indexed by the
-        filename bases.
+        filename bases with values the the lines in that file
+        in the form of a list of strings..
   '''
   d = {}
   for filename in glob.glob(dir_name+'/*.txt'):
@@ -63,11 +65,18 @@ def dir2lines(dir_name: str, small: int = -1) -> Dict[str, List]:
   return d
 
 def invertListDict(d: Dict[Any, List[Any]]) -> Dict[Any, Any]:
-  '''Given a dict with values that are lists, return a dict whose
-  keys are the elements of those lists and values the apropriate key.
+  '''Invert a dict whose values are lists.
+
+  Args:
+    d (Dict[Any, List[Any]]). The dict to be inverted.
+
+  Returns:
+    Dict[Any, Any]: The dict whose keys are the elements of
+    lists that are values of `d` and whose values are the
+    apropriate key.
 
   >>> d = {'one': [1.2, 1.34], 'two': [2.0, 2.5]}
-  >>> d_inverted = {1.2: 'one', 1.34: 'one', 2.0: 'two', 2.5: 'two'}
+  >>> d_inverted={1.2:'one', 1.34:'one', 2.0:'two', 2.5:'two'}
   >>> invertListDict(d) == d_inverted
   True
   '''
@@ -76,13 +85,23 @@ def invertListDict(d: Dict[Any, List[Any]]) -> Dict[Any, Any]:
 def make_token(word: str) -> str:
   '''Return the token for a word.
 
+  Args:
+    word (str): The word to tokenize.
+
+  Returns:
+    (str). The tokenized word.
+
   >>> make_token("You're,")
   "you're"
   '''
   return word.strip(punctuation).lower()
 
 def make_tokens(line: str) -> List[str]:
-  '''Split line on whitespace and return the resulting list of tokens.
+  '''Split line on whitespace and return the resulting list
+  of tokens.
+
+  Args:
+    line (str):
 
   :rtype: List[str]
 
@@ -94,7 +113,7 @@ def make_tokens(line: str) -> List[str]:
   tokens = [make_token(s) for s in line.split()]
   return [token for token in tokens if token != '']
 
-def line2tokens(lst: List[str]) -> List[str]:
+def line_to_tokens(lst: List[str]) -> List[str]:
   return [make_tokens(item) for item in lst]
 
 def make_token2index(tokens: Union[List[str],List[List[str]]],pad: str = None)\
@@ -119,7 +138,6 @@ def make_token2index(tokens: Union[List[str],List[List[str]]],pad: str = None)\
     return {token: i for i, token in enumerate([pad] + sorted(vocab))}
   else:
     return {token: i for i, token in enumerate(sorted(vocab))}
-
 
 ## Deprecate this in favor of above
 #def make_token2index(lines: List[str], pad: str = None) -> Dict[str, int]:
@@ -162,7 +180,7 @@ def make_ngram(tokens: List[str]) -> Ngram:
   '''
   return tokens[:-1], tokens[-1]
 
-def line2chars(line: str) -> List[str]:
+def line_to_chars(line: str) -> List[str]:
   '''Return list of characters in a line.
 
   Args:
@@ -171,23 +189,23 @@ def line2chars(line: str) -> List[str]:
   Returns:
     List[str]: The list of (lowercased) characters.
 
-  >>> line2chars('Coltrane')
+  >>> line_to_chars('Coltrane')
   ['c', 'o', 'l', 't', 'r', 'a', 'n', 'e']
-  >>> line2chars("L'Hopital")
+  >>> line_to_chars("L'Hopital")
   ['l', "'", 'h', 'o', 'p', 'i', 't', 'a', 'l']
   '''
   return list(line.lower())
 
-def line2ngrams(line: str, n: int) -> List[Ngram]:
+def line_to_ngrams(line: str, n: int) -> List[Ngram]:
   '''Return a list of ngrams for line.
 
   :rtype: List[Ngram] = List[Tuple[List[str], str]]
 
-  >>> line2ngrams('Yi er san si.', 3)
+  >>> line_to_ngrams('Yi er san si.', 3)
   [(['yi', 'er'], 'san'), (['er', 'san'], 'si')]
-  >>> line2ngrams('Yi er san si.', 4)
+  >>> line_to_ngrams('Yi er san si.', 4)
   [(['yi', 'er', 'san'], 'si')]
-  >>> line2ngrams('??', 4)
+  >>> line_to_ngrams('??', 4)
   []
   '''
   tokens = make_tokens(line)
@@ -205,7 +223,7 @@ def make_ngrams(lines: List[str], n: int) -> List[Ngram]:
   >>> make_ngrams(['When it comes', 'will it come in darkness'], 4)
   [(['will', 'it', 'come'], 'in'), (['it', 'come', 'in'], 'darkness')]
   '''
-  line_wise_ngrams = [line2ngrams(line, n) for line in lines]
+  line_wise_ngrams = [line_to_ngrams(line, n) for line in lines]
   return [ngram for line in line_wise_ngrams for ngram in line]
 
 def pad_sequences(seqs: List[List[int]]) -> List[List[int]]:
@@ -232,7 +250,7 @@ def unpad_sequence(seq: List[int], padding_idx: int = 0) -> List[int]:
   '''
   return [entry for entry in seq if entry != 0]
 
-def ngrams2tensor(ngrams: List[Ngram], token2index: Dict[str, int]) \
+def ngrams_to_tensor(ngrams: List[Ngram], token2index: Dict[str, int]) \
       -> Tuple[LongTensor, LongTensor]:
   '''Return tensors xss and yss of contexts and targets, respectively.
 
