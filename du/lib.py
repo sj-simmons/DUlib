@@ -2,20 +2,63 @@
 '''Core functions for working with neural nets.
 
 Todo:
-  - Try to catch last saved model or just continue on control-c
-    for, well, everything.
-    - fix catch_sigint_and_break or remove it. If it is working
-      in bash, check and see how it interacts with interrupt in
-      say IDLE.
+  - Add option to train to show progress on training / testing
+    data each epoch.
+  - Clean up verbosity in cross_validate_train and
+    cross_validate.
   - Implement stratified sampling at least when splitting out
     testing data.  Maybe pass the relevant proportions to
     coherent_split.
-  - add option to train to show progress on training / testing
-    data each epoch.
-  - consider consolidating print_init, print_last into a tuple
-    (called printlines)
-  - then put None for no printing of lines, thereby cleaning up
-    verbosity
+  - Try to catch last saved model or just continue on control-c
+    for, well, everything.
+    - Fix catch_sigint_and_break or remove it. If it is working
+      in bash, check and see how it interacts with interrupt in
+      say IDLE.
+  - Start type checking kwargs whenever everyone is running
+    Python 3.6 or greater.
+  - Allow/implement adaptive momentum and activate train
+    accordingly.
+
+Example usage:
+
+Linear Regression:
+  >>> # generate data:
+  >>> xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)
+  >>> xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
+  >>> xss.size(); yss.size()
+  torch.Size([40, 1])
+  torch.Size([40, 1])
+  >>> # center and normalize
+  >>> xss,xss_means = center(xss); yss,yss_means = center(yss)
+  >>> xss,xss_stds=normalize(xss); yss,yss_stds=normalize(yss)
+  >>> # create model
+  >>> class LinRegModel(nn.Module):
+  ...   def __init__(self):
+  ...     super(LinRegModel, self).__init__()
+  ...     self.layer = nn.Linear(1, 1)
+  ...   def forward(self, xss):
+  ...     return self.layer(xss)
+  >>> model = LinRegModel(); crit = nn.MSELoss()
+  >>> model = train(model, crit, xss, yss, eps = 30, verb = 0)
+
+Linear Regression with learning rate decay:
+  >>> model = LinRegModel()
+  >>> learn_rate = 0.1; epochs = 2000
+  >>> decay_rate = 1-75*learn_rate/epochs
+  >>> print(decay_rate)
+  0.99625
+  >>> adaptives = {'lr': lambda x: decay_rate * x}
+  >>> model = train(model, crit, xss, yss, lr = learn_rate,
+  ...     adapts = adaptives, eps = epochs, verb = 0)
+  >>> params = list(model.parameters())
+  >>> mm = params[0].item(); bb = params[1].item()
+  >>> # map weights back to unnormalized/uncentered data
+  >>> my=yss_means.item(); mx=xss_means.item()
+  >>> sy=yss_stds.item(); sx=xss_stds.item()
+  >>> slope = mm*sy/sx; intercept = my+bb*sy-slope*mx
+  >>> # check slope and intercept of reg. line
+  >>> all([abs(slope-2)<.1, abs(intercept-9)<4])
+  True
 '''
 import torch
 import torch.nn as nn
@@ -23,18 +66,19 @@ import torch.nn as nn
 __author__ = 'Simmons'
 __version__ = '0.3dev'
 __status__ = 'Development'
-__date__ = '__'
+__date__ = '11/10/19'
 
 def get_device(gpu = -1):
   '''Get the best device to run on.
 
   Args:
     gpu (int): The gpu to use. Set to -1 to use the last gpu
-        found when there is a least one gpu; set to -2 to over-
-        ride using a found gpu and use the cpu. Default -1.
+        found when gpus are present; set to -2 to override
+        using a found gpu and use the cpu. Default -1.
 
   Returns:
-    str. A string to pass to Torch indicating the best device.
+    str. A string that can be passed using the  `to` method
+        of Torch tensors and modules.
   '''
   if gpu > -2:
     return torch.device( "cuda:{0}".format(
@@ -62,7 +106,6 @@ def center(xss, new_center = None):
 
   Args:
     xss (torch.Tensor) The tensor to center.
-
     new_center(torch.Tensor) A tensor the number of dimensions
         of which is one less than that of `xss` and whose size
         is in fact `torch.Size([d_1,...,d_n])` where `xss` has
@@ -92,18 +135,18 @@ def normalize(xss):
     xss (torch.Tensor)
 
   Returns:
-    (torch.Tensor, torch.Tensor). A tuple of tensors the first of
-        which is xss normalized with respect to the first dimen-
-        sion, except that those columns with st. dev. less than
-        threshold are left unchanged. The list of standard devs,
-        with numbers less than the threshold replaced by 1.0, is
-        returned as the second tensor in the tuple.
+    (torch.Tensor, torch.Tensor). A tuple of tensors the first
+        of which is xss normalized with respect to the first
+        dimension, except that those columns with standard dev
+        less than a threshold are left unchanged. The list of
+        standard devs, with numbers less than the threshold
+        replaced by 1.0, is the second tensor returned.
   '''
   stdevs = xss.std(0)
   stdevs[stdevs < 1e-7] = 1.0
   return xss.div_(stdevs), stdevs
 
-def coherent_split(proportion, *args, device = 'cpu'):
+def coh_split(proportion, *args, device = 'cpu'):
   '''Coherently randomize and split tensors into training and
   testing tensors.
 
@@ -111,26 +154,25 @@ def coherent_split(proportion, *args, device = 'cpu'):
 
   Args:
     proportion (float): The proportion to split out.
-
-    *args (torch.tensor): The tensors to be randomized and split,
-        all of which must have the same length in the first dim-
-        ension.
-
-    device (str): The device to train on.
+    *args (torch.tensor): The tensors to be randomized and
+        split, which must each have a common length in the
+        first dimension.
+    device (str): The returned tensors have been sent to
+        this device.
 
   Returns:
-    Tuple(torch.tensor). A tuple of length twice that of `args`,
-        holding, in turn, pairs each of which is a tensor in
-        `args` split according to the specified `proportion`,
-        and sent to the specified `device`.
+    Tuple(torch.tensor). A tuple of length twice that of `args`
+        and holding, in turn, pairs, each of which is a tensor
+        in `args` split according to `proportion` and sent to
+        the specified `device`.
 
   >>> from torch import rand
-  >>> coherent_split(0.6, rand(2,3), rand(3,3))
+  >>> coh_split(0.6, rand(2,3), rand(3,3))
   Traceback (most recent call last):
     ...
   AssertionError: all tensors must have same size in first dim
   >>> xss=rand(3, 2); xss_lengths=rand(3); yss=rand(3, 3)
-  >>> len(coherent_split(0.6, xss, xss_lengths, yss))
+  >>> len(coh_split(0.6, xss, xss_lengths, yss))
   6
   '''
   assert 0 <= proportion <= 1, "proportion ({}) must be between 0 and 1, "+\
@@ -146,32 +188,48 @@ def coherent_split(proportion, *args, device = 'cpu'):
   return tuple(return_args)
 
 def train(model, crit, feats, targs, **kwargs):
-  '''Return the model trained with the given hyper-parameters.
+  '''Train a model.
 
   Args:
-    model (nn.Module): The instance of nn.Module to be trained.
-    crit (nn.modules.loss): The loss function to be used for training.
-    feats (torch.Tensor): The training data features (inputs); must
-        be a tensor of dimension at least two with the first dimension
-        indexing all of the example features for the training data.
-    targs (torch.Tensor): The training data outputs; must be a tensor
-        with the first dimension indexing the training targets.
+    model (nn.Module): The instance of Module to be trained.
+    crit (nn.modules.loss): The loss function when training.
+    feats (torch.Tensor): The inputs of the training data; must
+        be a tensor of dimension at least two, with the first
+        dimension indexing all of the example features for the
+        training data.
+    targs (torch.Tensor): The training data outputs; must be a
+        tensor with the first dimension indexing the training
+        targets.
 
   Kwargs:
-    feats_lengths (torch.LongTensor): One-dimensional tensor holding
-        the lengths of sequences in `feats`. Likely, relevant only
-        for variable-length (i.e,, sequence) features. Default: None.
-    lr (float): The learning rate during training. Default: 0.1.
+    feats_lengths (torch.LongTensor): One-dimensional tensor
+        holding the lengths of sequences in `feats`. Likely,
+        relevant only for variable-length (i.e,, sequence)
+        features. Default: None.
+    lr (float): The learning rate to be used during training.
+        Default: 0.1.
     mo (float): The momentum during training. Default: 0.0.
-    bs (int): The mini-batch size where -1 means (full) batch gradient
-        descent. Default: -1.
-    eps (int): The number of epochs to train over. Default: 10.
-    print_init (int): The number of loss lines to print initially when
-        training (put -1 here for normal printing). Default: 7.
-    print_last (int): The number of loss lines to print lastly when
-        training.  Default: 17.
-    verb (int): Set the verbosity to 0 for no printing while training.
-        Default: 3.
+    bs (int): The mini-batch size where -1 forces batch grad-
+        ient descent (i.e. feed-forwarding all training exam-
+        ples before each backpropagation). Default: -1.
+    eps (int): The number of epochs to train over, where an
+        epoch is duration required to see each training ex-
+        ample exactly once. Default: 10.
+    adapts (Dict): A dictionary mapping each of (or at least
+        one of) the strings 'lr', 'mo' to a lambda function
+        which itself maps a float to a float. The lambda fns
+        will be applied before each backpropagation.  E.g.,
+        {'lr': lambda x: 0.98*x} corresponds to learning
+        rate decay. Default: the identity map(s).
+    print_lines (Tuple[int, int]): A tuple, the first compon-
+        ent of which is the number of lines to print initial-
+        ly when printing the current loss for each epoch dur-
+        ing training, and the second of which is the number
+        of lines to print lastly when training. If at least
+        one element of the tuple is 0 (resp., -1), then no
+        (resp., all) lines are printed. Default: (17, 7).
+    verb (int): The verbosity. 0: silent, ... , 2: all.
+        Default: 2.
     device (str): The device to run on. Default: 'cpu'.
 
   Returns:
@@ -181,21 +239,20 @@ def train(model, crit, feats, targs, **kwargs):
       "Number of features ({}) must equal number of targets ({}).".\
           format(len(feats), len(targs))
   catch_sigint()
-  loss_len = 20
-  num_examples = len(feats)
-  # fix this in such a way that it checks proper type is passed
+
   feats_lengths = kwargs.get('feats_lengths', None)
   lr = kwargs.get('lr', 0.1)
   mo = kwargs.get('mo', 0.0)
   bs = kwargs.get('bs', -1)
   eps = kwargs.get('eps', 10)
-  print_init = kwargs.get('print_init', 7)
-  print_last = kwargs.get('print_last', 17)
-  verb = kwargs.get('verb', 3)
+  print_init, print_last = kwargs.get('print_lines',(8, 12))
+  verb = kwargs.get('verb', 2)
   device = kwargs.get('device', 'cpu')
+  adaptives = kwargs.get('adapts', {'lr': lambda x: x, 'mo': lambda x: x})
 
+  num_examples = len(feats)
   if bs <= 0: bs = num_examples
-  if print_init == -1: print_init = eps
+  if  print_init == -1 or print_last == -1: print_init, print_last = eps, 0
 
   if mo > 0.0:
     z_params = []
@@ -247,7 +304,11 @@ def train(model, crit, feats, targs, **kwargs):
         for param in model.parameters():
           param.data.sub_(lr * param.grad.data)
 
-    if verb > 0:
+      # apply adaptives
+      lr = adaptives['lr'](lr)
+
+    if print_init * print_last != 0 and verb > 0:
+      loss_len = 20
       base_str = "epoch {0}/{1}; loss ".format(epoch+1, eps)
       loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
       if eps < 20 or epoch < print_init:
@@ -285,15 +346,17 @@ def cross_validate_train(
     verbosity = 1,     # verbosity 0 means no printing
     device = 'cpu'
 ):
-  '''
-  Returns the model (which has been partially -- for one epoch, by default --
-  trained) along with a tensor of its validations.
+  '''Train a model.
 
-  Notes:
-   -The data are appropriately mean centered and normalized the data during
-    training.
-   -If the number of the features is not divisible by k, then the last chunk
-    is thrown away (so make the length of it small, if not zero).
+  Returns the model which has been partially (for one epoch,
+  by default) trained, along with a tensor of its validations.
+  The data are appropriately mean-centered and normalized dur-
+  ing training. If the number of the features is not divisible
+  by k, then the last chunk is thrown away (so make the length
+  of it small, if not zero).
+
+  Args:
+    validation_crit (
   '''
   assert len(features) == len(targets),\
       "The number of features must equal number of targets."
