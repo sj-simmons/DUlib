@@ -3,6 +3,39 @@
 ### DUlib
 ---
 
+#### Quickstart
+
+At the command line:
+
+``` bash
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.2 --user
+```
+
+and then, say,
+
+``` bash
+pydoc3 du.lib.train
+```
+
+If you that looks useful then, in your program,
+
+``` python
+from du.lib import train
+```
+
+Want to peruse more functions from `du.lib`:
+``` bash
+pydoc3 du.lib
+```
+or to see what the  other libraries are called:
+``` bash
+pydoc3 du
+```
+
+You can find entire programs that use the functions herein at the DL@DU Project.
+
+---
+
 #### Versions
 
 **0.1** (March 2019)
