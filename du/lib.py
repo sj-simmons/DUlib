@@ -151,7 +151,7 @@ Linear Regression with learning rate decay:
 
 Linear Regression without normalizing or centering:
 
-  There's not reason not to center and normalize for this
+  There is no reason not to center and normalize for this
   problem. But, just for the sport of it, one can use the
   `optimize_ols` function:
 
@@ -239,10 +239,10 @@ def center(xss, new_centers = None):
   '''(Mean, by default) center a tensor.
 
   With this you can translate the data to anywhere. If the
-  second argument is None, then this simple mean-centers the
+  second argument is `None`, then this simply mean-centers the
   data w/r to the first dimension. But notice that the return-
-  ed object is a tuple. So if you just want to mean-center a
-  tensor you would call this funtion like this:
+  ed object is a tuple. So if you want to simply mean-center a
+  tensor you would call this function like:
 
   xss_centered, _ = center(xss)
 

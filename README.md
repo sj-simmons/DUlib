@@ -8,7 +8,7 @@
 At the command line install the latest release:
 
 ``` bash
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.3 --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git --user
 ```
 
 Then have a look at the documentation for the core library:
@@ -55,7 +55,7 @@ pip3 show -f DUlib
   * If you were part of the DL@DU project before about November 1, 2019 and
     you used any of the libraries in the old repo then you can install version 0.1
     ``` bash
-    pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.1  --user 
+    pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.1  --user
     ```
     and have all your code work as you wrote originally wrote it, with the sole
     exception of modifying the way you import functions from library. Now you do,
@@ -64,11 +64,13 @@ pip3 show -f DUlib
     from du.lib import center, normalize, train, confusion_matrix
     ```
 **Version 0.2** (November 6, 2019)
-  * Quick install: `pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.2 --user`
   * A library for NLP applications, [wordlib.py](du/wordlib.py), has been added.
-  * The functionality and functions (like `train`) in the original library
-    have been enhanced and tweaked.  Slight refactoring of your code might be
-    required when transition from version 0.1 to 0.2. Namely:
+
+**Version 0.3** (November 14, 2019)
+  * Quick install: `pip3 install git+https://github.com/sj-simmons/DUlib.git --user`
+  * The API, particularly in `du.lib`, should be stable as of this release, so you
+    should go ahead and upgrade. However, in transitioning from earlier versions to 0.3,
+    one needs to do some refactoring. For example:
     * If you were importing `device` in version 0.1 and doing something like
       ``` python
       print('running on', device)
@@ -85,28 +87,22 @@ pip3 show -f DUlib
       ``` python
       train(model, criterion,  features = xss, targets = yss, ... , momemtum = args.mo, ...)
       ```
-      then, in version 0.2, you would use
+      then, in version 0.3, you would use
       ``` python
       from du.lib import train
       ...
-      train(model, criterion, feats = xss, targs = yss, ... , mo = args.mo, ...)
+      train(model, crit, (xss, yss), ... , mo = args.mo, ...)
       ```
       In other words, some of the keywords for arguments passed to `train` have
       been shortened. Also, you now *must* use key-worded arguments for certain
       arguments (see the documentation).
-    * All of the code in the DL@DU projects has been refactored to version 0.2.
-
-**Version 0.3** (November 14, 2019)
-  * Quick install: `pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.3 --user`
-  * The API, particularly in `du.lib`, should be stable as of this release, so you
-    should go ahead and upgrade. However, in transitioning from version 0.2 to 0.3,
-    one needs to do some refactoring. See, for example, the new documentation for `train`.
   * A library called `du.models` has been added that contains various convolutional
     and recurrent models that we use at the DL@DU Project.
+  * All of the code in the DL@DU projects has been refactored to version 0.3.
 
 ---
 
-#### Experimenting with, building on top of, or otherwise modifying, DUlib
+#### Experimenting with, building on top of, or otherwise modifying DUlib
 
 If you want to experiment with the code in the libraries, then you can clone
 to a local repo on your machine:
@@ -120,7 +116,7 @@ to your local machine:
 cd DUlib
 pip3 install -e .
 ```
-Now suppose that you want to revert back to Simmons' version 0.3:
+Now suppose that you want to revert back to the latest release: 
 ``` bash
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.3 --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git --user
 ```
