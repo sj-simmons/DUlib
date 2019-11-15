@@ -85,13 +85,13 @@ pip3 show -f DUlib
     * If you were using key-worded arguments when calling `train` in version 0.1
       with a line similar to this:
       ``` python
-      train(model, criterion,  features = xss, targets = yss, ... , momemtum = args.mo, ...)
+      train(model, criterion, features = xss, targets = yss, learning_rate = 0.1, epochs = 10, batchsize = 20)
       ```
       then, in version 0.3, you would use
       ``` python
       from du.lib import train
       ...
-      train(model, crit, (xss, yss), ... , mo = args.mo, ...)
+      train(model, crit, train_data = (xss, yss), lr = 0.1 , eps = 10, bs = 20)
       ```
       In other words, some of the keywords for arguments passed to `train` have
       been shortened. Also, you now *must* use key-worded arguments for certain
