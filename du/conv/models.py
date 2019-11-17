@@ -1,21 +1,55 @@
 #!/usr/bin/env python3
-'''Model classes for convolutional and recurrent nets.
+'''model classes for convolutional nets.
+
+The convolutional models defined here are built from meta-
+layers, where a single meta-layer consists of a 2d convol-
+ution layer followed by a 2d max-pooling layer.
+
+The constructor for the convolution models allows passing in
+attributes called `means` and `stdevs` which in practice hold
+the means and standard deviations of the training data.
+
+The reason that we might want pass those to the constructor is
+so that we can then store them as attributes in a serialization
+of a trained instance of the class. That way, when we later
+want to use the pre-trained model to make a prediction, we can
+read in the serialized model and easily (if necessary) center
+and normalize the features of the prediction with respect to
+the means and centers of the training data (so that the train-
+ing data need not even be available when making predictions).
+
+Currently, two convolutional models are defined. The signatur-
+es for their constructors are as follows. See their class doc-
+umentation below for more.
+
+OneMetaCNN
+  (means: tensor = None, stdevs: tensor = None)
+
+TwoMetaCNN
+  (width_m1:int=16, width_m2:int=32, means=None, stdevs=None)
+
 '''
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from du.wordlib import unpad_sequence
 
 __author__ = 'Simmons'
-__version__ = '0.3'
+__version__ = '0.4'
 __status__ = 'Development'
-__date__ = '11/14/19'
+__date__ = '11/16/19'
 
 class OneMetaCNN(nn.Module):
-  ''' A one meta-layer convolutional model.
+  '''Class for a convolutional model with a single meta-layer.
   '''
-
   def __init__(self, means = None, stdevs = None):
+    '''Constructor.
+
+    Args:
+      means (torch.Tensor): A tensor typically holding the
+          means of the training data.
+      stdevs (torch.Tensor): A tensor typically holding the
+          standard deviations of the training data.
+    '''
     super(OneMetaCNN, self).__init__()
     self.meta_layer1 = nn.Sequential(
         nn.Conv2d(
@@ -42,6 +76,9 @@ class OneMetaCNN(nn.Module):
     self.register_buffer('stdevs', stdevs)
 
   def forward(self, xss):
+    '''Forwards through, in turn, a single meta-layer and a
+    single fully-connect layer, followed by logsoftmax.
+    '''
     xss = torch.unsqueeze(xss, dim=1)
     xss = self.meta_layer1(xss)
     xss = torch.reshape(xss, (-1, 1600))
@@ -54,6 +91,20 @@ class TwoMetaCNN(nn.Module):
 
   def __init__(self, width_m1=16, width_m2=32, means = None, stdevs = None):
     super(TwoMetaCNN, self).__init__()
+    '''Constructor.
+
+    Args:
+      width_m1 (int): The number of out-channels for the first
+          meta-layer that is encountered by forwarded examples.
+          Default: 16.
+      width_m2 (int): The number of out-channels of the second
+          meta-layer that is encountered by forwarded examples.
+          Default: 32.
+      means (torch.Tensor): A tensor typically holding the
+          means of the training data. Default: None.
+      stdevs (torch.Tensor): A tensor typically holding the
+          standard deviations of the training data. Default: None.
+    '''
     self.width_m2 = width_m2
     self.meta_layer1 = nn.Sequential( # A mini-batch_size of N for input to this
         nn.Conv2d(                    # would have size Nx1x20x20.
@@ -91,6 +142,9 @@ class TwoMetaCNN(nn.Module):
     self.register_buffer('stdevs', stdevs)
 
   def forward(self, xss):
+    '''Forwards examples through, in turn, two meta-layers and
+    two fully-connected layers, followed by logsoftmax.
+    '''
     xss = torch.unsqueeze(xss, dim=1)
     xss = self.meta_layer1(xss)
     xss = self.meta_layer2(xss)
@@ -100,23 +154,14 @@ class TwoMetaCNN(nn.Module):
     xss = self.fc_layer2(xss)
     return torch.log_softmax(xss, dim=1)
 
-class SimpleRNN(nn.Module):
-  def __init__(self, n_in, enc_dim, n_hid, n_out, padding_idx, device = 'cpu'):
-    super(SimpleRNN, self).__init__()
-    self.n_in = n_in
-    self.n_hid = n_hid
-    self.device = device
-    self.padding_idx = padding_idx
-    self.hidden = torch.zeros(1, n_hid).to(device)
-    self.comb2hid = nn.Linear(n_in + n_hid, n_hid)
-    self.comb2out = nn.Linear(n_in + n_hid, n_out)
+if __name__ == '__main__':
+  import doctest
+  failures, _ = doctest.testmod()
 
-  def forward(self, xss, lengths = None):
-    xs = xss.squeeze(0)[:lengths.item()]
-    for x_ in xs:
-      x_one_hot = F.one_hot(x_, self.n_in).float().unsqueeze(0)
-      combined = torch.cat((x_one_hot, self.hidden),dim = 1)
-      self.hidden = self.comb2hid(combined)
-    logit = self.comb2out(combined)
-    self.hidden = torch.zeros(1, self.n_hid).to(self.device)
-    return torch.log_softmax(logit,dim=1)
+  if failures == 0:
+    # Below prints only the signature of locally defined functions.
+    from inspect import signature
+    local_functions = [(name,ob) for (name, ob) in sorted(locals().items())\
+        if callable(ob) and ob.__module__ == __name__]
+    for name, ob in local_functions:
+      print(name,'\n  ',signature(ob))

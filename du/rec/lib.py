@@ -1,5 +1,38 @@
 #!/usr/bin/env python3
 '''NLP utilities.
+
+dir_to_lines
+   (dir_name:str, small:int=-1) -> Dict
+file_to_lines
+   (file_name:str) -> List
+invertListDict
+   (d:Dict) -> Dict
+line_to_chars
+   (line:str) -> List
+line_to_ngrams
+   (line:str, n:int) -> List
+line_to_tokens
+   (line:str) -> List
+lines_to_tokens
+   (lst:List) -> List
+make_ngram
+   (tokens:List) -> Tuple
+make_ngrams
+   (lines:List, n:int) -> List
+make_token2index
+   (tokens:Union, pad:str=None) -> Dict
+ngrams_to_tensor
+   (ngrams:List, token2index:Dict) -> Tuple
+pad_sequences
+   (seqs:List) -> List
+pca_plot
+   (tokens, vects)
+tokenize
+   (word:str) -> str
+tsne_plot
+   (words, vects, num_components=3)
+unpad_sequence
+   (seq:List, padding_idx:int=0) -> List
 '''
 import glob
 import io
@@ -11,9 +44,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 __author__ = 'Simmons'
-__version__ = '0.3'
+__version__ = '0.4'
 __status__ = 'Development'
-__date__ = '11/14/19'
+__date__ = '11/16/19'
 
 # define some type aliases
 Ngram = Tuple[List[str], str]

@@ -1,183 +1,44 @@
 #!/usr/bin/env python3
-'''Core functions for working with neural nets.
+'''core functions for working with neural nets.
 
 This library contains functions for centering and normalizing
 data, splitting out testing data, training neural nets, and
 gauging accuracy of trained models.
-
                    _____________________
 
+The functions along with their signatures displaying the simp-
+lest way to call them are (see each functions actual document-
+ation for more details):
 
-A note on building models:
-
-The first argument of the `train` function below is `model`.
-We assume that `model` is an instance of a class derived from
-`torch.nn.Module`, as is common when working with PyTorch.
-Such a derived class must implement a `forward` method. In
-other words, the `forward` method in `nn.Module` is a virtual
-method. See LinRegModel below for a simple but instructive
-example.
-
-We denote by `xss` the tensor that holds the features of our
-data; i.e., `xss` is the tensor that is to be forwarded by the
-`forward` method of our model. We assume that `xss` is at least
-2-dimensional, and that its first dimension indexes the exam-
-ples of our data. For instance, suppose that we want to model a
-2-dimensional regression plane that captures a point cloud that
-lives in 3-space. Then `xss` is assumed to be a tensor of size
-`torch.Size([n, 2])`, where `n` is the number of examples.
-
-If `yss` denotes the corresponding targets then, even though
-each example's target consists of only 1 number, we assume that
-`yss` is of `torch.Size([n, 1])`.  Therefore, you might want to
-employ the PyTorch utility `unsqueeze` when writing a program
-that calls, say, the `train` function in this library. (See be-
-low for a basic example).
-
+center
+  (xss: tensor) -> Tuple[tensor, tensor]
+coh_split
+  (proportion: float, *args: tensor) -> Tuple[tensor]
+confusion_matrix
+  (prob_dists: tensor, yss: tensor, classes: tensor)
+cross_validate
+  (model, crit, train_data:Tuple[tensor], k:int, bail_after:int)
+cross_validate_train
+  (model, crit, train_data: Tuple[tensor], k: int)
+get_device
+  ()
+normalize
+  (xss: tensor)
+optimize_ols
+  (feats: tensor)
+r_squared
+  (yhatss: tensor, yss: tensor)
+stand_args
+  ()
+train
+  (model, crit, train_data: Tuple[tensor))
                    _____________________
 
-
-On training recurrent versus feedforward models:
-
-The training functions in DUlib can be used without modifica-
-tion to train both feedforward and recurrent models.  The
-difference is that the features of data suitable for recurrent
-nets often have variable length. So when training a recurrent
-net, one often passes a tensor consisting of the lengths of the
-features along with the features themselves. See the document-
-ation for the various training functions for the details.
-
-                   _____________________
-
-
-The following are demonstrations of basic usage of the func-
-tions in this library in the case of the simplest neural net:
-the linear perceptron.
-
-Linear Regression:
-
-  First, generate some data.
-
-  >>> xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)
-
-  The x-values above are selected uniformly from the [0, 100].
-  The y-values were obtained by adding normally distributed
-  error to y=2x+9 when x runs through the xs.
-
-  Let us next cast the data as tensors of size appropriate for
-  training with PyTorch.
-
-  >>> xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
-  >>> xss.size(); yss.size()
-  torch.Size([40, 1])
-  torch.Size([40, 1])
-
-  For best performance, we center and normalize the data.
-
-  >>> xss,xss_means = center(xss); yss,yss_means = center(yss)
-  >>> xss,xss_stds=normalize(xss); yss,yss_stds=normalize(yss)
-
-  Next, let us create an instance a model that computes the
-  linear regression line (which should be close to y=2x+9).
-
-  >>> class LinRegModel(nn.Module):
-  ...   def __init__(self):
-  ...     super(LinRegModel, self).__init__()
-  ...     self.layer = nn.Linear(1, 1)
-  ...   def forward(self, xss):
-  ...     return self.layer(xss)
-  >>> model = LinRegModel()
-
-  We now specify a loss function, compute the optimal learning
-  rate and momentum, and train our model.
-
-  >>> criterion = nn.MSELoss()
-  >>> model = train(
-  ...     model = model,
-  ...     crit = criterion,
-  ...     train_data = (xss, yss),
-  ...     eps = 50,
-  ...     verb = 0)
-
-  Suppose that we want to predict the y-value when the x-value
-  is 50 (this should be close to 2*50+9).
-
-  >>> testss = torch.tensor([50.]).unsqueeze(1)
-  >>> testss; testss.size()
-  tensor([[50.]])
-  torch.Size([1, 1])
-  >>> yhatss = model(testss.sub_(xss_means).div_(xss_stds))
-  >>> prediction = (yhatss.mul_(yss_stds)+yss_means).item()
-  >>> abs(prediction - 109) < 5
-  True
-
-Linear Regression with learning rate decay:
-
-  The data, which are already centered and normalized are
-  those of the previous example. First we re-instance the
-  model, thereby re-initialing the weights.
-
-  >>> model = LinRegModel()
-
-  Let us implement a dynamic learning rate that decays over
-  time.
-
-  >>> learning_rate = 0.1; epochs = 2000
-  >>> decay_rate = 1-75*learning_rate/epochs
-  >>> print(decay_rate)
-  0.99625
-  >>> adaptives = {'lr': lambda x: decay_rate * x}
-
-  And train the model.
-
-  >>> model = train(model, criterion, (xss, yss), eps = epochs,
-  ...     lr = learning_rate, adapts = adaptives, verb = 0)
-
-  Now we check that the weights of our model converged to about
-  2 and 9, the slope and intercept of the line we used to gen-
-  erate the original data.
-
-  >>> params = list(model.parameters())
-  >>> mm = params[0].item(); bb = params[1].item()
-
-  Now map the weights back to unnormalized/uncentered data, and
-  check that the slope and intercept are close to 2 and 9,
-
-  >>> my=yss_means.item(); mx=xss_means.item()
-  >>> sy=yss_stds.item(); sx=xss_stds.item()
-  >>> slope = mm*sy/sx; intercept = my+bb*sy-slope*mx
-  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 6.0])
-  True
-
-Linear Regression without normalizing or centering:
-
-  There is no reason not to center and normalize for this
-  problem. But, just for the sport of it, one can use the
-  `optimize_ols` function:
-
-  >>> xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)
-  >>> xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
-  >>> lr, mo = optimize_ols(xss, verb = 0)
-  >>> model = train(model, criterion, (xss, yss), lr = lr,
-  ...     mo = mo, eps = 2000, verb = 0)
-  >>> params = list(model.parameters())
-  >>> slope = params[0].item(); intercept = params[1].item()
-  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 6.0])
-  True
-
-                   _____________________
-
-
-  Programs that employ the complete functionality of DUlib can be
-  found at the DL@DU Project.
-
-                   _____________________
-
-
-Todo (ignore this, unless you want to help Simmons work on it.)
-  - top priority: fix the packing issue for minibatch in rec
-    nets. Graphing against test loss on rec nets  won't work
-    until then.
+Todo (you can safely ignore this, unless you want to help
+    Simmons work on these items.)
+  - fix the packing issue for minibatch in rec nets. Graphing
+    against test loss on rec nets doesn't naturally work until
+    then.
   - attempt to move to device only in train() and coh_split().
     So try to refrain to going to device in programs (but still
     get and pass the device, of course).
@@ -193,7 +54,7 @@ Todo (ignore this, unless you want to help Simmons work on it.)
     testing data. (Take into account forget_after here).
   - Implement stratified sampling at least when splitting out
     testing data.  Maybe pass the relevant proportions to
-    coherent_split.
+    coh_split.
   - Try to catch last saved model or just continue on control-c
     for, well, everything.
     - Fix catch_sigint_and_break or remove it. If it is working
@@ -205,16 +66,16 @@ Todo (ignore this, unless you want to help Simmons work on it.)
     cross_validate.
   - Start type checking kwargs whenever everyone is clearly
     running Python 3.6 or greater.
-  - If you keep forget_first in train, then adjust x-axis
-    labels, or maybe just don't worry about it.
+  - break out processing of train_data test_data in train() as
+    a helper fn. Write a helper called to_device().
 '''
 import torch
 import torch.nn as nn
 
 __author__ = 'Simmons'
-__version__ = '0.3'
+__version__ = '0.4'
 __status__ = 'Development'
-__date__ = '11/14/19'
+__date__ = '11/16/19'
 
 def get_device(gpu = -1):
   '''Get the best device to run on.
@@ -412,8 +273,13 @@ def train(model, crit, train_data, **kwargs):
         loss on test data is computed each epoch.  However,
         The test data is not shown to the model during as
         part of backpropagation. Default = None.
-    graph (bool): If set, a real-time update graph is displayed
-        showing losses (requires matplotlib).
+    graph (int): If positive then, during training, display
+        a real-time graph.  If greater than 1, then the be-
+        gining `graph` losses are thrown away when training
+        gets to epoch `graph` (this functionality is made
+        available for a better viewing experience for some
+        models). Requires matplotlib (and a running X server).
+        If 0, do not display a graph. Default: 0.
     feats_lengths (torch.LongTensor): One-dimensional tensor
         holding the lengths of sequences in `feats`. Likely,
         relevant only for variable-length (i.e,, sequence)
@@ -455,7 +321,9 @@ def train(model, crit, train_data, **kwargs):
   adaptives = kwargs.get('adapts', {'lr': lambda x: x, 'mo': lambda x: x})
   print_init, print_last = kwargs.get('print_lines',(8, 12))
   verb = kwargs.get('verb', 2); device = kwargs.get('device', 'cpu')
-  graph = kwargs.get('graph', False)
+  graph = kwargs.get('graph', 0)
+
+  assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
   # parse train_data
   train_feats=train_data[0].to(device); train_targs=train_data[-1].to(device)
@@ -523,7 +391,6 @@ def train(model, crit, train_data, **kwargs):
     plt.xlabel('epoch',size='larger'); plt.ylabel('average loss',size='larger')
 
   losses = []
-  forget_first = 4 if eps > 30 else -1
 
   for epoch in range(eps):
     accum_loss = 0
@@ -557,11 +424,10 @@ def train(model, crit, train_data, **kwargs):
 
       lr = adaptives['lr'](lr) # apply adaptives
 
-    ave_loss = accum_loss*bs/num_examples
     if print_init * print_last != 0 and verb > 0:
       loss_len = 20
       base_str = "epoch {0}/{1}; loss ".format(epoch+1, eps)
-      loss_str = "{0:<10g}".format(ave_loss)
+      loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
       if eps < 20 or epoch < print_init:
         print(base_str + loss_str)
       elif epoch > eps - print_last:
@@ -576,26 +442,33 @@ def train(model, crit, train_data, **kwargs):
         print(base_str+loss_str, end='\b'*loss_len, flush=True)
 
     if graph:
-      losses.append(ave_loss)
+      if isinstance(train_feats_lengths, torch.Tensor):
+        loss = crit(model(train_feats, train_feats_lengths), train_targs).item()
+      else:
+        loss = crit(model(train_feats), train_targs).item()
+      losses.append(loss)
       if test_data:
         if isinstance(test_feats_lengths, torch.Tensor):
           loss = crit(model(test_feats, test_feats_lengths), test_targs).item()
         else:
           loss = crit(model(test_feats), test_targs).item()
         losses_test.append(loss)
-      if  epoch == forget_first:
-        losses = losses[forget_first:]
-        if test_data: losses_test = losses_test[forget_first:]
+      if  epoch == graph:
+        losses = losses[graph:]
+        if test_data: losses_test = losses_test[graph:]
         plt.clf()
         plt.xlabel('epoch',size='larger');
         plt.ylabel('average loss',size='larger')
-      plt.plot(losses,c='black',lw=.75);
-      if test_data: plt.plot(losses_test,c='red',lw=.75);
+      plt.plot(range(graph,graph+len(losses)), losses, c='black', lw=.8);
+      if test_data:
+        plt.plot(range(graph,graph+len(losses_test)),losses_test,c='red',lw=.8);
       fig.canvas.flush_events()
 
   if graph:
-    plt.plot(losses,c='black',lw=.5,label='training')
-    if test_data: plt.plot(losses_test,c='red',lw=.5,label='testing')
+    plt.plot(range(graph,graph+len(losses)),losses,c='black',lw=.8,\
+        label='training')
+    if test_data: plt.plot(range(graph,graph+len(losses_test)),\
+        losses_test,c='red',lw=.8,label='testing')
     plt.legend(loc=1); plt.ioff(); plt.show()
 
   return model
@@ -936,16 +809,16 @@ def optimize_ols(feats, **kwargs):
 
   return learning_rate, momentum
 
-def confusion_matrix(prob_dist, yss, classes, **kwargs):
+def confusion_matrix(prob_dists, yss, classes, **kwargs):
   '''Compute the confusion matrix.
 
-  Compute the confusion matrix with respect to given prob_dist
+  Compute the confusion matrix with respect to given prob_dists
   and targets.  The columns in the displayed table correspond
   to the actual (correct) target class and the rows are the
   class predicted by model.
 
   Args:
-    prob_dist (torch.Tensor): A tensor of dimension 2 hold-
+    prob_dists (torch.Tensor): A tensor of dimension 2 hold-
         ing the probability distribution predicting the cor-
         rect class for each example. The first dimension must
         index the examples. This is the predictions, in the
@@ -954,7 +827,7 @@ def confusion_matrix(prob_dist, yss, classes, **kwargs):
     yss (torch.Tensor): A 1-dimensional tensor holding the
         correct class for each example.
     classes (torch.LongTensor): A one-dimensional tensor
-        holding the numerical version='0.3',
+        holding the numerical version='0.4',
         torch.arange(10) for digit classification.
 
   Kwargs:
@@ -973,12 +846,12 @@ def confusion_matrix(prob_dist, yss, classes, **kwargs):
         of correct correct predictions or (optionally) one
         minus that ratio; i.e., the error rate.
   '''
-  assert len(prob_dist) == len(yss),\
+  assert len(prob_dists) == len(yss),\
       'Number of features ({}) must equal number of targets ({}).'\
-          .format(len(prob_dist), len(yss))
-  assert prob_dist.dim() == 2,\
-      'The prob_dist argument should be a 2-dim tensor not a {}-dim one.'\
-          .format(prob_dist.dim())
+          .format(len(prob_dists), len(yss))
+  assert prob_dists.dim() == 2,\
+      'The prob_dists argument should be a 2-dim tensor not a {}-dim one.'\
+          .format(prob_dists.dim())
   assert classes.dim() == 1,\
       'The classes argument should be a 1-dim tensor not {}-dim one.'\
           .format(classes.dim())
@@ -988,7 +861,7 @@ def confusion_matrix(prob_dist, yss, classes, **kwargs):
   class2name = kwargs.get('classnames', None)
 
   cm_counts = torch.zeros(len(classes), len(classes))
-  for prob, ys in zip(prob_dist, yss):
+  for prob, ys in zip(prob_dists, yss):
     cm_counts[torch.argmax(prob).item(), ys] += 1
 
   cm_pcts = cm_counts/len(yss)
@@ -1087,8 +960,13 @@ def stand_args(desc = '', **kwargs):
         gpus, where -1 means to use the last gpu found, and -2
         means to override using a found gpu and use the cpu.
         Default: -1.
-    gr (bool): Whether or not to display a gui graph of the
-        losses during training. Default: False.
+    gr (int): If positive then, during training, display
+        a real-time graph.  If greater than 1, then the be-
+        gining `graph` losses are thrown away when training
+        gets to epoch `graph` (this functionality is made
+        available for a better viewing experience for some
+        models). Requires matplotlib (and a running X server).
+        If 0, do not display a graph. Default: 0.
 
   Returns:
     (argparse.ArgumentParser). The parser object to which the
@@ -1104,7 +982,7 @@ def stand_args(desc = '', **kwargs):
   seed = kwargs.get('seed', False)
   pt = kwargs.get('pt', 1.0)
   gpu = kwargs.get('gpu', -1)
-  gr = kwargs.get('gr', False)
+  gr = kwargs.get('gr', 0)
 
   parser = argparse.ArgumentParser( description = desc, formatter_class =\
       argparse.ArgumentDefaultsHelpFormatter)
@@ -1123,7 +1001,8 @@ def stand_args(desc = '', **kwargs):
   p('-pt', type=float, help='proportion to train on', default=pt)
   hstr='which gpu, if more than one is found; -1 for last gpu found; -2 for cpu'
   p('-gpu', type=int, help=hstr, default=gpu)
-  p('-gr', help='display a graph of losses duing training', action='store_true')
+  hstr='graph of losses during training; redraw after this many epochs'
+  p('-gr', help=hstr, type=int, default=0)
   return  parser
 
 def _catch_sigint():
