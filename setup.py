@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 def readme():
   with open('README.rst', 'r') as fh:
@@ -10,12 +10,12 @@ setup(
   download_url='https://github.com/sj-simmons/DUlib/archive/v0.4.tar.gz',
   author='SSimmons',
   author_email='ssimmons@drury.edu',
-  packages=['du'],
+  packages=find_packages(),
   #install_requires=['torch>=1.2.0+cpu', 'scipy', 'matplotlib<3.1', 'scikit-image<0.16'],
   #We do not include torch in install_requires since then users can install
   #the appropriate verion of torch (e.gl, cpu vs. gpu) for their machine.
   install_requires=['scipy', 'matplotlib<3.1', 'scikit-image<0.16'],
-  version='0.5',
+  version='0.6',
   license='Apache 2.0',
   description='tools from the DL@DU Project',
   long_description=readme(),

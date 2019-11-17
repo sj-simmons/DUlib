@@ -75,7 +75,7 @@ import torch
 import torch.nn as nn
 
 __author__ = 'Simmons'
-__version__ = '0.5'
+__version__ = '0.6'
 __status__ = 'Development'
 __date__ = '11/17/19'
 
@@ -829,7 +829,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
     yss (torch.Tensor): A 1-dimensional tensor holding the
         correct class for each example.
     classes (torch.LongTensor): A one-dimensional tensor
-        holding the numerical version='0.5',
+        holding the numerical version='0.6',
         torch.arange(10) for digit classification.
 
   Kwargs:

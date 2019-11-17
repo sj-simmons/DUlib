@@ -76,7 +76,7 @@ with: `pip show DUlib`.
       been shortened. Also, you now *must* use key-worded arguments for certain
       arguments. See the documentation with `pydoc3 du.lib.train`.
 
-**Version 0.5** (November 17, 2019)
+**Version 0.6** (November 17, 2019)
   * DUlib has been uploaded to [pypi.org](https://pypi.org/) and can now be
     installed be simply issuing the command `pip install DUlib` (or, depending on
     your setup, `pip install DUlib --user`) at the command line.
@@ -111,7 +111,7 @@ with: `pip show DUlib`.
             ├── lib.py
             └── models.py
     ```
-  * All code in the DL@DU projects has been refactored to version 0.5.
+  * All code in the DL@DU projects has been refactored to version 0.6.
 
 ---
 
