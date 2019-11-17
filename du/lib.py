@@ -68,14 +68,16 @@ Todo (you can safely ignore this, unless you want to help
     running Python 3.6 or greater.
   - break out processing of train_data test_data in train() as
     a helper fn. Write a helper called to_device().
+  - clean up string by using multiline ones correctly. Use
+    verbosity so nothing is printed by default?
 '''
 import torch
 import torch.nn as nn
 
 __author__ = 'Simmons'
-__version__ = '0.4'
+__version__ = '0.5'
 __status__ = 'Development'
-__date__ = '11/16/19'
+__date__ = '11/17/19'
 
 def get_device(gpu = -1):
   '''Get the best device to run on.
@@ -827,7 +829,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
     yss (torch.Tensor): A 1-dimensional tensor holding the
         correct class for each example.
     classes (torch.LongTensor): A one-dimensional tensor
-        holding the numerical version='0.4',
+        holding the numerical version='0.5',
         torch.arange(10) for digit classification.
 
   Kwargs:

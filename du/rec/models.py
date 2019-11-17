@@ -13,9 +13,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 __author__ = 'Simmons'
-__version__ = '0.4'
+__version__ = '0.5'
 __status__ = 'Development'
-__date__ = '11/16/19'
+__date__ = '11/17/19'
 
 class SimpleRNN(nn.Module):
   def __init__(self, n_in, enc_dim, n_hid, n_out, padding_idx, device = 'cpu'):
