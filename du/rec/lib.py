@@ -46,7 +46,7 @@ import torch.nn.functional as F
 __author__ = 'Simmons'
 __version__ = '0.4'
 __status__ = 'Development'
-__date__ = '11/16/19'
+__date__ = '11/17/19'
 
 # define some type aliases
 Ngram = Tuple[List[str], str]
