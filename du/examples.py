@@ -171,7 +171,7 @@ Linear Regression without normalizing or centering:
   ...     mo = mo, eps = 3000, verb = 0)
   >>> params = list(model.parameters())
   >>> slope = params[0].item(); intercept = params[1].item()
-  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 6.0])
+  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 10.0])
   True
 
                    _____________________
@@ -184,7 +184,7 @@ Linear Regression without normalizing or centering:
 
 '''
 __author__ = 'Simmons'
-__version__ = '0.6'
+__version__ = '0.6.1'
 __status__ = 'Development'
 __date__ = '11/17/19'
 
