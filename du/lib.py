@@ -70,12 +70,13 @@ Todo (you can safely ignore this, unless you want to help
     a helper fn. Write a helper called to_device().
   - clean up string by using multiline ones correctly. Use
     verbosity so nothing is printed by default?
+  - add poly regression to examples
 '''
 import torch
 import torch.nn as nn
 
 __author__ = 'Simmons'
-__version__ = '0.6'
+__version__ = '0.6.1'
 __status__ = 'Development'
 __date__ = '11/17/19'
 
@@ -313,7 +314,7 @@ def train(model, crit, train_data, **kwargs):
     device (str): The device to run on. Default: 'cpu'.
 
   Returns:
-    (nn.Module, Tuple). The trained model.
+    (nn.Module, Tuple). The trained model sent to device 'cpu'.
   '''
   _catch_sigint()
 
@@ -341,6 +342,7 @@ def train(model, crit, train_data, **kwargs):
       "Number of training features ({}) must equal number of targets ({}).".\
           format(len(train_feats), len(train_targs))
 
+  if verb > 0: print('training on', device)
   model = model.to(device)
   train_feats = train_feats.to(device); train_targs = train_targs.to(device)
   if isinstance(train_feats_lengths, torch.Tensor):
@@ -473,7 +475,7 @@ def train(model, crit, train_data, **kwargs):
         losses_test,c='red',lw=.8,label='testing')
     plt.legend(loc=1); plt.ioff(); plt.show()
 
-  return model
+  return model.to('cpu')
 
 def cross_validate_train(model, crit, train_data, k, **kwargs):
   '''Cross-validate train a model for one (by default) epoch.
@@ -738,8 +740,10 @@ def optimize_ols(feats, **kwargs):
   linear regression models; i.e. for linear models with MSE
   loss.
 
-  Reports the condition number of A = X^T*X where X is the des-
-  ign matrix.
+  Consider setting the verbosity to 1 so to see the reports on
+  the following during opitmization:
+    - The condition number of A = X^T*X where X is the design
+      matrix.
 
   Args:
     feats (torch.Tensor): The features of the training data.
@@ -747,9 +751,9 @@ def optimize_ols(feats, **kwargs):
   Kwargs:
     with_mo (bool): Optimize both the learning rate and the
         momentum. Default: True.
-    warn (bool): Issue warnings about numerical integrity.
-        Default: True.
-    verb (int): Put 0 for silent. Default: 1.
+    verb (int): Verbosity; 0 for silent, 1 to print details
+        f the optimization process including warnings concern-
+        ing numerical integrity. Default: 0.
 
   Returns:
     Tuple[float]: A tuple, the first entry of which is the
@@ -757,45 +761,51 @@ def optimize_ols(feats, **kwargs):
         optimal momentum. If `with_mo` is False, then 0.0
         is returned for the momentum.
   '''
-  from scipy.linalg import eigh
+
+  #from scipy.linalg import eigh
   from scipy.sparse.linalg import eigsh
   from scipy.sparse import issparse
 
   with_mo = kwargs.get('with_mo', True)
   warn = kwargs.get('warn', True)
-  verb = kwargs.get('verb', 1)
+  verb = kwargs.get('verb', 0)
 
   problematic = False
-  if verb: print("optimizing ... ", end='')
+  if verb: print("optimizing:")
 
-  # ADD A COLUMN OF ONES
   feats = torch.cat((torch.ones(len(feats),1), feats.to("cpu")), 1)
 
-  feats = feats.numpy().astype('float64')
-  A = feats.transpose() @ feats
-  eigs = eigh(A, eigvals_only = True)
-  if not all(map(lambda x: x.imag == 0.0, eigs)) == True and warn and verb:
-    print("\nwarning: eigenvalues should be real but some are not due to num"+\
-        "erical\n"+' '*9+"ill-conditioning (largest imaginary part is "+\
-        '{:.3g}'.format(max([x.imag for x in eigs]))+").")
-    problematic = True
-  eigs = [x.real for x in eigs]
-  if not all(map(lambda x: x >= 0.0, eigs)) == True and warn and verb:
-    print("\nwarning: eigenvalues should be positive but some are not due to "+\
-        "numerical\n"+' '*9+"ill-conditioning (most negative eigenvalue is "+\
-        '{:.3g}'.format(min([x for x in eigs]))+").")
+  design_mat = feats.transpose(0,1).mm(feats)
+  eigs, _ = torch.symeig(design_mat)
+  if not all(map(lambda x: x >= 0.0, eigs.tolist())):
+    if verb:
+      print('  warning: negative eigenvalues (most negative is {:.3g})'.\
+          format(min([x for x in eigs])))
     problematic = True
 
   if problematic:
-    if verb: print("checking for sparseness ... ",end='')
-    is_sparse = issparse(A)
-    if verb: print(sparse)
-    largest = eigsh(A,1,which = 'LM',return_eigenvectors = False).item()
-    smallest=eigsh(A,1,which='SA',return_eigenvectors=False,sigma=1.0).item()
+    from importlib.util import find_spec
+    spec = find_spec('scipy.sparse')
+    if spec is None:
+      if verb: print('  warning: scipy.sparse not installed.')
+    else:
+      from scipy.sparse.linalg import eigsh
+      from scipy.sparse import issparse
+      if verb: print("  checking for sparseness ... ",end='')
+      feats = feats.numpy().astype('float64')
+      design_mat = feats.transpose() @ feats
+      is_sparse = issparse(design_mat)
+      if verb: print(is_sparse)
+      largest = eigsh(design_mat,1,which='LM',return_eigenvectors=False).item()
+      smallest=eigsh(design_mat,1,which='SA',return_eigenvectors=False,
+          sigma=1.0).item()
   else:
-    eigs = [0.0 if x.real < 0.0 else x for x in eigs]
-    largest = max(eigs)
-    smallest = min(eigs)
+    eigs = eigs.tolist()
+    eigs_ = [0.0 if x < 0.0 else x for x in eigs]
+    if len(eigs_) < len(eigs) and verb:
+      print('lopped off non-positive eig. vals.')
+    largest = max(eigs_)
+    smallest = min(eigs_)
 
   if (smallest != 0):
     if verb: print("condition number: {:.3g}".format(largest/smallest))
@@ -829,7 +839,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
     yss (torch.Tensor): A 1-dimensional tensor holding the
         correct class for each example.
     classes (torch.LongTensor): A one-dimensional tensor
-        holding the numerical version='0.6',
+        holding the numerical version='0.6.1',
         torch.arange(10) for digit classification.
 
   Kwargs:
