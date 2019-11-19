@@ -14,8 +14,10 @@ setup(
   #install_requires=['torch>=1.2.0+cpu', 'scipy', 'matplotlib<3.1', 'scikit-image<0.16'],
   #We do not include torch in install_requires since then users can install
   #the appropriate verion of torch (e.gl, cpu vs. gpu) for their machine.
-  install_requires=['scipy', 'matplotlib<3.1', 'scikit-image<0.16'],
-  version='0.6',
+  #Do the same for matplotlib
+  #install_requires=['matplotlib<3.1'],
+  install_requires=[],
+  version='0.6.1',
   license='Apache 2.0',
   description='tools from the DL@DU Project',
   long_description=readme(),
@@ -29,6 +31,7 @@ setup(
       'Programming Language :: Python :: 3.5',
       'Programming Language :: Python :: 3.6',
       'Programming Language :: Python :: 3.7',
+      'Programming Language :: Python :: 3.8',
       'Topic :: Scientific/Engineering',
       'Topic :: Scientific/Engineering :: Mathematics',
       'Topic :: Scientific/Engineering :: Artificial Intelligence',
