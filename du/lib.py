@@ -34,19 +34,22 @@ train
   (model, crit, train_data: Tuple[tensor))
                    _____________________
 
-Todo (you can safely ignore this, unless you want to help
-    Simmons work on these items.)
-  - fix the packing issue for minibatch in rec nets. Graphing
+Todo (you can safely ignore this list, unless you have time to
+    help Simmons work on these items.)
+  - Fix the packing issue for minibatch in rec nets - graphing
     against test loss on rec nets doesn't naturally work until
     then.
-  - attempt to move to device only in train() and coh_split().
+  - Attempt to move to device only in train() and coh_split().
     So try to refrain to going to device in programs (but still
-    get and pass the device, of course).
+    get and pass the device, of course). RETHINK THIS.
   - make cross_validate_train and cross_validate work with
-    variable length data.
-  - add feats lengths to all three train fns and documentation.
+    variable length data
+    - add feats lengths to all three train fns and document-
+      ation
   - zparams in train() should probably be a tensor on the same
     device as the model parameters.
+  - Using tuples instead of lists for losses and loss_test
+    makes good sense since they are faster and immutable.
   - Add option to train to show progress on training / testing
     data each epoch.  Done for losses, but add another pane
     to the graph with percentage correct training/testing.
@@ -66,14 +69,13 @@ Todo (you can safely ignore this, unless you want to help
     cross_validate.
   - Start type checking kwargs whenever everyone is clearly
     running Python 3.6 or greater.
-  - break out processing of train_data test_data in train() as
-    a helper fn. Write a helper called to_device().
-  - clean up string by using multiline ones correctly. Use
+  - Clean up string by using multiline ones correctly. Use
     verbosity so nothing is printed by default?
-  - add poly regression to examples
+  - Add poly (i.e. linear) regression to examples.
 '''
 import torch
 import torch.nn as nn
+from types import FunctionType
 
 __author__ = 'Simmons'
 __version__ = '0.6.1'
@@ -234,6 +236,54 @@ def coh_split(proportion, *args, device = 'cpu'):
   return_args =[item for sublist in split_args for item in sublist]
   return tuple(return_args)
 
+def _to_device(*args, device = 'cpu'):
+  '''Send stuff to a device.'''
+  pass
+
+def _parse_data(data_tuple, device = 'cpu'):
+  '''Helper function for the train function.
+
+  Args:
+    data_tuple Tuple[tensor]: Length either 2 or 3.
+
+  Returns:
+  '''
+  feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
+  if len(data_tuple) == 3:
+    feats_lengths = data_tuple[1].to(device)
+    assert len(feats_lengths) == len(feats),\
+        "No. of feats lengths ({}) must equal no. of feats ({}).".\
+            format(len(feats_lengths), len(feats))
+  else:
+    assert len(data_tuple) == 2, 'data_tuple must have len 2 or 3'
+    feats_lengths = None
+  assert len(feats) == len(targs),\
+      "Number of features ({}) must equal number of targets ({}).".\
+          format(len(feats), len(targs))
+  return feats, feats_lengths, targs
+
+def copy_parameters(model):
+  '''Copy a models parameters.
+
+  This is a helper function to copy a models parameters and
+  initialize each copied tensors so as to hold all zeros. The
+  returned tensors reside on the same device as that of the
+  corresponding tensor in model.parameters().
+
+   Args:
+     model (nn.Module): The model whose parameters to copy.
+
+   Returns:
+     list[tensor]: A list with the stucture of model.param-
+         eters() (which is itself a generator) but with its
+         tensors holding all zeros.
+  '''
+  params = []
+  for param in model.parameters():
+    params.append(param.data.clone())
+  for param in params: param.zero_()
+  return params
+
 def train(model, crit, train_data, **kwargs):
   '''Train a model.
 
@@ -247,6 +297,38 @@ def train(model, crit, train_data, **kwargs):
   loss for the training data. If testing data is present,
   then the red graph is the average loss per example for the
   test data.
+
+  Notes on specifying training hyper-parameters:
+
+  The argument `hyparams` specifies the training hyper-para-
+  meters.  It can be used in one of two ways. To train with
+  a constant learning rate and/or  momentum, one passes a sim-
+  ple dictionary of the form either
+
+       train( ..., hyparams = {'lr': 0.01}, ...)
+
+  or
+
+    train( ..., hyparams = {'lr': 0.01, 'mo': 0.9}, ...).
+
+  Alternatively one can pass a function, in which case the
+  following applies:
+
+  Upon calling this function, a copy (called z_params) of
+  `model.parameters()` is created, where `model` is the first
+  argument passed. All of the tensors in z_params are immedi-
+  ately detached from the model's graph and initialized to
+  zero.  In the training loop, the model parameters are updated
+  during back-propagation by calling the function passed to
+  hyparams like this:
+
+    hyparams(params = model.parameters(), z_params = z_params)
+
+  E.g., another way to achieve the first simple option above
+  (training with learning rate 0.01 and no momentum) is to pass
+  to `hyperparams` the function
+
+     lambda ps, _: [p.data.sub_(lr * p.grad.data) for p in ps]
 
   Args:
     model (nn.Module): The instance of Module to be trained.
@@ -277,7 +359,7 @@ def train(model, crit, train_data, **kwargs):
         The test data is not shown to the model during as
         part of backpropagation. Default = None.
     graph (int): If positive then, during training, display
-        a real-time graph.  If greater than 1, then the be-
+        a real-time graph. If greater than 1, then the be-
         gining `graph` losses are thrown away when training
         gets to epoch `graph` (this functionality is made
         available for a better viewing experience for some
@@ -287,21 +369,16 @@ def train(model, crit, train_data, **kwargs):
         holding the lengths of sequences in `feats`. Likely,
         relevant only for variable-length (i.e,, sequence)
         features. Default: None.
-    lr (float): The learning rate to be used during training.
-        Default: 0.1.
-    mo (float): The momentum during training. Default: 0.0.
+    hyparams (Union[dict, FunctionType]): The training hyper-
+        parameters in the form of a function; or, more simply,
+        a dict mapping the first or each of both of the strings
+        'lr', 'mo' to a float. Default: {'lr': 0.1}.
     bs (int): The mini-batch size where -1 forces batch grad-
         ient descent (i.e. feed-forwarding all training exam-
         ples before each backpropagation). Default: -1.
     eps (int): The number of epochs to train over, where an
         epoch is duration required to see each training ex-
         ample exactly once. Default: 10.
-    adapts (Dict): A dictionary mapping each of (or at least
-        one of) the strings 'lr', 'mo' to a lambda function
-        which itself maps a float to a float. The lambda fns
-        will be applied before each backpropagation.  E.g.,
-        {'lr': lambda x: 0.98*x} corresponds to learning
-        rate decay. Default: the identity map(s).
     print_lines (Tuple[int, int]): A tuple, the first compon-
         ent of which is the number of lines to print initial-
         ly when printing the current loss for each epoch dur-
@@ -311,7 +388,9 @@ def train(model, crit, train_data, **kwargs):
         (resp., all) lines are printed. Default: (17, 7).
     verb (int): The verbosity. 0: silent, ... , 2: all.
         Default: 2.
-    device (str): The device to run on. Default: 'cpu'.
+    device (str): Specifically set the device to train on.
+        Default None. (The default leads to training on the
+        best device available.)
 
   Returns:
     (nn.Module, Tuple). The trained model sent to device 'cpu'.
@@ -321,67 +400,55 @@ def train(model, crit, train_data, **kwargs):
   test_data = kwargs.get('test_data', None)
   lr = kwargs.get('lr', 0.1); mo = kwargs.get('mo', 0.0);
   bs=kwargs.get('bs', -1); eps = kwargs.get('eps', 10)
-  adaptives = kwargs.get('adapts', {'lr': lambda x: x, 'mo': lambda x: x})
+  hyparams = kwargs.get( 'hyparams', {'lr':0.1})
   print_init, print_last = kwargs.get('print_lines',(8, 12))
-  verb = kwargs.get('verb', 2); device = kwargs.get('device', 'cpu')
+  verb = kwargs.get('verb', 2); device = kwargs.get('device', None)
   graph = kwargs.get('graph', 0)
+
+  if not device:
+    device = get_device()
+
+  model = model.to(device)
+
+  make_z_params = True
+  if isinstance(hyparams, dict):
+    for key in hyparams.keys():
+      assert key == 'lr' or key == 'mo',\
+        "keys of hyparams must be 'lr' or 'mo', not {}.".format(key)
+    assert 'lr' in hyparams.keys(), 'no learning rate specified'
+    lr = hyparams['lr']
+    if 'mo' not in hyparams.keys():
+      hyparams = lambda ps, _: [p.data.sub_(lr * p.grad.data) for p in ps]
+      make_z_params = False
+    else:
+      mo = hyparams['mo']
+      def hyparams(params, z_params):
+        for i, (z_param, param) in enumerate(zip(z_params, params)):
+          z_params[i] = z_param.mul_(mo).add_(param.grad.data)
+          param.data.sub_(z_params[i] * lr)
+  else:
+    assert isinstance(hyparams, FunctionType),\
+        'hyparams must be a function or a dict or a function, not a {}'.\
+            format(type(hyparams))
+  if make_z_params: # then set up z_params
+    z_params = copy_parameters(model)
 
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
-  # parse train_data
-  train_feats=train_data[0].to(device); train_targs=train_data[-1].to(device)
-  if len(train_data) == 3:
-    train_feats_lengths = train_data[1].to(device)
-    assert len(train_feats_lengths) == len(train_feats),\
-        "No. of train_feats lengths ({}) must equal no. of train_feats ({}).".\
-            format(len(train_feats_lengths), len(train_feats))
-  else:
-    assert len(train_data) == 2, 'test data must have len 2 or 3'
-    train_feats_lengths = None
-  assert len(train_feats) == len(train_targs),\
-      "Number of training features ({}) must equal number of targets ({}).".\
-          format(len(train_feats), len(train_targs))
-
-  if verb > 0: print('training on', device)
-  model = model.to(device)
-  train_feats = train_feats.to(device); train_targs = train_targs.to(device)
-  if isinstance(train_feats_lengths, torch.Tensor):
-    train_feats_lengths = train_feats_lengths.to(device)
-
+  train_feats, train_feats_lengths, train_targs =_parse_data(train_data, device)
   num_examples = len(train_feats)
 
-  # parse test_data
   if test_data:
-    losses_test = []
-    test_feats = test_data[0].to(device); test_targs = test_data[-1].to(device)
-    if len(test_data) == 3:
-      test_feats_lengths = test_data[1].to(device)
-      assert len(test_feats_lengths) == len(test_feats),\
-          "No. of test_feats lengths ({}) must equal no. of test_feats ({}).".\
-              format(len(test_feats_lengths), len(test_feats))
-    else:
-      assert len(test_data) == 2, 'test_data tuple must have len 2 or 3'
-      test_feats_lengths = None
-    assert len(test_feats) == len(test_targs),\
-        "Number of testing features ({}) must equal number of targets ({}).".\
-            format(len(test_feats), len(test_targs))
-
-    test_feats = test_feats.to(device); test_targs = test_targs.to(device)
-    if isinstance(test_feats_lengths, torch.Tensor):
-      test_feats_lengths = test_feats_lengths.to(device)
+    test_feats, test_feats_lengths, test_targs = _parse_data(test_data, device)
+    losses_test=[]
 
   if bs <= 0: bs = num_examples
   if  print_init == -1 or print_last == -1: print_init, print_last = eps, -1
 
-  if mo > 0.0:
-    z_params = []
-    for param in model.parameters():
-      z_params.append(param.data.clone())
-    for param in z_params:
-      param.zero_()
+  #if mo > 0.0:
 
+  if verb > 0: print('training on', device)
   if verb > 2: print(model)
-
   if verb > 1:
     if lr < .005: lr_str = "learning rate: {:.4g}".format(lr)
     else: lr_str = "learning rate: {:.5g}".format(lr)
@@ -418,15 +485,16 @@ def train(model, crit, train_data, **kwargs):
       model.zero_grad()
       loss.backward()
 
-      if mo > 0.0:
-        for i, (z_param, param) in enumerate(zip(z_params, model.parameters())):
-          z_params[i] = mo * z_param + param.grad.data
-          param.data.sub_(z_params[i] * lr)
-      else:
-        for param in model.parameters():
-          param.data.sub_(lr * param.grad.data)
+      hyparams(model.parameters(), z_params)
+      #if mo > 0.0:
+      #  for i, (z_param, param) in enumerate(zip(z_params, model.parameters())):
+      #    z_params[i] = mo * z_param + param.grad.data
+      #    param.data.sub_(z_params[i] * lr)
+      #else:
+      #  for param in model.parameters():
+      #    param.data.sub_(lr * param.grad.data)
 
-      lr = adaptives['lr'](lr) # apply adaptives
+      #lr = adaptives['lr'](lr) # apply adaptives
 
     if print_init * print_last != 0 and verb > 0:
       loss_len = 20
