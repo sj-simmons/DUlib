@@ -370,9 +370,13 @@ def train(model, crit, train_data, **kwargs):
         relevant only for variable-length (i.e,, sequence)
         features. Default: None.
     hyparams (Union[dict, FunctionType]): The training hyper-
-        parameters in the form of a function; or, more simply,
-        a dict mapping the first or each of both of the strings
-        'lr', 'mo' to a float. Default: {'lr': 0.1}.
+        parameters in the form of a function; or, for basic
+        functionality, a dict whose keys either {'lr,'bs','eps'}
+        or {'lr,'mo','bs','eps'}. If hyparams is such a dict,
+        then it should map 'lr' and 'mo' (if present) to a
+        `float`; 'bs' and 'eps' should each map to an `int`.
+        Default: None, which is equivalent to passing the dict
+        {'lr':0.1, 'bs':-1, 'eps':10}.
     bs (int): The mini-batch size where -1 forces batch grad-
         ient descent (i.e. feed-forwarding all training exam-
         ples before each backpropagation). Default: -1.
@@ -398,9 +402,7 @@ def train(model, crit, train_data, **kwargs):
   _catch_sigint()
 
   test_data = kwargs.get('test_data', None)
-  lr = kwargs.get('lr', 0.1); mo = kwargs.get('mo', 0.0);
-  bs=kwargs.get('bs', -1); eps = kwargs.get('eps', 10)
-  hyparams = kwargs.get( 'hyparams', {'lr':0.1})
+  hyparams = kwargs.get('hyparams', None)
   print_init, print_last = kwargs.get('print_lines',(8, 12))
   verb = kwargs.get('verb', 2); device = kwargs.get('device', None)
   graph = kwargs.get('graph', 0)
@@ -410,16 +412,18 @@ def train(model, crit, train_data, **kwargs):
 
   model = model.to(device)
 
-  make_z_params = True
+  # process hyparams
+  lr = 0.1; bs = -1; eps = 10; mo = None
   if isinstance(hyparams, dict):
     for key in hyparams.keys():
-      assert key == 'lr' or key == 'mo',\
-        "keys of hyparams must be 'lr' or 'mo', not {}.".format(key)
-    assert 'lr' in hyparams.keys(), 'no learning rate specified'
-    lr = hyparams['lr']
+      assert key in ['lr','mo','eps','bs'],\
+          "keys of hyparams must be 'lr','mo','bs',or 'eps', not {}.".\
+              format(key)
+    if 'lr' in hyparams.keys(): lr = hyparams['lr']
+    if 'bs' in hyparams.keys(): bs = hyparams['bs']
+    if 'eps' in hyparams.keys(): eps = hyparams['eps']
     if 'mo' not in hyparams.keys():
       hyparams = lambda ps, _: [p.data.sub_(lr * p.grad.data) for p in ps]
-      make_z_params = False
     else:
       mo = hyparams['mo']
       def hyparams(params, z_params):
@@ -430,8 +434,11 @@ def train(model, crit, train_data, **kwargs):
     assert isinstance(hyparams, FunctionType),\
         'hyparams must be a function or a dict or a function, not a {}'.\
             format(type(hyparams))
-  if make_z_params: # then set up z_params
+  if mo != None: # then set up z_params
+    print('making z_params')
     z_params = copy_parameters(model)
+  else:
+    z_params = None
 
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
@@ -445,15 +452,15 @@ def train(model, crit, train_data, **kwargs):
   if bs <= 0: bs = num_examples
   if  print_init == -1 or print_last == -1: print_init, print_last = eps, -1
 
-  #if mo > 0.0:
-
   if verb > 0: print('training on', device)
   if verb > 2: print(model)
   if verb > 1:
     if lr < .005: lr_str = "learning rate: {:.4g}".format(lr)
     else: lr_str = "learning rate: {:.5g}".format(lr)
-    if mo < .005: mo_str = ", momentum: {:.4g}".format(mo)
-    else: mo_str = ", momentum: {:.5g}".format(mo)
+    if mo:
+      if mo < .005: mo_str = ", momentum: {:.4g}".format(mo)
+      else: mo_str = ", momentum: {:.5g}".format(mo)
+    else: mo_str = ''
     print(lr_str + mo_str + ", batchsize:", bs)
 
   if graph:
