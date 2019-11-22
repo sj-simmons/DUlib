@@ -1,4 +1,5 @@
-<p align="right"> <b> DL@DU </b> </p> <a id="dldu"></a>
+<a id="dldu"></a>
+<p align="right"> <b> <a href="https://github.com/sj-simmons/deep-learning#dldu"> The DL@DU Project</a> </b> </p>
 
 ### DUlib
 ---
@@ -90,10 +91,7 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
             └── models.py
     ```
 
-<a id="version0_7_"></a>
-####
-
-**Version 0.7** (November 21, 2019)
+**Version 0.8** (November 21, 2019)
   * The new normal with respect to `device`:
 
     For most applications involving feedforward nets, you don't really have to
@@ -112,12 +110,12 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
     * in the presence of gpu(s) you, for whatever reason, want to over-ride the use of a gpu and
       train on the cpu.
     * you want to non-trivially subclass DUlib's `TrainParams_` class.
-    * you are creating something interesting using the PyTorch's
+    * you are creating something interesting using PyTorch's
       [optim](https://pytorch.org/docs/stable/optim.html) package.
     * you are computing r-squared in the presence of high-dimensional data.
     * you are using/building a recurrent net class.
   * The API, particularly in `du.lib`, is stabilizing quickly, as of this release, so it is
-    worth it to go ahead and upgrade. However, in transitioning to version 0.7, you need some
+    worth it to upgrade. However, in transitioning to version 0.8, you need some
     refactoring. For example:
     * Calling `train` now looks, for example, like this:
       ``` python
@@ -127,16 +125,14 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
           train_data = (xss_train, yss_train),
           test_data = (xss_test, yss_test),
           learn_params = {'lr': args.lr, 'mo': args.mo},
-          epochs = args.epochs,
-          bs = args.bs,
-          graph = args.gr)
+          epochs = 10)
       ```
       Notice that `learn_params` (the learning parameters) is, in this example,
-      a dictionary.  It can also be an instance of the class `LearnParams_` (new in version 0.7, do
-      `pydoc3 du/examples.py` for a simple example of using this class);
+      a dictionary.  It can also be an instance of the class `LearnParams_` (which is new in version 0.8; do
+      `pydoc3 du.examples` to see a simple demonstration of using this class);
       or, `learn_params` can be a prebuilt optimizer from the [optim](https://pytorch.org/docs/stable/optim.html)
       package. (See the documentation for more details: `pydoc3 du.lib.train`).
-    * Another change in version 0.7 is that `optimize_ols` now outputs a dict instead of a tuple.
+    * Another change in version 0.8 is that `optimize_ols` now outputs a dict instead of a tuple.
       Hence you can, for example, do
       ``` python
       model = train(
@@ -144,12 +140,31 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
           criterion,
           train_data = (xss, yss),
           learn_params = optimize_ols(xss),
-          epochs = args.epochs,
-          bs = args.bs,
-          graph = args.gr)
+          epochs = 10)
       ```
   * All code in the [DL@DU projects](https://github.com/sj-simmons/deep-learning#dldu) has been
-    refactored to version 0.7.
+    refactored to version 0.8.
+
+<a id="latest"></a>
+####
+
+**Version 0.8.1** (November 23, 2019)
+  * A new module [model.py](du/models.py) was added in the root directory.
+
+  * The module structure is now:
+    ``` bash
+        du
+        ├── conv
+        │   └── models.py
+        ├── examples.py
+        ├── lib.py
+        ├── models.py
+        └── rec
+            ├── lib.py
+            └── models.py
+    ```
+
+
 
 ---
 
@@ -173,8 +188,8 @@ pip install git+https://github.com/sj-simmons/DUlib.git --user
 ```
 or just
 ``` bash
-pip install DUlib --user
+pip install -U DUlib --user
 ```
 
 Please let Simmons know of any new functionality that you implement and wish
-to add to DUlib! Or just fork, create/fix/modify, and issue a pull request.
+to add to DUlib. Or just fork, create/fix/modify, and issue a pull request.

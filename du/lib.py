@@ -91,7 +91,7 @@ from types import FunctionType
 from typing import Dict
 
 __author__ = 'Simmons'
-__version__ = '0.7'
+__version__ = '0.8'
 __status__ = 'Development'
 __date__ = '11/21/19'
 
@@ -300,7 +300,7 @@ def format_num(number):
   return string
 
 class LearnParams_:
-  '''The base class for LearnParams classes.
+  '''The base class for all LearnParams classes.
 
   Args:
     lr (float): The learning rate during training.
@@ -318,8 +318,8 @@ class LearnParams_:
     '''Update parameters.
 
     Args:
-      parameters (generator): The parameters (in the form of
-          on iterator of tensors) to be updated.
+      parameters (generator): The model parameters (in the
+          form of on iterator of tensors) to be updated.
     '''
     for param in parameters:
       param.data.sub_(self.lr * param.grad.data)
@@ -971,7 +971,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
     yss (torch.Tensor): A 1-dimensional tensor holding the
         correct class for each example.
     classes (torch.LongTensor): A one-dimensional tensor
-        holding the numerical version='0.7',
+        holding the numerical version='0.8',
         torch.arange(10) for digit classification.
 
   Kwargs:

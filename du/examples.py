@@ -202,7 +202,7 @@ Linear Regression without normalizing or centering:
                    _____________________
 '''
 __author__ = 'Simmons'
-__version__ = '0.7'
+__version__ = '0.8'
 __status__ = 'Development'
 __date__ = '11/21/19'
 

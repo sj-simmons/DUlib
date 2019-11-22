@@ -17,7 +17,7 @@ setup(
   #Do the same for matplotlib
   #install_requires=['matplotlib<3.1'],
   install_requires=[],
-  version='0.7',
+  version='0.8',
   license='Apache 2.0',
   description='tools from the DL@DU Project',
   long_description=readme(),
