@@ -34,9 +34,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 __author__ = 'Simmons'
-__version__ = '0.6.1'
+__version__ = '0.7'
 __status__ = 'Development'
-__date__ = '11/17/19'
+__date__ = '11/21/19'
 
 class OneMetaCNN(nn.Module):
   '''Class for a convolutional model with a single meta-layer.

@@ -22,10 +22,11 @@ lives in 3-space. Then `xss` is assumed to be a tensor of size
 
 If `yss` denotes the corresponding targets then, even though
 each example's target consists of only 1 number, we assume that
-`yss` is of `torch.Size([n, 1])`.  Therefore, you might want to
-employ the PyTorch utility `unsqueeze` when writing a program
-that calls, say, the `train` function in this library. (See be-
-low for a basic example).
+`yss` is of `torch.Size([n, 1])`; so that we also, in general,
+assume `yss` is of dimension at least 2.  Therefore, you might
+want to employ the PyTorch utility `unsqueeze` when writing a
+program that calls, say, the `train` function in this library.
+(See below for a basic example.)
 
                    _____________________
 
@@ -78,7 +79,7 @@ Linear Regression:
   >>> import torch.nn as nn
   >>> class LinRegModel(nn.Module):
   ...   def __init__(self):
-  ...     super(LinRegModel, self).__init__()
+  ...     super().__init__()
   ...     self.layer = nn.Linear(1, 1)
   ...   def forward(self, xss):
   ...     return self.layer(xss)
@@ -93,7 +94,8 @@ Linear Regression:
   ...     model = model,
   ...     crit = criterion,
   ...     train_data = (xss, yss),
-  ...     eps = 50,
+  ...     learn_params = {'lr': 0.1},
+  ...     epochs = 50,
   ...     verb = 0)
 
   Suppose that we want to predict the y-value when the x-value
@@ -127,34 +129,45 @@ Linear Regression with learning rate decay:
 
   >>> model = LinRegModel()
 
-  Let us implement a dynamic learning rate that decays over
-  time.
+  Let us use the class LearnParam_ to implement a dynamic
+  learning rate that decays over time.
 
+  >>> from du.lib import LearnParams_
+  >>> class LR_decay(LearnParams_):
+  ...   def __init__(self, lr, rate):
+  ...     super().__init__(lr)
+  ...     self.rate = rate
+  ...   def update(self, params):
+  ...     self.lr = self.rate * self.lr
+  ...     super().update(params)
+
+  Now we train using an instance of the above class.
   >>> learning_rate = 0.1; epochs = 2000
   >>> decay_rate = 1-75*learning_rate/epochs
   >>> print(decay_rate)
   0.99625
-  >>> adaptives = {'lr': lambda x: decay_rate * x}
-
-  And train the model.
-
-  >>> model = train(model, criterion, (xss, yss), eps = epochs,
-  ...     lr = learning_rate, adapts = adaptives, verb = 0)
+  >>> model = train(
+  ...   model,
+  ...   criterion,
+  ...   (xss, yss),
+  ...   learn_params = LR_decay(learning_rate, decay_rate),
+  ...   epochs = epochs,
+  ...   verb = 0)
 
   Now we check that the weights of our model converged to about
   2 and 9, the slope and intercept of the line we used to gen-
   erate the original data.
 
   >>> params = list(model.parameters())
-  >>> mm = params[0].item(); bb = params[1].item()
+  >>> m = params[0].item(); b = params[1].item()
 
   Now map the weights back to unnormalized/uncentered data, and
   check that the slope and intercept are close to 2 and 9,
 
   >>> my=yss_means.item(); mx=xss_means.item()
   >>> sy=yss_stds.item(); sx=xss_stds.item()
-  >>> slope = mm*sy/sx; intercept = my+bb*sy-slope*mx
-  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 6.0])
+  >>> slope = m*sy/sx; intercept = my+b*sy-slope*mx
+  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 10.0])
   True
 
 Linear Regression without normalizing or centering:
@@ -166,27 +179,32 @@ Linear Regression without normalizing or centering:
   >>> xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)
   >>> xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
   >>> from du.lib import optimize_ols
-  >>> lr, mo = optimize_ols(xss, verb = 0)
-  >>> model = train(model, criterion, (xss, yss), lr = lr,
-  ...     mo = mo, eps = 3000, verb = 0)
+  >>> model = train(
+  ...     model = model,
+  ...     crit = criterion,
+  ...     train_data = (xss, yss),
+  ...     learn_params = optimize_ols(xss),
+  ...     epochs = 3000,
+  ...     verb = 0)
   >>> params = list(model.parameters())
   >>> slope = params[0].item(); intercept = params[1].item()
   >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 10.0])
   True
 
+  In this last example, we ran on the best available device,
+  meaning the cpu or, if gpus are available, the last gpu
+  found.
                    _____________________
-
 
   Entire programs that employ the complete functionality of
   DUlib can be found at the DL@DU Project.
 
                    _____________________
-
 '''
 __author__ = 'Simmons'
-__version__ = '0.6.1'
+__version__ = '0.7'
 __status__ = 'Development'
-__date__ = '11/17/19'
+__date__ = '11/21/19'
 
 if __name__ == '__main__':
   import doctest

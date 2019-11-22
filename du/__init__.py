@@ -15,5 +15,5 @@ The module structure for DUlib is:
 '''
 __author__ = 'Simmons'
 __status__ = 'Development'
-__date__ = '11/17/19'
-__version__ = '0.6.1'
+__date__ = '11/21/19'
+__version__ = '0.7'

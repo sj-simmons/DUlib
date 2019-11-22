@@ -9,78 +9,91 @@ gauging accuracy of trained models.
 The functions along with their signatures displaying the simp-
 lest way to call them are (see each functions actual document-
 ation for more details):
-
-center
-  (xss: tensor) -> Tuple[tensor, tensor]
-coh_split
-  (proportion: float, *args: tensor) -> Tuple[tensor]
-confusion_matrix
-  (prob_dists: tensor, yss: tensor, classes: tensor)
-cross_validate
-  (model, crit, train_data:Tuple[tensor], k:int, bail_after:int)
-cross_validate_train
-  (model, crit, train_data: Tuple[tensor], k: int)
-get_device
-  ()
-normalize
-  (xss: tensor)
-optimize_ols
-  (feats: tensor)
-r_squared
-  (yhatss: tensor, yss: tensor)
-stand_args
-  ()
-train
-  (model, crit, train_data: Tuple[tensor))
                    _____________________
 
-Todo (you can safely ignore this list, unless you have time to
-    help Simmons work on these items.)
-  - Fix the packing issue for minibatch in rec nets - graphing
-    against test loss on rec nets doesn't naturally work until
-    then.
-  - Attempt to move to device only in train() and coh_split().
-    So try to refrain to going to device in programs (but still
-    get and pass the device, of course). RETHINK THIS.
-  - make cross_validate_train and cross_validate work with
-    variable length data
-    - add feats lengths to all three train fns and document-
-      ation
-  - zparams in train() should probably be a tensor on the same
-    device as the model parameters.
-  - Using tuples instead of lists for losses and loss_test
-    makes good sense since they are faster and immutable.
-  - Add option to train to show progress on training / testing
-    data each epoch.  Done for losses, but add another pane
-    to the graph with percentage correct training/testing.
-  - Add percentage or loss to ascii output in the presence of
-    testing data. (Take into account forget_after here).
-  - Implement stratified sampling at least when splitting out
-    testing data.  Maybe pass the relevant proportions to
-    coh_split.
-  - Try to catch last saved model or just continue on control-c
-    for, well, everything.
-    - Fix catch_sigint_and_break or remove it. If it is working
-      in bash, check and see how it interacts with interrupt in
-      say IDLE.
-  - Allow/implement adaptive momentum and activate train
-    accordingly.
-  - Clean up verbosity in cross_validate_train and
-    cross_validate.
-  - Start type checking kwargs whenever everyone is clearly
-    running Python 3.6 or greater.
-  - Clean up string by using multiline ones correctly. Use
-    verbosity so nothing is printed by default?
-  - Add poly (i.e. linear) regression to examples.
+Quick signatures (of classes and non-helper functions):
+
+  LearnParams
+     (model, lr=0.1, mo=0.0)
+  LearnParams_
+     (lr=0.1)
+
+  center
+     (xss, new_centers=None)
+  coh_split
+     (proportion, *args, device='cpu')
+  confusion_matrix
+     (prob_dists, yss, classes, **kwargs)
+  copy_parameters
+     (model)
+  cross_validate
+     (model, crit, train_data, k, bail_after, **kwargs)
+  cross_validate_train
+     (model, crit, train_data, k, **kwargs)
+  format_num
+     (number)
+  get_device
+     (gpu=-1)
+  normalize
+     (xss, new_widths=None, unbiased=True)
+  optimize_ols
+     (feats, **kwargs)
+  r_squared
+     (yhatss, yss, return_error=False)
+  stand_args
+     (desc='', **kwargs)
+  train
+     (model, crit, train_data, **kwargs)
 '''
+
+#Todo:
+#  - Fix the packing issue for minibatch in rec nets - graphing
+#    against test loss on rec nets doesn't naturally work until
+#    then.
+#  - Attempt to move to device only in train() and coh_split().
+#    So try to refrain to going to device in programs (but still
+#    get and pass the device, of course). THINK THROUGH THIS.
+#    - what about the new normal -- only moving to device for in
+#      the train fn -- w/r to cross_validate_train?
+#    - grep this whole file for device and look carefully
+#    - NOTE:  now using the gpu arg in train ...
+#  - make cross_validate_train and cross_validate work with
+#    variable length data
+#    - add feats lengths to all three train fns and document-
+#      ation
+#  - Using tuples instead of lists for losses and loss_test
+#    makes good sense since they are faster and immutable.
+#  - Add option to train to show progress on training / testing
+#    data each epoch.  Done for losses, but add another pane
+#    to the graph with percentage correct training/testing.
+#  - Add percentage or loss to ascii output in the presence of
+#    testing data. (Take into account forget_after here).
+#  - Implement stratified sampling at least when splitting out
+#    testing data.  Maybe pass the relevant proportions to
+#    coh_split.
+#  - Try to catch last saved model or just continue on control-c
+#    for, well, everything.
+#    - Fix catch_sigint_and_break or remove it. If it is working
+#      in bash, check and see how it interacts with interrupt in
+#      say IDLE.
+#  - Clean up verbosity in cross_validate_train and
+#    cross_validate.
+#  - Start type checking kwargs whenever everyone is clearly
+#    running Python 3.6 or greater.
+#  - Clean up strings by using multiline ones correctly. Use
+#    verbosity so nothing is printed by default.
+#  - Add poly (i.e. linear) regression to examples.
+#  -  Use _check_kwargs everywhere.
+
 import torch
 import torch.nn as nn
 from types import FunctionType
+from typing import Dict
 
 __author__ = 'Simmons'
-__version__ = '0.6.1'
+__version__ = '0.7'
 __status__ = 'Development'
-__date__ = '11/17/19'
+__date__ = '11/21/19'
 
 def get_device(gpu = -1):
   '''Get the best device to run on.
@@ -201,8 +214,8 @@ def coh_split(proportion, *args, device = 'cpu'):
     *args (torch.tensor): The tensors to be randomized and
         split, which must each have a common length in the
         first dimension.
-    device (str): The returned tensors have been sent to
-        this device.
+    device (str): The returned tensors have been sent to this
+        device. Consider not using this unless necessary.
 
   Returns:
     Tuple(torch.tensor). A tuple of length twice that of `args`
@@ -236,10 +249,6 @@ def coh_split(proportion, *args, device = 'cpu'):
   return_args =[item for sublist in split_args for item in sublist]
   return tuple(return_args)
 
-def _to_device(*args, device = 'cpu'):
-  '''Send stuff to a device.'''
-  pass
-
 def _parse_data(data_tuple, device = 'cpu'):
   '''Helper function for the train function.
 
@@ -247,6 +256,7 @@ def _parse_data(data_tuple, device = 'cpu'):
     data_tuple Tuple[tensor]: Length either 2 or 3.
 
   Returns:
+    Tuple[tensor].
   '''
   feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
   if len(data_tuple) == 3:
@@ -284,6 +294,66 @@ def copy_parameters(model):
   for param in params: param.zero_()
   return params
 
+def format_num(number):
+  if number < .005: string = '{:.4g}'.format(number)
+  else: string = '{:.5g}'.format(number)
+  return string
+
+class LearnParams_:
+  '''The base class for LearnParams classes.
+
+  Args:
+    lr (float): The learning rate during training.
+  '''
+  def __init__(self, lr = 0.1):
+    self.lr = lr
+
+  def __str__(self):
+    return 'learning rate: ' + format_num(self.lr)
+
+  def set_device(self, device):
+    pass
+
+  def update(self, parameters):
+    '''Update parameters.
+
+    Args:
+      parameters (generator): The parameters (in the form of
+          on iterator of tensors) to be updated.
+    '''
+    for param in parameters:
+      param.data.sub_(self.lr * param.grad.data)
+
+class LearnParams(LearnParams_):
+  '''A class for implementing gradient descent with momentum.
+
+  Args:
+    lr (float): The learning rate during training.
+    mo (float): The momentum during training.
+  '''
+  def __init__(self, model, lr = 0.1, mo = 0.0):
+    super().__init__(lr)
+    self.mo = mo
+    self.z_params = copy_parameters(model)
+
+  def __str__(self):
+    return super().__str__() + ', momentum: ' + format_num(self.mo)
+
+  def set_device(self, device):
+    for param in self.z_params:
+      param.to(device)
+
+  def update(self, params):
+    '''Update parameters with momentum.
+
+    Args:
+      parameters (generator): The parameters (in the form of
+          on iterator of tensors) to be updated.
+    '''
+    for i, (z_param, param) in enumerate(zip(self.z_params, params)):
+      self.z_params[i] = z_param.mul_(self.mo).add_(param.grad.data)
+      param.data.sub_(self.z_params[i] * self.lr)
+
 def train(model, crit, train_data, **kwargs):
   '''Train a model.
 
@@ -300,35 +370,20 @@ def train(model, crit, train_data, **kwargs):
 
   Notes on specifying training hyper-parameters:
 
-  The argument `hyparams` specifies the training hyper-para-
-  meters.  It can be used in one of two ways. To train with
-  a constant learning rate and/or  momentum, one passes a sim-
+  The argument `learn_params` specifies the training hyper-
+  parameters.  It can be used in one of two ways. To train with
+  a constant learning rate and/or momentum, one passes a sim-
   ple dictionary of the form either
 
-       train( ..., hyparams = {'lr': 0.01}, ...)
+       train( ..., learn_params = {'lr': 0.01}, ...)
 
   or
 
-    train( ..., hyparams = {'lr': 0.01, 'mo': 0.9}, ...).
+    train( ..., learn_params = {'lr': 0.01, 'mo': 0.9}, ...).
 
-  Alternatively one can pass a function, in which case the
-  following applies:
-
-  Upon calling this function, a copy (called z_params) of
-  `model.parameters()` is created, where `model` is the first
-  argument passed. All of the tensors in z_params are immedi-
-  ately detached from the model's graph and initialized to
-  zero.  In the training loop, the model parameters are updated
-  during back-propagation by calling the function passed to
-  hyparams like this:
-
-    hyparams(params = model.parameters(), z_params = z_params)
-
-  E.g., another way to achieve the first simple option above
-  (training with learning rate 0.01 and no momentum) is to pass
-  to `hyperparams` the function
-
-     lambda ps, _: [p.data.sub_(lr * p.grad.data) for p in ps]
+  Alternatively, learn_params can be an instance of the
+  LearnParams_ class (see the du.examples) or an instance of
+  torch.optim.Optimizer.
 
   Args:
     model (nn.Module): The instance of Module to be trained.
@@ -352,12 +407,24 @@ def train(model, crit, train_data, **kwargs):
         sion indexing the training examples.
 
   Kwargs:
-    test_data Tuple[torch.Tensor]: Data to test on in the
-        form of a tuple of length 2 or 3 (i.e., matching
-        the `train_data` (see above).  If present, the
-        loss on test data is computed each epoch.  However,
-        The test data is not shown to the model during as
-        part of backpropagation. Default = None.
+    test_data Tuple[torch.Tensor]: Data to test on in the form
+        of a tuple of length 2 or 3 (that is, matching the
+        `train_data` (see above).  If present, the loss on test
+        data is computed each epoch.  However, The test data is
+        not shown to the model during as part of backpropaga-
+        tion. Default = None.
+    learn_params (Union[dict,LearnParam_,torch.optim.Optimizer]):
+        The training (or 'learning') hyperparameters in the
+        form of an instance of the class LParams_; or, for bas-
+        ic functionality, a dict whose keys map the string
+        'lr', and optionally 'mo', to floats; or an instance
+        of torch.optim.Optimizer. Default: {'lr':0.1}.
+    bs (int): The mini-batch size where -1 forces batch grad-
+        ient descent (i.e. feed-forwarding all training exam-
+        ples before each backpropagation). Default: -1.
+    epochs (int): The number of epochs to train over, where
+        an epoch is duration required to see each training ex-
+        ample exactly once. Default: 10.
     graph (int): If positive then, during training, display
         a real-time graph. If greater than 1, then the be-
         gining `graph` losses are thrown away when training
@@ -369,20 +436,6 @@ def train(model, crit, train_data, **kwargs):
         holding the lengths of sequences in `feats`. Likely,
         relevant only for variable-length (i.e,, sequence)
         features. Default: None.
-    hyparams (Union[dict, FunctionType]): The training hyper-
-        parameters in the form of a function; or, for basic
-        functionality, a dict whose keys either {'lr,'bs','eps'}
-        or {'lr,'mo','bs','eps'}. If hyparams is such a dict,
-        then it should map 'lr' and 'mo' (if present) to a
-        `float`; 'bs' and 'eps' should each map to an `int`.
-        Default: None, which is equivalent to passing the dict
-        {'lr':0.1, 'bs':-1, 'eps':10}.
-    bs (int): The mini-batch size where -1 forces batch grad-
-        ient descent (i.e. feed-forwarding all training exam-
-        ples before each backpropagation). Default: -1.
-    eps (int): The number of epochs to train over, where an
-        epoch is duration required to see each training ex-
-        ample exactly once. Default: 10.
     print_lines (Tuple[int, int]): A tuple, the first compon-
         ent of which is the number of lines to print initial-
         ly when printing the current loss for each epoch dur-
@@ -392,76 +445,70 @@ def train(model, crit, train_data, **kwargs):
         (resp., all) lines are printed. Default: (17, 7).
     verb (int): The verbosity. 0: silent, ... , 2: all.
         Default: 2.
-    device (str): Specifically set the device to train on.
-        Default None. (The default leads to training on the
-        best device available.)
+    gpu (int): The gpu to use if there are any available. Set
+        to -1 to use the last gpu found when gpus are present;
+        set to -2 to override using a found gpu and use the
+        cpu. Default -1.
 
   Returns:
     (nn.Module, Tuple). The trained model sent to device 'cpu'.
   '''
+  _check_kwargs(kwargs,['test_data','learn_params','bs','epochs','graph',\
+      'feats_lengths','print_lines','verb','gpu'])
   _catch_sigint()
 
   test_data = kwargs.get('test_data', None)
-  hyparams = kwargs.get('hyparams', None)
+  learn_params = kwargs.get('learn_params', {'lr': 0.1})
+  bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 10)
   print_init, print_last = kwargs.get('print_lines',(8, 12))
-  verb = kwargs.get('verb', 2); device = kwargs.get('device', None)
-  graph = kwargs.get('graph', 0)
-
-  if not device:
-    device = get_device()
-
-  model = model.to(device)
-
-  # process hyparams
-  lr = 0.1; bs = -1; eps = 10; mo = None
-  if isinstance(hyparams, dict):
-    for key in hyparams.keys():
-      assert key in ['lr','mo','eps','bs'],\
-          "keys of hyparams must be 'lr','mo','bs',or 'eps', not {}.".\
-              format(key)
-    if 'lr' in hyparams.keys(): lr = hyparams['lr']
-    if 'bs' in hyparams.keys(): bs = hyparams['bs']
-    if 'eps' in hyparams.keys(): eps = hyparams['eps']
-    if 'mo' not in hyparams.keys():
-      hyparams = lambda ps, _: [p.data.sub_(lr * p.grad.data) for p in ps]
-    else:
-      mo = hyparams['mo']
-      def hyparams(params, z_params):
-        for i, (z_param, param) in enumerate(zip(z_params, params)):
-          z_params[i] = z_param.mul_(mo).add_(param.grad.data)
-          param.data.sub_(z_params[i] * lr)
-  else:
-    assert isinstance(hyparams, FunctionType),\
-        'hyparams must be a function or a dict or a function, not a {}'.\
-            format(type(hyparams))
-  if mo != None: # then set up z_params
-    print('making z_params')
-    z_params = copy_parameters(model)
-  else:
-    z_params = None
+  verb = kwargs.get('verb', 2); graph = kwargs.get('graph', 0)
+  gpu = kwargs.get('gpu', -1)
 
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
+  device = get_device(gpu)
   train_feats, train_feats_lengths, train_targs =_parse_data(train_data, device)
   num_examples = len(train_feats)
+
+  if bs <= 0: bs = num_examples
+
+  if verb > 0: print('training on', device)
+
+  model = model.to(device)
+  if verb > 2: print(model)
+
+  #process learn_params
+  has_optim = False
+  if isinstance(learn_params, Dict):
+    for key in learn_params.keys(): assert key in ['lr','mo'],\
+        "keys of learn_params dict should be 'lr' or 'mo', not {}.".format(key)
+    assert 'lr' in learn_params.keys(), "input dict must map 'lr' to float"
+    lr = learn_params['lr']
+    if verb > 1: print('learning rate:', format_num(lr), end=', ')
+    if 'mo' not in learn_params.keys():
+      learn_params = LearnParams_(lr = lr)
+      mo = None
+    else:
+      mo = learn_params['mo']
+      if verb > 1: print('momentum:', format_num(mo), end=', ')
+      learn_params = LearnParams(model, lr = lr, mo = mo)
+      learn_params.set_device(device)
+    if verb > 1: print('batchsize:', bs)
+  elif isinstance(learn_params, torch.optim.Optimizer):
+    has_optim = True
+  else:
+    assert isinstance(learn_params, LearnParams_),\
+        'learn_params must be a dict or an instance of LearnParams_, not a {}'.\
+            format(type(learn_params))
+    learn_params.set_device(device)
+    if verb > 1: print(learn_params, end=', ')
+    if verb > 1: print('batchsize:', bs)
 
   if test_data:
     test_feats, test_feats_lengths, test_targs = _parse_data(test_data, device)
     losses_test=[]
 
-  if bs <= 0: bs = num_examples
-  if  print_init == -1 or print_last == -1: print_init, print_last = eps, -1
-
-  if verb > 0: print('training on', device)
-  if verb > 2: print(model)
-  if verb > 1:
-    if lr < .005: lr_str = "learning rate: {:.4g}".format(lr)
-    else: lr_str = "learning rate: {:.5g}".format(lr)
-    if mo:
-      if mo < .005: mo_str = ", momentum: {:.4g}".format(mo)
-      else: mo_str = ", momentum: {:.5g}".format(mo)
-    else: mo_str = ''
-    print(lr_str + mo_str + ", batchsize:", bs)
+  if  print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
 
   if graph:
     import matplotlib.pyplot as plt
@@ -470,7 +517,7 @@ def train(model, crit, train_data, **kwargs):
 
   losses = []
 
-  for epoch in range(eps):
+  for epoch in range(epochs):
     accum_loss = 0
     indices = torch.randperm(len(train_feats)).to(device)
 
@@ -489,27 +536,20 @@ def train(model, crit, train_data, **kwargs):
             train_targs.index_select(0, current_indices))
 
       accum_loss += loss.item()
-      model.zero_grad()
+      if has_optim: learn_params.zero_grad()
+      else: model.zero_grad()
       loss.backward()
 
-      hyparams(model.parameters(), z_params)
-      #if mo > 0.0:
-      #  for i, (z_param, param) in enumerate(zip(z_params, model.parameters())):
-      #    z_params[i] = mo * z_param + param.grad.data
-      #    param.data.sub_(z_params[i] * lr)
-      #else:
-      #  for param in model.parameters():
-      #    param.data.sub_(lr * param.grad.data)
-
-      #lr = adaptives['lr'](lr) # apply adaptives
+      if has_optim: learn_params.step()
+      else: learn_params.update(model.parameters())
 
     if print_init * print_last != 0 and verb > 0:
       loss_len = 20
-      base_str = "epoch {0}/{1}; loss ".format(epoch+1, eps)
+      base_str = "epoch {0}/{1}; loss ".format(epoch+1, epochs)
       loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
-      if eps < 20 or epoch < print_init:
+      if epochs < 20 or epoch < print_init:
         print(base_str + loss_str)
-      elif epoch > eps - print_last:
+      elif epoch > epochs - print_last:
         print(end='\b'*len(base_str))
         print(base_str + loss_str)
       elif epoch == print_init:
@@ -550,7 +590,8 @@ def train(model, crit, train_data, **kwargs):
         losses_test,c='red',lw=.8,label='testing')
     plt.legend(loc=1); plt.ioff(); plt.show()
 
-  return model.to('cpu')
+  model = model.to('cpu')
+  return model
 
 def cross_validate_train(model, crit, train_data, k, **kwargs):
   '''Cross-validate train a model for one (by default) epoch.
@@ -589,7 +630,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
     cent_norm_feats (Tuple[bool]): Tuple with first entry det-
         ermining whether to center the features, and the sec-
         ond, whether to normalize them. Default: (True, True).
-    cent_norm_targss (Tuple[bool]): Tuple with first entry det-
+    cent_norm_targs (Tuple[bool]): Tuple with first entry det-
         ermining whether to center the targets, and the sec-
         ond, whether to normalize them. Default: (True, True).
     feats_lengths (torch.LongTensor): One-dimensional tensor
@@ -602,7 +643,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
     bs (int): The mini-batch size where -1 forces batch grad-
         ient descent (i.e. feed-forwarding all training exam-
         ples before each backpropagation). Default: -1.
-    eps (int): The number of epochs to train over for each
+    epochs (int): The number of epochs to train over for each
         validation step. Default: 1.
     adapts (Dict): A dictionary mapping each of (or at least
         one of) the strings 'lr', 'mo' to a lambda function
@@ -610,9 +651,12 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         will be applied before each backpropagation.  E.g.,
         {'lr': lambda x: 0.98*x} corresponds to learning
         rate decay. Default: the identity map(s).
+    gpu (int): Which gpu to use in the presence of one or more
+        gpus, where -1 means to use the last gpu found, and -2
+        means to override using a found gpu and use the cpu.
+        Default: -1.
     verb (int): The verbosity. 0: silent, ... , 2: all.
         Default: 2.
-    device (str): The device to run on. Default: 'cpu'.
 
   Returns:
     nn.Module. Returns the model which has been partially
@@ -623,7 +667,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         last chunk is thrown away (so make the length of it
         small, if not zero).
   '''
-  catch_sigint()
+  _catch_sigint()
   valid_crit = kwargs.get('valid_crit', None)
   feats, targs = train_data
   assert len(feats) == len(targs),\
@@ -633,9 +677,9 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
   cent_feats, norm_feats = kwargs.get('cent_norm_feats',(True, True))
   cent_targs, norm_targs = kwargs.get('cent_norm_targs',(True, True))
   lr = kwargs.get('lr', 0.1); mo = kwargs.get('mo', 0.0);
-  bs=kwargs.get('bs', -1); eps = kwargs.get('eps', 1)
+  bs=kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
   adapts = kwargs.get('adapts', {'lr': lambda x: x, 'mo': lambda x: x})
-  verb = kwargs.get('verb', 2); device = kwargs.get('device', 'cpu')
+  verb = kwargs.get('verb', 2); gpu = kwargs.get('gpu', -1)
 
   valids = torch.zeros(k) # this will hold the k validations
   chunklength = len(feats) // k
@@ -643,7 +687,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
   if not valid_crit: valid_crit = crit
 
   # randomize
-  indices = torch.randperm(len(feats)).to(device)
+  indices = torch.randperm(len(feats))
   xss = feats.index_select(0, indices)
   yss = targs.index_select(0, indices)
 
@@ -659,8 +703,15 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
     if cent_targs: yss_train, yss_train_means = center(yss_train)
     if norm_targs: yss_train, yss_train_stdevs = normalize(yss_train)
 
-    model = train(model=model, crit=crit, train_data=(xss_train, yss_train),
-        eps=eps, lr=lr, mo=mo, bs=bs, adapts=adapts, verb=verb-1, device=device)
+    model = train(
+        model=model,
+        crit=crit,
+        train_data=(xss_train, yss_train),
+        learn_params = {'lr': lr, 'mo': mo},
+        bs=bs,
+        epochs=epochs,
+        verb=verb-1,
+        gpu=gpu)
 
     if cent_feats: xss_test.sub_(xss_train_means)
     if norm_feats: xss_test.div_(xss_train_stdevs)
@@ -708,7 +759,7 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
     cent_norm_feats (Tuple[bool]): Tuple with first entry det-
         ermining whether to center the features, and the sec-
         ond, whether to normalize them. Default: (True, True).
-    cent_norm_targss (Tuple[bool]): Tuple with first entry det-
+    cent_norm_targs (Tuple[bool]): Tuple with first entry det-
         ermining whether to center the targets, and the sec-
         ond, whether to normalize them. Default: (True, True).
     feats_lengths (torch.LongTensor): One-dimensional tensor
@@ -721,7 +772,7 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
     bs (int): The mini-batch size where -1 forces batch grad-
         ient descent (i.e. feed-forwarding all training exam-
         ples before each backpropagation). Default: -1.
-    eps (int): The number of epochs to train over for each
+    epochs (int): The number of epochs to train over for each
         validation step. Default: 1.
     adapts (Dict): A dictionary mapping each of (or at least
         one of) the strings 'lr', 'mo' to a lambda function
@@ -752,12 +803,12 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
           format(len(feats), len(targs))
   feats_lengths = kwargs.get('feats_lengths', None)
   bail_after = kwargs.get('bail_after', 10)
-  cent_feats, norm_feats = kwargs.get('cent_norm_feats',(True, True))
-  cent_targs, norm_targs = kwargs.get('cent_norm_targs',(True, True))
+  cent_norm_feats = kwargs.get('cent_norm_feats',(True, True))
+  cent_norm_targs = kwargs.get('cent_norm_targs',(True, True))
   lr = kwargs.get('lr', 0.1); mo = kwargs.get('mo', 0.0);
-  bs=kwargs.get('bs', -1); eps = kwargs.get('eps', 1)
+  bs=kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
   adapts = kwargs.get('adapts', {'lr': lambda x: x, 'mo': lambda x: x})
-  verb = kwargs.get('verb', 2); device = kwargs.get('device', 'cpu')
+  verb = kwargs.get('verb', 1); gpu = kwargs.get('gpu', -1)
 
   no_improvement = 0
   best_valids = 1e15*torch.ones(k)
@@ -778,14 +829,16 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
         train_data = (feats, targs),
         k = k,
         valid_crit = valid_crit,
-        eps = eps,
+        cent_norm_feats = cent_norm_feats,
+        cent_norm_targs = cent_norm_targs,
+        epochs = epochs,
         lr = lr,
         mo = mo,
         bs = bs,
         verb = verb,
-        device = device)
+        gpu = gpu)
 
-    total_epochs += k*eps
+    total_epochs += k*epochs
 
     if valids.mean().item() < best_valids.mean().item():
       best_model = copy.deepcopy(model)
@@ -831,10 +884,9 @@ def optimize_ols(feats, **kwargs):
         ing numerical integrity. Default: 0.
 
   Returns:
-    Tuple[float]: A tuple, the first entry of which is the
-        optimal learning_rate and second of which is the
-        optimal momentum. If `with_mo` is False, then 0.0
-        is returned for the momentum.
+    Tuple[float]: A dict of  mapping either 'lr' to a float
+        or, if `with_mo` is `True`, mapping each of 'lr' and
+        'mo' to a float.
   '''
 
   #from scipy.linalg import eigh
@@ -894,7 +946,12 @@ def optimize_ols(feats, **kwargs):
     learning_rate = (2/(smallest**0.5+largest**0.5))**2
     momentum = ((largest**0.5-smallest**0.5)/(largest**0.5+smallest**0.5))**2
 
-  return learning_rate, momentum
+  if with_mo:
+    return_dict = {'lr': learning_rate, 'mo': momentum}
+  else:
+    return_dict = {'lr': learning_rate}
+
+  return return_dict
 
 def confusion_matrix(prob_dists, yss, classes, **kwargs):
   '''Compute the confusion matrix.
@@ -914,7 +971,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
     yss (torch.Tensor): A 1-dimensional tensor holding the
         correct class for each example.
     classes (torch.LongTensor): A one-dimensional tensor
-        holding the numerical version='0.6.1',
+        holding the numerical version='0.7',
         torch.arange(10) for digit classification.
 
   Kwargs:
@@ -1038,7 +1095,7 @@ def stand_args(desc = '', **kwargs):
         fault value `mo`. Default 0.0.
     bs (int): Batchsize, where -1 leads to batch gradient
         descent. Default 1.
-    eps (int): The number of epochs over which to train.
+    epochs (int): The number of epochs over which to train.
         Default 20.
     seed (bool): Whether or not to set a random seed.
         Default: False.
@@ -1065,7 +1122,7 @@ def stand_args(desc = '', **kwargs):
   lr = kwargs.get('lr', 0.1)
   mo = kwargs.get('mo', 0.0)
   bs = kwargs.get('bs', 1)
-  eps = kwargs.get('eps', 20)
+  epochs = kwargs.get('epochs', 20)
   seed = kwargs.get('seed', False)
   pt = kwargs.get('pt', 1.0)
   gpu = kwargs.get('gpu', -1)
@@ -1078,7 +1135,7 @@ def stand_args(desc = '', **kwargs):
   p('-mo', type=float, help='momentum', default=mo)
   hstr='the mini-batch size; set to -1 for (full) batch gradient descent'
   p('-bs', type=int, help=hstr, default=bs)
-  p('-eps', type=int, help='num epochs to train', default=eps)
+  p('-epochs', type=int, help='num epochs to train', default=epochs)
   hstr="toggle setting random seed"
   if seed:
     p('-seed', dest='seed', help=hstr, action='store_false')
@@ -1091,6 +1148,21 @@ def stand_args(desc = '', **kwargs):
   hstr='graph of losses during training; redraw after this many epochs'
   p('-gr', help=hstr, type=int, default=0)
   return  parser
+
+def _check_kwargs(passed, valid_keywords):
+  ''' Check that each string in passed is in valid and notify
+  of problems.
+
+  Args:
+    passed (List[str]): In practice, the keywords that were
+        passed to the function, class, method, etc. from which
+        `_check_kwargs` was called.
+    valid_keywords (List[str]): The valid keywords for said
+        function, class, method, etc.
+  '''
+  for keyword in passed:
+    assert keyword in valid_keywords,\
+        '{} is not a valid argument keyword'.format(keyword)
 
 def _catch_sigint():
   '''Catch keyboard interrupt signal.  '''
