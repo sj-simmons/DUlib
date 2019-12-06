@@ -19,14 +19,10 @@
   the [DL@DU Project](https://github.com/sj-simmons/deep-learning#dldu).
 * If you are in the Python interpreter and have imported say the `train`
   function with `from du.lib import train`, then you can get help on `train`
-  function with:
-  ``` python
-  >>> help(train)
-  ```
-  At the command line, you would issue the command `pydoc3 du.lib.train`
+  function with: `help(train)`
+* At the command line, you would issue the command `pydoc3 du.lib.train`
   for help on `train`.
-
-Note: The downstream repo for DUlib
+* The downstream repo for DUlib
     is: [pypi.org/project/DUlib/](https://pypi.org/project/DUlib/).
 
 ---
@@ -56,7 +52,7 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
     to prefer this over a later release.
 
 **Version 0.6** (November 17, 2019).
-  * DUlib now has a down-stream repo on [pypi.org](https://pypi.org/) so that it can now
+  * DUlib now has a downstream repo on [pypi.org](https://pypi.org/) so that it can now
     be installed by simply issuing the command `pip3 install DUlib` (or, depending
     on your setup, `pip3 install DUlib --user`) at the command line.
     * The pypi page is here:
@@ -79,17 +75,6 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
 
     Putting `graph = 5`, for example, when calling `train`, redraws the graph at epoch 5, throwing
     a way the graph at previous epochs, which can be useful in some instances.
-  * The modules in the library are now structured as:
-    ```bash
-        du
-        ├── examples.py
-        ├── lib.py
-        ├── conv
-        │   └── models.py
-        └── rec
-            ├── lib.py
-            └── models.py
-    ```
 
 **Version 0.8** (November 21, 2019)
   * The new normal with respect to `device`:
@@ -148,23 +133,23 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.8.1** (November 23, 2019)
-  * A new module [model.py](du/models.py) was added in the root directory.
+**Version 0.8.5** (December 5th, 2019)
+  * The current module structure is show below, with the modules in blue and
+    some of the more common functions in red.  To view the current module
+    structure, and to see suggested usage and more, type `pydoc3 du` at the
+    command line.
 
-  * The module structure is now:
-    ``` bash
-        du
-        ├── conv
-        │   └── models.py
-        ├── examples.py
-        ├── lib.py
-        ├── models.py
-        └── rec
-            ├── lib.py
-            └── models.py
-    ```
+    <p align="center">
+      <img height="600" src="screenshot1.png">
+    </p>
 
+  * The core library is `du.lib`.  To quickly see usage and synopsis of the
+    functions and classes available in `du.lib`, type `pydoc3 du.lib` at the
+    command line (and scroll down to peruse detailed usage).
 
+    <p align="center">
+      <img height="600" src="screenshot2.png">
+    </p>
 
 ---
 
