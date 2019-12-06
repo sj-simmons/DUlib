@@ -1,5 +1,5 @@
 __doc__ = 'tools for convolutional networks.'
-__author__ = 'Simmons'
+__author__ = 'Scott Simmons'
 __status__ = 'Development'
-__date__ = '11/21/19'
-__version__ = '0.8'
+__date__ = '12/06/19'
+__version__ = '0.8.5'

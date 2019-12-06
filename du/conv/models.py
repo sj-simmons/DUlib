@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-'''model classes for convolutional nets.
+'''model classes for ~convolutional neural nets~.
 
-The convolutional models defined here are built from meta-
-layers, where a single meta-layer consists of a 2d convol-
-ution layer followed by a 2d max-pooling layer.
-
-The constructor for the convolution models allows passing in
-attributes called `means` and `stdevs` which in practice hold
-the means and standard deviations of the training data.
-
-The reason that we might want pass those to the constructor is
-so that we can then store them as attributes in a serialization
-of a trained instance of the class. That way, when we later
-want to use the pre-trained model to make a prediction, we can
-read in the serialized model and easily (if necessary) center
-and normalize the features of the prediction with respect to
-the means and centers of the training data (so that the train-
-ing data need not even be available when making predictions).
+The convolutional models defined here are built from metalay-
+ers, where a single meta-layer consists of a 2d convolution
+layer followed by a 2d max-pooling layer.
 
 Currently, two convolutional models are defined. The signatur-
 es for their constructors are as follows. See their class doc-
@@ -32,13 +19,38 @@ TwoMetaCNN
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from du.models import FFNNet_
 
-__author__ = 'Simmons'
-__version__ = '0.8'
+__author__ = 'Scott Simmons'
+__version__ = '0.8.5'
 __status__ = 'Development'
-__date__ = '11/21/19'
+__date__ = '12/06/19'
 
-class OneMetaCNN(nn.Module):
+#def MetaLayer(nn.Module):
+#  """A metalayer for a convolutional network.
+#
+#  This is a customizable single so-called 'meta-layer' con-
+#  sisting of a single convolutional layer followed by a sin-
+#  gle max-pooling layer.
+#
+#  Args:
+#    in_size (Tuple[int]): A tuple of length two holding the
+#        width and length of each input. If an instance of
+#        this class is the first meta-layer encounterd by data
+#        on its way through a convolutional network, then this
+#        is just `(width, length)` where `width` and `length`
+#        are the feature image width and length in pixels for
+#        an example in the data.
+#    channels (Tuple[int]): `(in_channels, out_channels)`.
+#    kernel_size (int): The width and height of the kernel.
+#    stride (int)
+#    padding (int)
+#  """
+#  def __init__(self, im_size, in_width, kernel_size):
+#  pass
+
+
+class OneMetaCNN(FFNNet_):
   '''Class for a convolutional model with a single meta-layer.
   '''
   def __init__(self, means = None, stdevs = None):
@@ -50,7 +62,7 @@ class OneMetaCNN(nn.Module):
       stdevs (torch.Tensor): A tensor typically holding the
           standard deviations of the training data.
     '''
-    super(OneMetaCNN, self).__init__()
+    super().__init__(means = means, stdevs = stdevs)
     self.meta_layer1 = nn.Sequential(
         nn.Conv2d(
             in_channels=1,
@@ -63,12 +75,6 @@ class OneMetaCNN(nn.Module):
         nn.MaxPool2d(kernel_size = 2, stride = 2, padding = 0)
     )
     self.fc_layer1 = nn.Linear(1600,10)
-
-    # recommended hyper-parameters (with seed 123, epochs 30,
-    # centered and normalized)
-    self.register_buffer('lr', torch.tensor(.023))
-    self.register_buffer('mo', torch.tensor(.9))
-    self.register_buffer('bs', torch.tensor(30))
 
     # Add mean and stdev fields to state_dict.  These hold
     # the means and stdevs of the training data.
@@ -85,12 +91,11 @@ class OneMetaCNN(nn.Module):
     xss = self.fc_layer1(xss)
     return torch.log_softmax(xss, dim=1)
 
-class TwoMetaCNN(nn.Module):
+class TwoMetaCNN(FFNNet_):
   ''' A two meta-layer convolutional model.
   '''
-
-  def __init__(self, width_m1=16, width_m2=32, means = None, stdevs = None):
-    super(TwoMetaCNN, self).__init__()
+  def __init__(self, im_size = (20, 20), width_m1=16, width_m2=32, width_fc1 = 200, n_classes = 10, means = None, stdevs = None):
+    super().__init__(means = means, stdevs = stdevs)
     '''Constructor.
 
     Args:
@@ -105,6 +110,8 @@ class TwoMetaCNN(nn.Module):
       stdevs (torch.Tensor): A tensor typically holding the
           standard deviations of the training data. Default: None.
     '''
+    self.im_w = im_size[0]
+    self.im_h = im_size[1]
     self.width_m2 = width_m2
     self.meta_layer1 = nn.Sequential( # A mini-batch_size of N for input to this
         nn.Conv2d(                    # would have size Nx1x20x20.
@@ -129,17 +136,9 @@ class TwoMetaCNN(nn.Module):
         nn.MaxPool2d(kernel_size = 2, stride = 2, padding = 0)
     )                                 # Downsampling, we have
                                       #   N x width_m2 x 5 x 5.
-    self.fc_layer1 = nn.Linear(width_m2*25,200)
-    self.fc_layer2 = nn.Linear(200,10)
+    self.fc_layer1 = nn.Linear(int(width_m2*self.im_h*self.im_w/16), width_fc1)
+    self.fc_layer2 = nn.Linear(width_fc1, n_classes)
 
-    # recommended hyper-parameters
-    self.register_buffer('lr', torch.tensor(1e-4))
-    self.register_buffer('mo', torch.tensor(.95))
-
-    # Add mean and stdev fields to state_dict.  These hold
-    # the means and stdevs of the training data.
-    self.register_buffer('means', means)
-    self.register_buffer('stdevs', stdevs)
 
   def forward(self, xss):
     '''Forwards examples through, in turn, two meta-layers and
@@ -148,11 +147,12 @@ class TwoMetaCNN(nn.Module):
     xss = torch.unsqueeze(xss, dim=1)
     xss = self.meta_layer1(xss)
     xss = self.meta_layer2(xss)
-    xss = torch.reshape(xss, (-1, self.width_m2*25))
+    xss = torch.reshape(xss, (-1, int(self.width_m2*self.im_h*self.im_w/16)))
     xss = self.fc_layer1(xss)
     xss = torch.relu(xss)
     xss = self.fc_layer2(xss)
     return torch.log_softmax(xss, dim=1)
+
 
 if __name__ == '__main__':
   import doctest

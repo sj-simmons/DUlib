@@ -1,55 +1,171 @@
 #!/usr/bin/env python3
-'''core functions for working with neural nets.
+'''classes and functions for working with neural nets.
 
-This library contains functions for centering and normalizing
-data, splitting out testing data, training neural nets, and
-gauging accuracy of trained models.
-                   _____________________
+This library can be used to center and normalize data, split
+out testing data, train neural nets, and gauge performance of
+trained models.
+                    _____________________
 
-The functions along with their signatures displaying the simp-
-lest way to call them are (see each functions actual document-
-ation for more details):
-                   _____________________
+The classes and functions along with their signatures are as
+follows (see each function's documentation for details).
 
-Quick signatures (of classes and non-helper functions):
+!Functions!
 
-  LearnParams
-     (model, lr=0.1, mo=0.0)
-  LearnParams_
-     (lr=0.1)
+  |center|       mean-center `xss`; returns `(tensor, tensor)`
+    ($xss$,        -tensor to center w/r to its 1st dim
+     $new_centers$ = `None`)
+                 -first return tensor has column means
+                  `new_centers`; default is `new_centers`
+                  being all zeros.
 
-  center
-     (xss, new_centers=None)
-  coh_split
-     (proportion, *args, device='cpu')
-  confusion_matrix
-     (prob_dists, yss, classes, **kwargs)
-  copy_parameters
-     (model)
-  cross_validate
-     (model, crit, train_data, k, bail_after, **kwargs)
-  cross_validate_train
-     (model, crit, train_data, k, **kwargs)
-  format_num
-     (number)
-  get_device
-     (gpu=-1)
-  normalize
-     (xss, new_widths=None, unbiased=True)
-  optimize_ols
-     (feats, **kwargs)
-  r_squared
-     (yhatss, yss, return_error=False)
-  stand_args
-     (desc='', **kwargs)
-  train
-     (model, crit, train_data, **kwargs)
+  |normalize|    normalize `xss`; returns `(tensor, tensor)`
+    ($xss$,        -tensor to normalize w/r to its 1st dim
+     $new_widths$ = `None`,
+                 -the first tensor returned will now have
+                  columns with st. devs `new_widths`; de-
+                  fault is `new_widths` being all ones.
+     $unbiased$ = `True`)
+                 -use n-1 instead of n in the denominator
+                  when computing the standard deviation.
+
+  |coh_split|    randomize and coherently split each tensor
+                 in `*args`; returns `Tuple[tensor]`
+    ($prop$,       -split like `prop`, 1 - `prop`
+     $*args$)      -each of these tensors are split into two
+
+  |train|        return `model` trained using ~SGD~;
+    ($model$,      -the instance of `nn.Module` to be trained
+     $crit$,       -the criterion for assessing the loss
+     $train_data$,
+                 -either a tuple `(train_feats, train_targs)` or
+                  `(train_feats, train_lengths, train_targs)`;
+                  passing `train_lengths` or, below, `test_lengths`
+                  is likely only relevant for recurrent nets.
+     $test_data$ = `None`,
+                 -either `(train_feats, train_targs)` or
+                  `(test_feats, test_lengths, train_targs)`
+     $learn_params$ = `{'lr':0.1}`,
+                 -a `dict` of the form `{'lr':.1,'mo':.9}` or
+                  `{'lr':.1}`, or an instance of `LearnParams_`,
+                  or and instance of `torch.optim.Optimizer`.
+     $bs$ = `-1`,    -the mini-batch size; -1 is (full) batch
+     $epochs$ = `10`,
+                 -train for this many epochs
+     $graph$ = `0`,  -put 1 (or more) to show graph when training
+     $print_lines$ = `(17,7)`,
+                 -print 17 beginning lines and 7 ending lines
+     $verb$ = `2`,   -verbosity; 3 for more, 1 for less, 0 for
+                  silent
+     $gpu$ = `-1`)   -the gpu to run on, if any are available; if
+                  none available, use the cpu; put -1 to use
+                  the last gpu if multiple ones found; put -2
+                  to override found gpu(s) and use the cpu.
+                  Consider just accepting the default here.
+
+  |cross_validate_train|
+    ($model$, $crit$, $train_data$, $k$, $**kwargs$)
+     This is a helper function for `cross_validate`; each epoch
+     it iterates fold-wise, validating on the `k` possible test
+     sets, and returns the model trained (partially, for 1 epoch,
+     by default); consider using `cross_validate` instead of cal-
+     ling this directly; the arguments are the same as those for
+     `cross_validate`, but without `bail_after`.
+
+  |cross_validate| return `model` cross-validate trained
+    ($model$,     -the model to be cross-validated
+     $crit$,      -the loss function while training
+     $train_data$,-either `(train_feats, train_targs)` or
+                   `(test_feats, test_lengths, train_targs)`
+     $k$ = `10`,    -the number of folds when cross-validating
+     $bail_after$ = `5`,
+                -bail after this many steps if no improvement
+     $valid_crit$ = `None`,
+                -the criterion to use when validating on test
+                 test_data during cross validate training and
+                 on any final testing data. Default means to
+                 use the loss function define by `crit`.
+     $cent_norm_feats$ = `(True, True)`,
+                -whether to center and/or normalize features
+     $cent_norm_targs$ = `(True, True)`,
+                -whether to center and/or normalize targets
+     $learn_params$ = `{'lr':0.1}`,
+                -a `dict` of the form `{'lr':.1,'mo':.9}` or
+                 `{'lr':.1}`, or an instance of `LearnParams_`,
+                 or and instance of `torch.optim.Optimizer`.
+     $bs$ = `-1`,   -the mini-batch size; -1 is (full) batch
+     $epochs$ = `1`,
+                -train for this many epochs during each run of
+                 `cross_valid_train`.
+     $verb$ = `1`,  -verbosity; 0 for silent
+     $gpu$ = `-1`)  -the gpu to run on, if any are available; if
+                 none available, use the cpu; put -1 to use
+                 the last gpu if multiple ones found; put -2
+                 to override found gpu(s) and use the cpu.
+                 Consider just accepting the default here.
+
+  |confusion_matrix| compute the confusion matrix for a class-
+                 ification problem (with, say, `m` classes)
+    ($prob_dists$,-these are the predictions of the model in
+                 the form of a tensor (of shape `(n,m)`) of
+                 disctete probability dists; this is normally
+                 just `model(xss_test)` or `model(xss_train)`
+     $yss$        -a tensor of shape `(n)` holding the correct
+                 classes
+     $classes$,   -a tensor of shape `(n)` holding the possible
+                 classes; normally would be `torch.arange(10)`,
+                 if there are 10 things being classified
+     $return_error$ = `False`,
+                -return error instead of proportion correct
+     $show$ = `False`,
+                -display the confusion matrix       -
+     $class2name$ = `None`)
+                -a dict mapping `int`s representing the classes
+                 to the corresponing descriptive name (str)
+
+  |r_squared|     compute the coefficient of determination
+    ($yhatss$,    -either a trained model's best guesses (so
+                 often just `model(xss)`; or, a tuple of
+                 the form `(model, xss)`. (Use the second
+                 form to execute the model evaluation on
+                 the fastest device available.)
+     $yss$,       -the actual targets
+     $gpu$ = `-1`,  -run on the fastest device, by default
+     $return_error$ = `False`)
+
+  |optimize_ols|  find optimal training hyper-parameters; re-
+    ($feats$,      turns a dict with keys 'lr' and 'mo'
+     $with_mo$ = `True`
+                -if `False` just returns optimal learning rate
+     $verb$ = `0`)  -default is silence; put 1 to include warnings,
+                 and 2 to actually print out `X^TX` where `X`
+                 is the design matrix.
+
+  |copy_parameters| helper for sub-classing `LearnParams_`
+    ($model$)     -copy the parameters of `model`
+
+!Classes!
+
+  |LearnParams_|  base class for defining learning parameters
+    ($lr$ = `0.1`)  -we need at least a learning rate
+
+  |LearnParams|   subclass of `LearnParams_`, an instance of
+                which adds momentum
+    ($model$,     -model instance to which to add momentum
+     $lr$ = `0.01`, -the desired learning rate
+     $mo$ = `0.9`)  -the desired momentum
 '''
 
 #Todo:
+#  - Looks like the graphing epochs values on axis are off by one
 #  - Fix the packing issue for minibatch in rec nets - graphing
 #    against test loss on rec nets doesn't naturally work until
-#    then.
+#    then (without accumulating it with a loop).
+#  - Fix the documentation: it is wrong in saying that yss is
+#    assumed to be dim > 2.  But for any classification problem
+#    the train fn assumes it 1.
+#  - Maybe detect a classification problem in cross_validate and
+#    warn of bail if someone cent_norms the yss (which is the
+#    default).
 #  - Attempt to move to device only in train() and coh_split().
 #    So try to refrain to going to device in programs (but still
 #    get and pass the device, of course). THINK THROUGH THIS.
@@ -61,8 +177,6 @@ Quick signatures (of classes and non-helper functions):
 #    variable length data
 #    - add feats lengths to all three train fns and document-
 #      ation
-#  - Using tuples instead of lists for losses and loss_test
-#    makes good sense since they are faster and immutable.
 #  - Add option to train to show progress on training / testing
 #    data each epoch.  Done for losses, but add another pane
 #    to the graph with percentage correct training/testing.
@@ -81,38 +195,40 @@ Quick signatures (of classes and non-helper functions):
 #  - Start type checking kwargs whenever everyone is clearly
 #    running Python 3.6 or greater.
 #  - Clean up strings by using multiline ones correctly. Use
-#    verbosity so nothing is printed by default.
-#  - Add poly (i.e. linear) regression to examples.
-#  -  Use _check_kwargs everywhere.
+#    verbosity so nothing is printed by default. Use
+#    textwrap.dedent.
+#  -  Use _check_kwargs everywhere in the other modules.
+#  - fix asserts, like you did in r-squared, throughout
+#  - catch tkinter error when bailing early on any graphing.
+#  - optimize_ols is still somehow spitting out complex numbers
+#    eigenvalues for terribly unconditioned but symmetric mats.
+#  - write a cent_norm function and an un_norm_cent_wieghts that
+#    reverts the weights of a trained linear model back to that of
+#    the un_normalized un_centered data. Then use this for better
+#    high degree poly regression.
+#  - r-squared only really applies to ols regression (with linear
+#    hypothesis) (*but what about poly linear regression*). Still
+#    though, for a regression problem,  just split out testing
+#    data and compute r-squared for that.
+#  - when using cross-validation, just put in the means and st.devs.
+#    of all the data when serializing (change doc strings in models)
+#  - Build a graphing class
+#  - Colorize the confusion matrix
+#  - use '\r' where possible in train printing
 
 import torch
 import torch.nn as nn
 from types import FunctionType
 from typing import Dict
+from textwrap import dedent
+import du.util
 
-__author__ = 'Simmons'
-__version__ = '0.8'
+__author__ = 'Scott Simmons'
+__version__ = '0.8.5'
 __status__ = 'Development'
-__date__ = '11/21/19'
+__date__ = '12/06/19'
 
-def get_device(gpu = -1):
-  '''Get the best device to run on.
-
-  Args:
-    gpu (int): The gpu to use. Set to -1 to use the last gpu
-        found when gpus are present; set to -2 to override
-        using a found gpu and use the cpu. Default -1.
-
-  Returns:
-    str. A string that can be passed using the  `to` method
-        of Torch tensors and modules.
-  '''
-  if gpu > -2:
-    return torch.device( "cuda:{0}".format(
-               (torch.cuda.device_count() + gpu) % torch.cuda.device_count()
-           )) if torch.cuda.is_available() else "cpu"
-  else:
-    return 'cpu'
+globals()['__doc__']=du.util._markup(globals()['__doc__'])
 
 def center(xss, new_centers = None):
   '''(Mean, by default) center a tensor.
@@ -122,10 +238,23 @@ def center(xss, new_centers = None):
   data w/r to the first dimension. But notice that the return-
   ed object is a tuple. So if you want to simply mean-center a
   tensor you would call this function like:
+             xss_centered, _ = center(xss)
+  That is, you don't care about the second element of the tuple
+  being returned.
 
-  xss_centered, _ = center(xss)
+  Args:
+    xss (`torch.Tensor`) The tensor to center.
+    new_centers(`torch.Tensor`) A tensor the number of dimensions
+        of which is one less than that of `xss` and whose shape
+        is in fact `(d_1,...,d_n)` where `xss` has as its shape
+        (d_0, d_1,...,d_n).  The default `None` is equivalent to
+        `new_center` being the zero tensor.  Default: None.
 
-  Examples:
+  Returns:
+    (torch.Tensor, torch.Tensor). A tuple of tensors the first
+        of which is `xss` centered with respect to the first dim-
+        ension; the second is a tensor the size of the remain-
+        ing dimensions that holds the means.
 
   >>> xss = torch.arange(12.).view(3,4)
   >>> center(xss)
@@ -136,23 +265,8 @@ def center(xss, new_centers = None):
   >>> xss__, _ = center(xss_, -xss_means)
   >>> int(torch.all(torch.eq(xss, xss__)).item())
   1
-
-  Args:
-    xss (torch.Tensor) The tensor to center.
-    new_centers(torch.Tensor) A tensor the number of dimensions
-        of which is one less than that of `xss` and whose size
-        is in fact `torch.Size([d_1,...,d_n])` where `xss` has
-        `torch.Size([d_0, d_1,...,d_n])`.  The default `None`
-        is equivalent to `new_center` being the zero tensor.
-        Default: None.
-
-  Returns:
-    (torch.Tensor, torch.Tensor). A tuple of tensors the first
-        of which is xss centered with respect to the first dim-
-        ension; the second is a tensor the size of the remain-
-        ing dimensions that holds the means.
   '''
-  # add and assert here ... check that new_center is right dim.
+  # add an assert checkin that new_center is right dim.
   xss_means = xss.mean(0)
   if isinstance(new_centers, torch.Tensor):
     new_xss = xss.sub_(new_centers)
@@ -165,17 +279,6 @@ def normalize(xss, new_widths = None, unbiased = True):
 
   See the documentation for the function `center`. This is
   completely analagous.
-
-  Examples:
-
-  >>> xss = torch.tensor([[1, 2, 3], [6, 7, 8]]).float()
-  >>> xss, _ = normalize(xss, unbiased = False)
-  >>> xss.tolist() # doctest:+ELLIPSIS
-  [[0.4...
-  >>> xss = torch.tensor([[1, 2, 3], [1, 7, 3]]).float()
-  >>> xss, _ = normalize(xss, unbiased = False)
-  >>> xss.tolist() # doctest:+ELLIPSIS
-  [[1.0...
 
   Args:
     xss (torch.Tensor)
@@ -190,8 +293,17 @@ def normalize(xss, new_widths = None, unbiased = True):
         less than a threshold are left unchanged. The list of
         standard devs, with numbers less than the threshold
         replaced by 1.0, is the second tensor returned.
+
+  >>> xss = torch.tensor([[1, 2, 3], [6, 7, 8]]).float()
+  >>> xss, _ = normalize(xss, unbiased = False)
+  >>> xss.tolist() # doctest:+ELLIPSIS
+  [[0.4...
+  >>> xss = torch.tensor([[1, 2, 3], [1, 7, 3]]).float()
+  >>> xss, _ = normalize(xss, unbiased = False)
+  >>> xss.tolist() # doctest:+ELLIPSIS
+  [[1.0...
   '''
-  # add and assert here ... check that new_width is right dim.
+  # add and assert checking that new_width is right dim.
   xss_stdevs = xss.std(0, unbiased)
   xss_stdevs[xss_stdevs < 1e-7] = 1.0
   if isinstance(new_widths, torch.Tensor):
@@ -200,30 +312,26 @@ def normalize(xss, new_widths = None, unbiased = True):
     new_xss = xss.div_(xss_stdevs)
   return new_xss, xss_stdevs
 
-def coh_split(proportion, *args, device = 'cpu'):
+def coh_split(prop, *args):
   '''Coherently randomize and split tensors into training and
   testing tensors.
 
   This splits with respect to the first dimension.
 
   Args:
-    proportion (float): The proportion to split out. Suppose
-        this is 0.8. Then for each pair in the return tuple,
-        the first holds 4/5 of the data and the second holds
-        the other 1/5.
+    prop (float): The proportion to split out. Suppose this
+        is 0.8. Then for each pair in the return tuple, the
+        first holds 4/5 of the data and the second holds the
+        other 1/5.
     *args (torch.tensor): The tensors to be randomized and
         split, which must each have a common length in the
         first dimension.
-    device (str): The returned tensors have been sent to this
-        device. Consider not using this unless necessary.
 
   Returns:
     Tuple(torch.tensor). A tuple of length twice that of `args`
         and holding, in turn, pairs, each of which is a tensor
-        in `args` split according to `proportion` and sent to
+        in `args` split according to `prop`.
         the specified `device`.
-
-  Examples:
 
   >>> from torch import rand
   >>> coh_split(0.6, rand(2,3), rand(3,3))
@@ -237,40 +345,18 @@ def coh_split(proportion, *args, device = 'cpu'):
   >>> xss_train.size()
   torch.Size([3, 2])
   '''
-  assert 0 <= proportion <= 1, "proportion ({}) must be between 0 and 1, "+\
-      "inclusive".format(proportion)
+  assert 0 <= prop <= 1, dedent("""\
+      Arg prop ({}) must be between 0 and 1, inclusive.
+  """.format(prop))
   len_ = list(map(len, args))
   assert all(len_[0] == x for x in len_), "all tensors must have same size "+\
       "in first dim"
-  indices = torch.randperm(len_[0]).to(device)
-  rand_args = [tensor.to(device).index_select(0, indices) for tensor in args]
-  cutoff = int(proportion * len_[0])
+  indices = torch.randperm(len_[0])
+  rand_args = [tensor.index_select(0, indices) for tensor in args]
+  cutoff = int(prop * len_[0])
   split_args = [[tensor[:cutoff], tensor[cutoff:]] for tensor in rand_args]
   return_args =[item for sublist in split_args for item in sublist]
   return tuple(return_args)
-
-def _parse_data(data_tuple, device = 'cpu'):
-  '''Helper function for the train function.
-
-  Args:
-    data_tuple Tuple[tensor]: Length either 2 or 3.
-
-  Returns:
-    Tuple[tensor].
-  '''
-  feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
-  if len(data_tuple) == 3:
-    feats_lengths = data_tuple[1].to(device)
-    assert len(feats_lengths) == len(feats),\
-        "No. of feats lengths ({}) must equal no. of feats ({}).".\
-            format(len(feats_lengths), len(feats))
-  else:
-    assert len(data_tuple) == 2, 'data_tuple must have len 2 or 3'
-    feats_lengths = None
-  assert len(feats) == len(targs),\
-      "Number of features ({}) must equal number of targets ({}).".\
-          format(len(feats), len(targs))
-  return feats, feats_lengths, targs
 
 def copy_parameters(model):
   '''Copy a models parameters.
@@ -294,11 +380,6 @@ def copy_parameters(model):
   for param in params: param.zero_()
   return params
 
-def format_num(number):
-  if number < .005: string = '{:.4g}'.format(number)
-  else: string = '{:.5g}'.format(number)
-  return string
-
 class LearnParams_:
   '''The base class for all LearnParams classes.
 
@@ -306,12 +387,18 @@ class LearnParams_:
     lr (float): The learning rate during training.
   '''
   def __init__(self, lr = 0.1):
+    '''Constructor.'''
     self.lr = lr
 
   def __str__(self):
+    '''Make string representation.'''
     return 'learning rate: ' + format_num(self.lr)
 
   def set_device(self, device):
+    '''Set the device if necessary.
+
+    Not necessary here, but could be in subclasses.
+    '''
     pass
 
   def update(self, parameters):
@@ -331,17 +418,20 @@ class LearnParams(LearnParams_):
     lr (float): The learning rate during training.
     mo (float): The momentum during training.
   '''
-  def __init__(self, model, lr = 0.1, mo = 0.0):
+  def __init__(self, model, lr = 0.01, mo = 0.9):
+    '''Constructor.'''
     super().__init__(lr)
     self.mo = mo
     self.z_params = copy_parameters(model)
 
   def __str__(self):
+    '''Add to the string representation of the base class.'''
     return super().__str__() + ', momentum: ' + format_num(self.mo)
 
   def set_device(self, device):
+    '''Send z_params to live on device'''
     for param in self.z_params:
-      param.to(device)
+      param = param.to(device)
 
   def update(self, params):
     '''Update parameters with momentum.
@@ -432,10 +522,6 @@ def train(model, crit, train_data, **kwargs):
         available for a better viewing experience for some
         models). Requires matplotlib (and a running X server).
         If 0, do not display a graph. Default: 0.
-    feats_lengths (torch.LongTensor): One-dimensional tensor
-        holding the lengths of sequences in `feats`. Likely,
-        relevant only for variable-length (i.e,, sequence)
-        features. Default: None.
     print_lines (Tuple[int, int]): A tuple, the first compon-
         ent of which is the number of lines to print initial-
         ly when printing the current loss for each epoch dur-
@@ -443,7 +529,7 @@ def train(model, crit, train_data, **kwargs):
         of lines to print lastly when training. If at least
         one element of the tuple is 0 (resp., -1), then no
         (resp., all) lines are printed. Default: (17, 7).
-    verb (int): The verbosity. 0: silent, ... , 2: all.
+    verb (int): The verbosity. 0: silent, ... , 3: all.
         Default: 2.
     gpu (int): The gpu to use if there are any available. Set
         to -1 to use the last gpu found when gpus are present;
@@ -453,9 +539,10 @@ def train(model, crit, train_data, **kwargs):
   Returns:
     (nn.Module, Tuple). The trained model sent to device 'cpu'.
   '''
-  _check_kwargs(kwargs,['test_data','learn_params','bs','epochs','graph',\
-      'feats_lengths','print_lines','verb','gpu'])
-  _catch_sigint()
+  # this is the train function
+  du.util._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
+      'graph','print_lines','verb','gpu'])
+  du.util._catch_sigint()
 
   test_data = kwargs.get('test_data', None)
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
@@ -466,8 +553,9 @@ def train(model, crit, train_data, **kwargs):
 
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
-  device = get_device(gpu)
-  train_feats, train_feats_lengths, train_targs =_parse_data(train_data, device)
+  device = du.util.get_device(gpu)
+  train_feats, train_feats_lengths, train_targs =\
+      du.util._parse_data(train_data, device)
   num_examples = len(train_feats)
 
   if bs <= 0: bs = num_examples
@@ -484,13 +572,13 @@ def train(model, crit, train_data, **kwargs):
         "keys of learn_params dict should be 'lr' or 'mo', not {}.".format(key)
     assert 'lr' in learn_params.keys(), "input dict must map 'lr' to float"
     lr = learn_params['lr']
-    if verb > 1: print('learning rate:', format_num(lr), end=', ')
+    if verb > 1: print('learning rate:', du.util.format_num(lr), end=', ')
     if 'mo' not in learn_params.keys():
       learn_params = LearnParams_(lr = lr)
       mo = None
     else:
       mo = learn_params['mo']
-      if verb > 1: print('momentum:', format_num(mo), end=', ')
+      if verb > 1: print('momentum:', du.util.format_num(mo), end=', ')
       learn_params = LearnParams(model, lr = lr, mo = mo)
       learn_params.set_device(device)
     if verb > 1: print('batchsize:', bs)
@@ -505,15 +593,18 @@ def train(model, crit, train_data, **kwargs):
     if verb > 1: print('batchsize:', bs)
 
   if test_data:
-    test_feats, test_feats_lengths, test_targs = _parse_data(test_data, device)
-    losses_test=[]
+    if len(test_data[0]) == 0: test_data = None
+    else:
+      test_feats, test_feats_lengths, test_targs =\
+          du.util._parse_data(test_data, device)
+      losses_test=[]
 
-  if  print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
+  if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
 
   if graph:
     import matplotlib.pyplot as plt
     plt.ion(); fig, _ = plt.subplots()
-    plt.xlabel('epoch',size='larger'); plt.ylabel('average loss',size='larger')
+    plt.xlabel('epoch', size='larger'); plt.ylabel('average loss',size='larger')
 
   losses = []
 
@@ -572,7 +663,7 @@ def train(model, crit, train_data, **kwargs):
         else:
           loss = crit(model(test_feats), test_targs).item()
         losses_test.append(loss)
-      if  epoch == graph:
+      if epoch == graph:
         losses = losses[graph:]
         if test_data: losses_test = losses_test[graph:]
         plt.clf()
@@ -633,30 +724,23 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
     cent_norm_targs (Tuple[bool]): Tuple with first entry det-
         ermining whether to center the targets, and the sec-
         ond, whether to normalize them. Default: (True, True).
-    feats_lengths (torch.LongTensor): One-dimensional tensor
-        holding the lengths of sequences in `feats`. Likely,
-        relevant only for variable-length (i.e,, sequence)
-        features. Default: None.
-    lr (float): The learning rate to be used during training.
-        Default: 0.1.
-    mo (float): The momentum during training. Default: 0.0.
+    learn_params (Union[dict,LearnParam_,torch.optim.Optimizer]):
+        The training (or 'learning') hyperparameters in the
+        form of an instance of the class LParams_; or, for bas-
+        ic functionality, a dict whose keys map the string
+        'lr', and optionally 'mo', to floats; or an instance
+        of torch.optim.Optimizer. Default: {'lr':0.1}.
     bs (int): The mini-batch size where -1 forces batch grad-
         ient descent (i.e. feed-forwarding all training exam-
         ples before each backpropagation). Default: -1.
     epochs (int): The number of epochs to train over for each
         validation step. Default: 1.
-    adapts (Dict): A dictionary mapping each of (or at least
-        one of) the strings 'lr', 'mo' to a lambda function
-        which itself maps a float to a float. The lambda fns
-        will be applied before each backpropagation.  E.g.,
-        {'lr': lambda x: 0.98*x} corresponds to learning
-        rate decay. Default: the identity map(s).
+    verb (int): The verbosity. 0: silent, 1: more, 2: all.
+        Default: 2.
     gpu (int): Which gpu to use in the presence of one or more
         gpus, where -1 means to use the last gpu found, and -2
         means to override using a found gpu and use the cpu.
         Default: -1.
-    verb (int): The verbosity. 0: silent, ... , 2: all.
-        Default: 2.
 
   Returns:
     nn.Module. Returns the model which has been partially
@@ -667,18 +751,27 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         last chunk is thrown away (so make the length of it
         small, if not zero).
   '''
-  _catch_sigint()
+  # This is cross_validate_train
+  du.util._check_kwargs(kwargs,['k','valid_crit','cent_norm_feats',\
+      'cent_norm_targs','learn_params','bs','epochs','gpu','verb'])
+  du.util._catch_sigint()
   valid_crit = kwargs.get('valid_crit', None)
-  feats, targs = train_data
+  assert 2 <= len(train_data) <= 3, dedent("""\
+      Argument train_data tuple must have length 2 or 3, not {}
+  """.format(len(train_data)))
+  feats_lengths = None
+  if len(train_data) == 2:
+    feats, targs = train_data
+  elif len(train_data) == 3:
+    feats, feats_lengths, targs = train_data
   assert len(feats) == len(targs),\
       "Number of features ({}) must equal number of targets ({}).".\
           format(len(feats), len(targs))
-  feats_lengths = kwargs.get('feats_lengths', None)
+  assert not feats_lengths, 'variable length not implemented yet'
   cent_feats, norm_feats = kwargs.get('cent_norm_feats',(True, True))
   cent_targs, norm_targs = kwargs.get('cent_norm_targs',(True, True))
-  lr = kwargs.get('lr', 0.1); mo = kwargs.get('mo', 0.0);
-  bs=kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
-  adapts = kwargs.get('adapts', {'lr': lambda x: x, 'mo': lambda x: x})
+  learn_params = kwargs.get('learn_params', {'lr': 0.1})
+  bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
   verb = kwargs.get('verb', 2); gpu = kwargs.get('gpu', -1)
 
   valids = torch.zeros(k) # this will hold the k validations
@@ -707,7 +800,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         model=model,
         crit=crit,
         train_data=(xss_train, yss_train),
-        learn_params = {'lr': lr, 'mo': mo},
+        learn_params = learn_params,
         bs=bs,
         epochs=epochs,
         verb=verb-1,
@@ -722,7 +815,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
 
   return model, valids
 
-def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
+def cross_validate(model, crit, train_data, k, **kwargs):
   '''Cross-validate a model.
 
   Args:
@@ -762,27 +855,22 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
     cent_norm_targs (Tuple[bool]): Tuple with first entry det-
         ermining whether to center the targets, and the sec-
         ond, whether to normalize them. Default: (True, True).
-    feats_lengths (torch.LongTensor): One-dimensional tensor
-        holding the lengths of sequences in `feats`. Likely,
-        relevant only for variable-length (i.e,, sequence)
-        features. Default: None.
-    lr (float): The learning rate to be used during training.
-        Default: 0.1.
-    mo (float): The momentum during training. Default: 0.0.
+    learn_params (Union[dict,LearnParam_,torch.optim.Optimizer]):
+        The training (or 'learning') hyperparameters in the
+        form of an instance of the class LParams_; or, for bas-
+        ic functionality, a dict whose keys map the string
+        'lr', and optionally 'mo', to floats; or an instance
+        of torch.optim.Optimizer. Default: {'lr':0.1}.
     bs (int): The mini-batch size where -1 forces batch grad-
         ient descent (i.e. feed-forwarding all training exam-
         ples before each backpropagation). Default: -1.
     epochs (int): The number of epochs to train over for each
         validation step. Default: 1.
-    adapts (Dict): A dictionary mapping each of (or at least
-        one of) the strings 'lr', 'mo' to a lambda function
-        which itself maps a float to a float. The lambda fns
-        will be applied before each backpropagation.  E.g.,
-        {'lr': lambda x: 0.98*x} corresponds to learning
-        rate decay. Default: the identity map(s).
-    verb (int): The verbosity. 0: silent, ... , 2: all.
-        Default: 2.
-    device (str): The device to run on. Default: 'cpu'.
+    verb (int): The verbosity. 0: silent, or 1. Default: 1.
+    gpu (int): Which gpu to use in the presence of one or more
+        gpus, where -1 means to use the last gpu found, and -2
+        means to override using a found gpu and use the cpu.
+        Default: -1.
 
   Returns:
     nn.Module. Returns the model which has been partially
@@ -792,22 +880,31 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
         ber of the features is not divisible by k, then the
         last chunk is thrown away (so make the length of it
         small, if not zero).
-
   '''
+  # This is cross_validate
+  du.util._check_kwargs(kwargs,['k','bail_after','valid_crit',\
+      'cent_norm_feats','cent_norm_targs','learn_params','bs',\
+      'epochs','verb','gpu'])
   import copy
-
   valid_crit = kwargs.get('valid_crit', None)
-  feats, targs = train_data
+  k = kwargs.get('k', 10)
+  bail_after = kwargs.get('bail_after', 5)
+  assert 2 <= len(train_data) <= 3, dedent("""\
+      Argument train_data tuple must have length 2 or 3, not {}
+  """.format(len(train_data)))
+  feats_lengths = None
+  if len(train_data) == 2:
+    feats, targs = train_data
+  elif len(train_data) == 3:
+    feats, feats_lengths, targs = train_data
   assert len(feats) == len(targs),\
       "Number of features ({}) must equal number of targets ({}).".\
           format(len(feats), len(targs))
-  feats_lengths = kwargs.get('feats_lengths', None)
-  bail_after = kwargs.get('bail_after', 10)
+  assert not feats_lengths, 'variable length not implemented yet'
   cent_norm_feats = kwargs.get('cent_norm_feats',(True, True))
   cent_norm_targs = kwargs.get('cent_norm_targs',(True, True))
-  lr = kwargs.get('lr', 0.1); mo = kwargs.get('mo', 0.0);
-  bs=kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
-  adapts = kwargs.get('adapts', {'lr': lambda x: x, 'mo': lambda x: x})
+  learn_params = kwargs.get('learn_params', {'lr': 0.1})
+  bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
   verb = kwargs.get('verb', 1); gpu = kwargs.get('gpu', -1)
 
   no_improvement = 0
@@ -826,7 +923,7 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
     model, valids = cross_validate_train(
         model = model,
         crit = crit,
-        train_data = (feats, targs),
+        train_data = train_data,
         k = k,
         valid_crit = valid_crit,
         cent_norm_feats = cent_norm_feats,
@@ -850,13 +947,13 @@ def cross_validate(model, crit, train_data, k, bail_after, **kwargs):
     if valids.mean().item() == 0.0: no_improvement = bail_after
 
     if verb > 0:
-      print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}"\
-          .format(valids.mean().item(),valids.std().item(),best_valids.mean().\
+      print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
+          format(valids.mean().item(),valids.std().item(),best_valids.mean().\
           item(),total_epochs)+' '+str(no_improvement)+"/"+str(bail_after))
 
   if verb > 0:
-    print("best valid:  mean={0:.5g}  stdev={1:.5g}"\
-        .format(best_valids.mean().item(),best_valids.std().item()))
+    print("best valid:  mean={0:.5g}  stdev={1:.5g}".\
+        format(best_valids.mean().item(),best_valids.std().item()))
 
   return best_model, best_valids.mean()
 
@@ -872,6 +969,7 @@ def optimize_ols(feats, **kwargs):
   the following during opitmization:
     - The condition number of A = X^T*X where X is the design
       matrix.
+    - Check for sparseness of A when appropriate.
 
   Args:
     feats (torch.Tensor): The features of the training data.
@@ -881,12 +979,12 @@ def optimize_ols(feats, **kwargs):
         momentum. Default: True.
     verb (int): Verbosity; 0 for silent, 1 to print details
         f the optimization process including warnings concern-
-        ing numerical integrity. Default: 0.
+        ing numerical integrity. Put 2, to actually print out
+        X^T*X. Default: 0.
 
   Returns:
-    Tuple[float]: A dict of  mapping either 'lr' to a float
-        or, if `with_mo` is `True`, mapping each of 'lr' and
-        'mo' to a float.
+    Dict: A dict of mapping either 'lr' to a float or, if
+        `with_mo` is `True`, so mapping both 'lr' and 'mo'.
   '''
 
   #from scipy.linalg import eigh
@@ -894,7 +992,6 @@ def optimize_ols(feats, **kwargs):
   from scipy.sparse import issparse
 
   with_mo = kwargs.get('with_mo', True)
-  warn = kwargs.get('warn', True)
   verb = kwargs.get('verb', 0)
 
   problematic = False
@@ -903,6 +1000,7 @@ def optimize_ols(feats, **kwargs):
   feats = torch.cat((torch.ones(len(feats),1), feats.to("cpu")), 1)
 
   design_mat = feats.transpose(0,1).mm(feats)
+  if verb > 1: print(design_mat)
   eigs, _ = torch.symeig(design_mat)
   if not all(map(lambda x: x >= 0.0, eigs.tolist())):
     if verb:
@@ -968,10 +1066,10 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
         index the examples. This is the predictions, in the
         form of probability distributions, made by a model
         when fed the features of some set of examples.
-    yss (torch.Tensor): A 1-dimensional tensor holding the
+    yss (torch.LongTensor): A 1-dimensional tensor holding the
         correct class for each example.
     classes (torch.LongTensor): A one-dimensional tensor
-        holding the numerical version='0.8',
+        holding the numerical classes. This should be
         torch.arange(10) for digit classification.
 
   Kwargs:
@@ -990,6 +1088,8 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
         of correct correct predictions or (optionally) one
         minus that ratio; i.e., the error rate.
   '''
+  # this is confusion_matrix
+  du.util._check_kwargs(kwargs,['return_error','show','class2name'])
   assert len(prob_dists) == len(yss),\
       'Number of features ({}) must equal number of targets ({}).'\
           .format(len(prob_dists), len(yss))
@@ -997,19 +1097,19 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
       'The prob_dists argument should be a 2-dim tensor not a {}-dim one.'\
           .format(prob_dists.dim())
   assert classes.dim() == 1,\
-      'The classes argument should be a 1-dim tensor not {}-dim one.'\
+      'The classes argument should be a 1-dim tensor not a {}-dim one.'\
           .format(classes.dim())
-
+  assert isinstance(yss,torch.LongTensor), 'Argument yss must be a LongTensor.'
   return_error = kwargs.get('return_error', False)
   show = kwargs.get('show', False)
-  class2name = kwargs.get('classnames', None)
+  class2name = kwargs.get('class2name', None)
 
   cm_counts = torch.zeros(len(classes), len(classes))
   for prob, ys in zip(prob_dists, yss):
     cm_counts[torch.argmax(prob).item(), ys] += 1
 
   cm_pcts = cm_counts/len(yss)
-  counts = torch.bincount(yss)
+  counts = torch.bincount(yss, minlength=len(classes))
 
   if show:
     cell_length = 5
@@ -1031,7 +1131,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
           string = '{:.1f}'.format(100*entry).lstrip('0')
           print(' '*(cell_length-len(string))+string, end='')
       n_examples = cm_counts[:,i].sum()
-      pct = 100*(cm_counts[i,i]/n_examples)
+      pct = 100*(cm_counts[i,i]/n_examples) if n_examples != 0 else 0
       if class2name:
         print('  {} ({:.1f}% of {})'.format(class2name[i],pct,int(counts[i])))
       else:
@@ -1042,146 +1142,74 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
   else:
     return torch.trace(cm_pcts).item()
 
-def r_squared(yhatss, yss, return_error = False ):
+def r_squared(yhatss, yss, **kwargs):
   '''
-  Returns the coefficient of determination of two 2d tensors
+  Returns the coefficient of determination of two 2-d tensors
   (where the first dimension in each indexes the examples),
   one holding the yhatss (the predicted outputs) and the other
   holding the actual outputs, yss.
 
   Note: this is rigorously relevant only to linear, meaning
-  possibly polynomial linear, regression.
+  polynomial linear, regression.
 
   Args:
-    yhatss (torch.Tensor): The predicted outputs.
+    yhatss (torch.Tensor): Either the predicted outputs (assum-
+        ed to be
+        of size len(yhats) x 1.
     yss (torch.Tensor): The actual outputs.
+
+  Kwargs:
     return_error (bool): If False return the proportion of the
         variation explained by the regression line. If True,
         return 1 minus that proportion. Default: False.
+    gpu (int): The gpu to use if there are any available. Set
+        to -1 to use the last gpu found when gpus are present;
+        set to -2 to override using a found gpu and use the
+        cpu. Default -1.
+
+  >>> yhatss = torch.arange(4.).unsqueeze(1)
+  >>> yss = torch.tensor([-1., 5., 2., 3.]).unsqueeze(1)
+  >>> r_squared(yhatss, yss) # doctest: +ELLIPSIS
+  0.09333...
   '''
-  SS_E, SS_T = 0.0, 0.0
-  mean = yss.mean(0)
-  for yhats, ys in zip(yhatss, yss):
-    SS_E += (ys - yhats).pow(2)
-    SS_T += (ys - mean).pow(2)
+  du.util._check_kwargs(kwargs,['return_error','gpu'])
+  return_error = kwargs.get('return_error', False)
+  gpu = kwargs.get('return_error', -1)
+  device = du.util.get_device(gpu)
+  if not isinstance(yhatss, torch.Tensor):
+    assert (isinstance(yhatss, tuple) or isinstance(yhatss, list)),\
+        'Argument yhatss must be a tuple or a list'
+    assert (isinstance(yhatss[0], nn.Module) and\
+        isinstance(yhatss[1], torch.Tensor)), dedent("""\
+            If agrument yhatss is an interable, then the first item
+            should be the model, and the second should be the xss
+        """)
+    model = yhatss[0].to(device)
+    yhatss = model(yhatss[1].to(device))
+  assert yhatss.dim() == yss.dim(), dedent("""\
+      The arguments yhatss (dim = {}) and yss (dim = {}) must have
+      the same dimension.
+  """.format(yhatss.dim(), yss.dim()))
+  assert yhatss.dim() == 2, dedent("""\
+      Multiple outputs not implemented yet; yhatss should have dim-
+      ension 2, not {}.
+  """.format(yhatss.dim()))
+  assert len(yhatss) == len(yss), dedent("""\
+      len(yhatss) is {} which is not equal to len(yss) which is {}
+  """.format(len(yhatss),len(yss)))
+  assert yhatss.size()[1] ==  yss.size()[1] == 1, dedent("""\
+      The first dimension of yhatss and yss should index the examples.
+  """)
+  ave_sum_squares = nn.MSELoss()
+  yhatss = yhatss.squeeze(1).to(device)
+  yss = yss.squeeze(1).to(device)
+  SS_E = len(yss) * ave_sum_squares(yhatss, yss)
+  SS_T = len(yss) * ave_sum_squares(yss, yss.mean(0) *\
+      torch.ones(len(yss)).to(device))
   if return_error:
     return (SS_E/SS_T).item()
   else:
     return 1.0-(SS_E/SS_T).item()
-
-def stand_args(desc = '', **kwargs):
-  '''Set standard hyper-parameters.
-
-  Setup argparse switches, etc. for standard hyper-parameters,
-  and return the parser object so the calling program can add
-  more switches.
-
-  Note: This function does not implement, for example, bs being
-  set to -1 leading to (full) batch gradient descent. That
-  needs to be implemented in the program that calls this func-
-  tion.  Said differently, this function is handy solely for
-  elimination boilerplate processing of the standard hyperpar-
-  meters like learning rate, momentum, etc.
-
-  Args:
-    desc (str): A short description of what the program does.
-        Default: ''
-
-  Kwargs:
-    lr (float): The learning rate, returned to the calling
-        program via the return parser object with name 'lr'
-        and default value `lr`. Default: 0.1.
-    mo (float): The momentum returned with name 'mo' and de-
-        fault value `mo`. Default 0.0.
-    bs (int): Batchsize, where -1 leads to batch gradient
-        descent. Default 1.
-    epochs (int): The number of epochs over which to train.
-        Default 20.
-    seed (bool): Whether or not to set a random seed.
-        Default: False.
-    pt (float): The proportion on which train. Default 1.0.
-    gpu (int): Which gpu to use in the presence of one or more
-        gpus, where -1 means to use the last gpu found, and -2
-        means to override using a found gpu and use the cpu.
-        Default: -1.
-    gr (int): If positive then, during training, display
-        a real-time graph.  If greater than 1, then the be-
-        gining `graph` losses are thrown away when training
-        gets to epoch `graph` (this functionality is made
-        available for a better viewing experience for some
-        models). Requires matplotlib (and a running X server).
-        If 0, do not display a graph. Default: 0.
-
-  Returns:
-    (argparse.ArgumentParser). The parser object to which the
-        calling program can add more names.
-  '''
-  import argparse
-
-  desc = kwargs.get('desc', '')
-  lr = kwargs.get('lr', 0.1)
-  mo = kwargs.get('mo', 0.0)
-  bs = kwargs.get('bs', 1)
-  epochs = kwargs.get('epochs', 20)
-  seed = kwargs.get('seed', False)
-  pt = kwargs.get('pt', 1.0)
-  gpu = kwargs.get('gpu', -1)
-  gr = kwargs.get('gr', 0)
-
-  parser = argparse.ArgumentParser( description = desc, formatter_class =\
-      argparse.ArgumentDefaultsHelpFormatter)
-  p = parser.add_argument
-  p('-lr', type=float, help='learning rate', default=lr)
-  p('-mo', type=float, help='momentum', default=mo)
-  hstr='the mini-batch size; set to -1 for (full) batch gradient descent'
-  p('-bs', type=int, help=hstr, default=bs)
-  p('-epochs', type=int, help='num epochs to train', default=epochs)
-  hstr="toggle setting random seed"
-  if seed:
-    p('-seed', dest='seed', help=hstr, action='store_false')
-  else:
-    p('-seed', dest='seed', help=hstr, action='store_true')
-  p('-ser', help='serialize the trained model', action='store_true')
-  p('-pt', type=float, help='proportion to train on', default=pt)
-  hstr='which gpu, if more than one is found; -1 for last gpu found; -2 for cpu'
-  p('-gpu', type=int, help=hstr, default=gpu)
-  hstr='graph of losses during training; redraw after this many epochs'
-  p('-gr', help=hstr, type=int, default=0)
-  return  parser
-
-def _check_kwargs(passed, valid_keywords):
-  ''' Check that each string in passed is in valid and notify
-  of problems.
-
-  Args:
-    passed (List[str]): In practice, the keywords that were
-        passed to the function, class, method, etc. from which
-        `_check_kwargs` was called.
-    valid_keywords (List[str]): The valid keywords for said
-        function, class, method, etc.
-  '''
-  for keyword in passed:
-    assert keyword in valid_keywords,\
-        '{} is not a valid argument keyword'.format(keyword)
-
-def _catch_sigint():
-  '''Catch keyboard interrupt signal.  '''
-  import signal
-  def keyboardInterruptHandler(signal, frame):
-    #print("KeyboardInterrupt (ID: {}) caught. Cleaning up...".format(signal))
-    print("\n")
-    exit(0)
-  signal.signal(signal.SIGINT, keyboardInterruptHandler)
-
-def _catch_sigint_and_break():
-  '''Catch keyboard interrupt signal and break out of a `for` or
-  `while` loop.
-  '''
-  import signal
-  def keyboardInterruptHandler(signal, frame):
-    global interrupted
-    interrupted = True
-  signal.signal(signal.SIGINT, keyboardInterruptHandler)
 
 if __name__ == '__main__':
   import doctest
@@ -1194,3 +1222,4 @@ if __name__ == '__main__':
         if callable(ob) and ob.__module__ == __name__]
     for name, ob in local_functions:
       print(name,'\n  ',signature(ob))
+

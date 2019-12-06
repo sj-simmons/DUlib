@@ -6,8 +6,9 @@
 
 #### Quickstart
 * At the command line, install the latest release:
-  `pip3 install DUlib --user` (or `pip install -U DUlib3 --user` in the
-  presence of a previously installed version).
+  `pip3 install DUlib` (or `pip install -U DUlib3 --user` in the
+  presence of a previously installed version). Try first installing without the `--user`
+  switch but, if necessary, run `pip3 install DUlib --user`.
 * Then have a look at the functions provided by the core library: `pydoc3 du.lib`
 * and perhaps some examples of their usage: `pydoc3 du.examples`
 * Suppose you decide to use the `train` function.
@@ -19,15 +20,11 @@
   the [DL@DU Project](https://github.com/sj-simmons/deep-learning#dldu).
 * If you are in the Python interpreter and have imported say the `train`
   function with `from du.lib import train`, then you can get help on `train`
-  function with:
-  ``` python
-  >>> help(train)
-  ```
-  At the command line, you would issue the command `pydoc3 du.lib.train`
+  function with: `help(train)`
+* At the command line, you would issue the command `pydoc3 du.lib.train`
   for help on `train`.
-
-Note: The downstream repo for DUlib
-    is: [pypi.org/project/DUlib/](https://pypi.org/project/DUlib/).
+* The downstream repo for DUlib
+    is: [pypi.org/project/DUlib/](https://pypi.org/project/DUlib).
 
 ---
 
@@ -56,12 +53,12 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
     to prefer this over a later release.
 
 **Version 0.6** (November 17, 2019).
-  * DUlib now has a down-stream repo on [pypi.org](https://pypi.org/) so that it can now
+  * DUlib now has a downstream repo on [pypi.org](https://pypi.org/) so that it can now
     be installed by simply issuing the command `pip3 install DUlib` (or, depending
     on your setup, `pip3 install DUlib --user`) at the command line.
     * The pypi page is here:
       [pypi.org/project/DUlib](https://pypi.org/project/DUlib)
-    * Your DUlib installation can be upgraded with something like `pip3 install -U DUlib --user`
+    * Your DUlib installation can be upgraded with a command like `pip3 install -U DUlib`
   * The `graph` argument of the train function is now an `int` rather than
     a boolean.  To enable graphing while training (which requires `matplotlib` and
     a running X server) call `train` with the argument `graph = 1`, or put any
@@ -79,17 +76,6 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
 
     Putting `graph = 5`, for example, when calling `train`, redraws the graph at epoch 5, throwing
     a way the graph at previous epochs, which can be useful in some instances.
-  * The modules in the library are now structured as:
-    ```bash
-        du
-        ├── examples.py
-        ├── lib.py
-        ├── conv
-        │   └── models.py
-        └── rec
-            ├── lib.py
-            └── models.py
-    ```
 
 **Version 0.8** (November 21, 2019)
   * The new normal with respect to `device`:
@@ -124,7 +110,7 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
           criterion,
           train_data = (xss_train, yss_train),
           test_data = (xss_test, yss_test),
-          learn_params = {'lr': args.lr, 'mo': args.mo},
+          learn_params = {'lr': 0.01, 'mo': 0.9},
           epochs = 10)
       ```
       Notice that `learn_params` (the learning parameters) is, in this example,
@@ -148,23 +134,23 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.8.1** (November 23, 2019)
-  * A new module [model.py](du/models.py) was added in the root directory.
+**Version 0.8.5** (December 5th, 2019)
+  * The current module structure is show below, with the modules in blue and
+    some of the more common functions in red.  To view the current module
+    structure, and to see suggested usage and more, type `pydoc3 du` at the
+    command line.
 
-  * The module structure is now:
-    ``` bash
-        du
-        ├── conv
-        │   └── models.py
-        ├── examples.py
-        ├── lib.py
-        ├── models.py
-        └── rec
-            ├── lib.py
-            └── models.py
-    ```
+    <p align="center">
+      <img height="550" src="screenshot1.png">
+    </p>
 
+  * The core library is `du.lib`.  To quickly see usage and synopsis of the
+    functions and classes available in `du.lib`, type `pydoc3 du.lib` at the
+    command line (and scroll down to peruse detailed usage).
 
+    <p align="center">
+      <img height="550" src="screenshot2.png">
+    </p>
 
 ---
 
@@ -173,7 +159,7 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
 If you want to experiment with the code in the libraries, then you can clone
 to a local repo on your machine:
 ``` bash
-git clone https://github.com/sj-simmons/DUlib.git --user
+git clone https://github.com/sj-simmons/DUlib.git
 ```
 Suppose you clone to a local repo and modify or add to the code in the libraries,
 and then you want to install (directly from your local repo) the modified
@@ -184,11 +170,11 @@ pip install -e .
 ```
 Now suppose that you want to revert back to the latest release:
 ``` bash
-pip install git+https://github.com/sj-simmons/DUlib.git --user
+pip install git+https://github.com/sj-simmons/DUlib.git
 ```
 or just
 ``` bash
-pip install -U DUlib --user
+pip install -U DUlib
 ```
 
 Please let Simmons know of any new functionality that you implement and wish

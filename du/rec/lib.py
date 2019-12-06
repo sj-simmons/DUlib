@@ -43,10 +43,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-__author__ = 'Simmons'
-__version__ = '0.8'
+__author__ = 'Scott Simmons'
+__version__ = '0.8.5'
 __status__ = 'Development'
-__date__ = '11/21/19'
+__date__ = '12/06/19'
 
 # define some type aliases
 Ngram = Tuple[List[str], str]
