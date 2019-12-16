@@ -13,9 +13,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 __author__ = 'Scott Simmons'
-__version__ = '0.8.5'
+__version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/05/19'
+__date__ = '12/16/19'
 
 class SimpleRNN(nn.Module):
   def __init__(self, n_in, enc_dim, n_hid, n_out, padding_idx, device = 'cpu'):
@@ -40,7 +40,7 @@ class SimpleRNN(nn.Module):
 
 if __name__ == '__main__':
   import doctest
-  failures, _ = doctest.testmod()
+  failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)
 
   if failures == 0:
     # Below prints only the signature of locally defined functions.

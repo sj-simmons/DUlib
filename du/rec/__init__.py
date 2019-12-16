@@ -1,5 +1,5 @@
 __doc__ = 'tools for recurrent networks.'
 __author__ = 'Scott Simmons'
 __status__ = 'Development'
-__date__ = '12/05/19'
-__version__ = '0.8.5'
+__date__ = '12/16/19'
+__version__ = '0.9'

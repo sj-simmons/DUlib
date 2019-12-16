@@ -5,8 +5,15 @@
 ---
 
 #### Quickstart
+
+By now you are likely aware of
+[python environment hell](https://imgs.xkcd.com/comics/python_environment.png).
+
+We recommend simply *always* installing `DUlib` using the `--user` option with `pip3`.
+
+
 * At the command line, install the latest release:
-  `pip3 install DUlib --user` (or `pip install -U DUlib3 --user` in the
+  `pip3 install DUlib --user` (or `pip install -U DUlib --user` in the
   presence of a previously installed version).
 * Then have a look at the functions provided by the core library: `pydoc3 du.lib`
 * and perhaps some examples of their usage: `pydoc3 du.examples`
@@ -133,7 +140,7 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.8.5** (December 5th, 2019)
+**Version 0.9** (December 16th, 2019)
   * The current module structure is show below, with the modules in blue and
     some of the more common functions in red.  To view the current module
     structure, and to see suggested usage and more, type `pydoc3 du` at the

@@ -1,437 +1,493 @@
 #!/usr/bin/env python3
-'''that demonstrate the functionality of `DUlib`.
+'''that demonstrate the functionality of `du.lib`.
 
-Neural nets provide a way to learn from data. The weights of a
-well-trained neural net are a reflection, or ~representation~,
-of the data on which it was trained. The goal of Deep Learning
-is to find useful representation of the data in which we are
-interested.
+~Neural nets~ provide a way to learn from data. The ~weights~ of a
+well-trained neural net are a reflection, or ~representation~, of
+the data on which it was trained. The objective in Machine and
+Deep Learning is to find representations which yield patterns
+in the data at hand.
 
-In addition to finding training parameters that lead to conver-
-gence under training,  we must design with well-conceived arch-
-itecture of the neural net itself. Otherwise, the weights have
-little, if any, chance of revealing a useful representation of
-the data, whether or not the model converges.
+In addition to finding parameters that lead to convergence un-
+der training, we must design with well-conceived architecture
+of the neural net itself. Otherwise, the weights have little
+chance of revealing a useful representation of the data, wheth-
+er or not the model converges.
 
-_Notes on training data_
+!Notes on training data!
 
-The essential function provided by DUlib is `train`; which we
-use in our programs by first importing it with, for example:
+The essential function provided by DUlib is `train`; which we use
+in our programs by first importing it with, for example:
 
-    `from du.lib import train`
+  `from du.lib import train`
 
-The first argument of the `train` function is `model`. We as-
-sume that `model` is an instance of a class derived from the
-PyTorch class `torch.nn.Module`. Such a derived class must
-implement a `forward` method (that is, the `forward` method
-of `nn.Module` class is a virtual method).
+The first argument of the `train` function is `model`. (Recall that
+`pd du.lib.train` quickly returns, at your command line, the us-
+age of `train`.) We assume that `model` is an instance of a class
+derived from the `PyTorch` class `torch.nn.Module`. Such a derived
+class must implement a `forward` method; that is, the `forward` me-
+thod of the `nn.Module` class is a virtual method.
 
-(See the definition of `LinRegModel` below for a simple but
-instructive example of sub-classing `nn.Module`, creating an
-instance of that subclass, and using that instance to train
-a model to solve a simple linear regression problem.)
+(See the definition of `LinRegModel` below for a simple but in-
+structive example that sub-classes `nn.Module` and then creates
+an instance of that subclass and uses it to train a model to
+solve a simple linear regression problem.)
 
-Throughout DUlib, we denote by `xss` the tensor that holds the
-~features~ (or ~inputs~) of our data; i.e., `xss` is the tensor
-that is to be forwarded by the `forward` method of our model.
-We assume that `xss` is at least 2-dimensional, and that its
-first dimension indexes the examples of our data.
+Throughout `DUlib`, we denote by `xss` the tensor that holds the
+~features~ (or ~inputs~) of our data; i.e., `xss` is the tensor that
+is to be forwarded by the `forward` method of our model. We as-
+sume that `xss` is at least 2-dimensional, and that its first di-
+mension indexes the examples of our data.
 
-For instance, suppose that we want to model a 2-dimensional
-regression plane that captures a point cloud which lives in
-3-space. In this case, `xss` is assumed to be a tensor of size
-`torch.Size([n, 2])`, where `n` is the number of examples.
+For instance, suppose that we want to model a 2-dimensional re-
+gression plane that captures a point cloud which lives in R^3.
+In this case, `xss` is assumed to have size `torch.Size([n, 2])`,
+where `n` is the number of examples.
 
 As is the convention in PyTorch's documentation, let us agree
-to write `(n,2)` instead of `torch.Size([n, 2])`, for example,
-and refer to the 'shape' of a tensor, though we use 'shape' and
-'size' interchangeably.
+to write `(n,2)` instead of `torch.Size([n, 2])`, for example, and
+refer to the 'shape' of a tensor instead of its 'size', though
+we use 'shape' and 'size' interchangeably.
 
 Later, when we want to classify or otherwise model images (all
 of which we will assume to be the same size), our features will
-have shape `(n, image_width, image_height)` where `n` is the
-number of images. Let us agree to denote this as `(n,*)` where,
-in fact, there could be any number of additional dimensions be-
-yond the first.
+have shape `(n, image_width, image_height)` where `n` is the number
+of images. Let us agree to denote this as `(n,*)` where, in fact,
+there could be any number of additional dimensions beyond the
+first.
 
-As stated above, we assume that our features `xss` are always
-at least 2-dimensional; said differently, we assume that `xss`
-has shape `(n,*)` where `n` is the number of features. This is
-true even in the simplest case in which the features of an ex-
-ample in our data consists of a single number. In that case,
-`xss` should be a tensor of shape (n,1), not (n).
+As stated above, we assume that our features `xss` are always at
+least 2-dimensional; said differently, we assume that `xss` has
+shape `(n,*)`; and, furthermore, that  `n` is the number of exam-
+ples in our data. This is true even in the simplest case: that
+in which the features of an example in our data consists of a
+single number. In that case, `xss` should be a tensor of shape
+`(n,1)`, not `(n)`.
 
-(Therefore, you may wish, in your code, to deploy the PyTorch
+(Therefore, you may wish, in your code, to deploy the `PyTorch`
 utility `unsqueeze` when writing a program that calls, say, the
-`train` function in this library.  Again, see below for a basic
-example.)
+`train` function in this library.  Again, see below for basic ex-
+amples.)
 
-Now, given features denoted `xss` we, throughout, denote the
-corresponding targets (or outputs) by `yss`. What is the conv-
-ention surrounding the shape of the targets `yss`?
+Given features (or inputs) denoted `xss` we, throughout, notate
+the corresponding ~targets~ (or ~outputs~) by `yss`. What is the con-
+vention surrounding the shape of the targets `yss`?
 
 Suppose the scenario mentioned above: that of modeling a point
-cloud living in R^3 with a 2-d plane. Then, our `xss` tensor
-would naturally have shape `(n,2)` where, yet again, `n` denotes
-the number of examples (i.e., the number of points in our
-point cloud). What shape should `yss` be in this scenario?
+cloud living in R^3 with a 2-dimensional plane. Then, our `xss`
+tensor would naturally have shape `(n,2)` where, yet again, `n`
+denotes the number of examples (i.e., the number of points in
+our point cloud). What shape should `yss` be in this scenario?
 
-In this case, the machinery in DUlib would assume that the cor-
-responding `yss` have shape `(n,1)`.  This may seem unnatural.
-Should not, more simply, the `yss` have shape `(n)` since each
-example's target consists of a single number?
+In this case, the machinery of `DUlib` would assume that the cor-
+responding `yss` has shape `(n,1)`. This may seem unnatural. Should
+not, more simply, the `yss` have shape `(n)` since each example's
+target consists of a single number?
 
-The reason that we prefer `yss` to be of shape `(n,1)` instead
-of just `(n)` is that, in general, the examples' targets can
-consist any number of numbers. We can easily imagine scenarios
-in which we want to model a function with `k` inputs and `m`
-outputs. Then `xss` would be of shape `(n,k)` while `yss` would
-have shape `(n,m)` (and there would be `n` examples).
+The reason that we prefer `yss` to be of shape `(n,1)` instead of
+just `(n)` is that, in general, the examples' targets can consist
+any number of numbers. We can easily imagine scenarios in which
+we want to model a function with `k` inputs and `m` outputs. Then
+`xss` would be of shape `(n,k)` while `yss` would have shape `(n,m)`
+(and there would be `n` examples in our data set).
 
-As we stated above, `xss` should always be of shape `(n,*)`
-(meaning it should be at least 2 dimensional).  It may seems
-reasonable to impose the same convention for targets `yss`.
-And, for, say, regression problems, yes, DUlib assumes that
-the `yss` have shape `(n,*)`. But there is an exception that
-occurs very commonly.
+As we stated above, `xss` should always be of shape `(n,*)` (meaning
+it should be at least 2 dimensional).  It may seem reasonable to
+impose the same convention for targets `yss`.  And, for, say, re-
+gression problems, yes, `DUlib` assumes that the `yss` have shape
+`(n,*)`. But there is an exception that occurs often.
 
-In classification problems (in which, for example, say we want
-to classify images as landscapes, city-scapes, or see- scapes),
-then the target for each image would naturally and simply be an
-int: either `0`, `1`, or `2`.
+In classification problems (in which, for instance, we want to
+classify images as say landscapes, city-scapes, or see-scapes),
+the target for each image would naturally and simply be an `int`:
+either `0`, `1`, or `2`.
 
-Furthermore, it makes no sense, in commonly held practice to
+Furthermore, it makes no sense, in commonly held practice, to
 try to map an image to say both a sea-scape or a land-scape.
 Rather, if we wanted something like that we would, after train-
-ing, easily use the model to get, for given set of features,
-our hands on the entire discrete probability distribution of
-the trained model's best guesses over all of the target classes.
+ing, easily use the model to get, for a given set of features,
+our hands on the entire ~discrete probability distribution~ of
+the trained model's best guesses over all target classes.
 
-In summary, the `xss` are always assumed to be at least 2-dimen-
-sional, and so are the `yss`, unless we are working on a class-
-ification problem, in which case the `yss` are assumed to be
-one dimensional. So that, in the case of a classification pro-
-blem, if `xss` has shape `(n,*)`, then `yss` would have shape
-simply `(n)`.
+In summary, the `xss` are always assumed to be at least 2 dimen-
+sional, and so are the `yss`, unless we are working on a classif-
+ication problem, in which case the `yss` are assumed to be one
+dimensional. So that, in the case of a classification problem,
+if `xss` has shape `(n,*)`, then `yss` would have shape simply `(n)`.
 
-Lasty, each entry in `yss` should be an `int` in the range `0`
-to `C-1` where `C` is the number of classes. Importantly, `yss`
-must be a `torch.LongTensor` for a classification problem.
+Lastly, for a classification problem, each entry in `yss` should
+be an `int` in the range `0` to `C-1` where `C` is the number of class-
+es. Importantly, `yss` must be a `torch.LongTensor` in the case of
+a classification problem.
 
-A final note on notation: we use `yhatss` thoughout to denote
-the predictions made by a trained model on features unseen
-during training.
+A final note on notation: we use `yhatss` throughout to denote
+the predictions made by a trained model on features unseen dur-
+ing training.
+
                     _____________________
 
-The following are three demonstrations of basic usage of the
-functionality of DUlib in the case of the simplest neural net:
-the so called linear perceptron.
 
-_Simple linear regression_
+The following demonstrations illustrate the core functionality
+of `DUlib` using the case of the simplest neural net, the so
+called ~linear perceptron~.
 
-  First, we generate some data.
+!Simple linear regression!
 
-  >>> $import torch$
-  >>> $xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)$
+First, we generate some data.
 
-  The `x`-values above are selected uniformly from the interval
-  `[0, 100]`.  The `y`-values were obtained by adding normally
-  distributed error to `y=2x+9` when `x` runs through the `xs`.
+>>> `import torch`
+>>> `xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)`
 
-  Let us next cast the data as tensors of size appropriate for
-  training a neural net.
+The `x`-values, `xs`, above are selected uniformly from the inter-
+val `[0, 100]`. The `y`-values were obtained by adding normally
+distributed error to `y=2x+9` when `x` runs through the `xs`.
 
-  >>> $xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)$
-  >>> $xss.size(); yss.size()$
-  |torch.Size([40, 1])|
-  |torch.Size([40, 1])|
+Let us next cast the data as tensors of size appropriate for
+training a neural net with the `train` function in `DUlib`. (The
+`train` function is in the core library `du.lib`; so you can per-
+use the documentation for the `train` function by typing, for ex-
+ample, `pd du.lib.train` at the command line.)
 
-  For best performance, we center and normalize the data.
+>>> `xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)`
+>>> `xss.size(); yss.size()`
+$torch.Size([40, 1])$
+$torch.Size([40, 1])$
 
-  >>> $from du.lib import center, normalize$
-  >>> $xss,xss_means = center(xss); yss,yss_means = center(yss)$
-  >>> $xss,xss_stds=normalize(xss); yss,yss_stds=normalize(yss)$
+For best performance, we ~center~ and ~normalize~ the data.
 
-  Next, let us create an instance a model that computes the
-  ~least-squares regression~ line (which should be close to
-  `y=2x+9`).
+>>> `from du.lib import center, normalize`
+>>> `xss,xss_means = center(xss); yss,yss_means = center(yss)`
+>>> `xss,xss_stds=normalize(xss); yss,yss_stds=normalize(yss)`
 
-  >>> $import torch.nn as nn$
-  >>> $class LinRegModel(nn.Module):$
-  ...   $def __init__(self):$
-  ...     $super().__init__()$
-  ...     $self.layer = nn.Linear(1, 1)$
-  ...   $def forward(self, xss):$
-  ...     $return self.layer(xss)$
-  >>> $model = LinRegModel()$
+Next, let us create an instance of a model that, upon training,
+computes the ~least-squares regression~ line for the given data
+(which should be close to the line `y=2x+9`).
 
-  We now specify a ~loss function~, compute the optimal ~learning~
-  ~rate~ and ~momentum~, and train our model.
+>>> `import torch.nn as nn`
+>>> `class LinRegModel(nn.Module):`
+...   `def __init__(self):`
+...     `super().__init__()`
+...     `self.layer = nn.Linear(1, 1)`
+...   `def forward(self, xss):`
+...     `return self.layer(xss)`
+>>> `model = LinRegModel()`
 
-  >>> `criterion = nn.MSELoss()`
-  >>> `from du.lib import train`
-  >>> `model = train(`
-  ...     `model = model,`
-  ...     `crit = criterion,`
-  ...     `train_data = (xss, yss),`
-  ...     `learn_params = {'lr': 0.1},`
-  ...     `epochs = 50,`
-  ...     `verb = 0)`
+We now specify a ~loss function~ and train our model.
 
-  Suppose that we want to predict the `y`-value associated to the
-  `x`-value `50`. If `50` happens to be `x`-value in the data set, we
-  could just take for the prediction the corresponding `y`-value
-  (or the average of the corresponding `y`-values if `50` happens to
-  occur more than once.
+>>> `criterion = nn.MSELoss()`
+>>> `from du.lib import train`
+>>> `model = train(`
+...     `model = model`,
+...     `crit = criterion`,
+...     `train_data = (xss, yss)`,
+...     `learn_params = {'lr': 0.1}`,
+...     `epochs = 50`,
+...     `verb = 0)`
 
-  If `50` does not occur, we could use the regression line to make
-  our prediction (this should be close to `2*50+9`). But notice that,
-  even if `50` does occur, we still probably want to use the regres-
-  sion line, since we are assuming that the original data includes
-  error.
+Suppose that we want to predict the `y`-value associated to the
+`x`-value 50. If 50 happens to be an `x`-value in the data set, we
+could just take for the prediction the corresponding `y`-value (or
+the average of the corresponding `y`-values if 50 happens to oc-
+cur more than once as an input of data).
 
-  >>> `testss = torch.tensor([50.]).unsqueeze(1)`
-  >>> `testss; testss.size()`
-  `tensor([[50.]])`
-  `torch.Size([1, 1])`
+If 50 does not occur, we can use the regression line to make
+our prediction (which should be close to 2*50+9, by the way).
+But notice that, even if 50 does occur in the data, we still
+want to use the regression line since we are assuming that the
+original data includes error.
 
-  We mean `center` and `normalize` with respect to the means and
-  standard deviations of the training data.
+>>> `testss = torch.tensor([50.]).unsqueeze(1)`
+>>> `testss; testss.size()`
+$tensor([[50.]])$
+$torch.Size([1, 1])$
 
-  >>> `testss, _ = center(testss, xss_means)`
-  >>> `testss, _ = normalize(testss, xss_stds)`
+We mean center and normalize with respect to the means and
+standard deviations of the training data.
 
-  After running the inputs for which we wish to make an predic-
-  tion through our trained model, we translate the output to
-  where it is supposed to be.
+>>> `testss, _ = center(testss, xss_means)`
+>>> `testss, _ = normalize(testss, xss_stds)`
 
-  >>> `yhatss = model(testss)`
-  >>> `prediction = (yhatss.mul_(yss_stds)+yss_means).item()`
-  >>> `abs(prediction - 109) < 5`
-  `True`
+After running the inputs for which we wish to make an predic-
+tion through our trained model, we translate the output to
+where it is supposed to be.
 
-_Simple linear regression with learning rate decay_
+>>> `yhatss = model(testss)`
+>>> `prediction = (yhatss.mul_(yss_stds)+yss_means).item()`
+>>> `abs(prediction - 109) < 5`
+$True$
 
-  The data, which are already centered and normalized are
-  those of the previous example. First we re-instance the
-  model, thereby re-initialing the weights. The criterion
-  is still `MSELoss`.
+The last line above checks that the output for the input 50 is
+fairly close to 109=2*50+9. Why is this not exactly 109?
 
-  >>> model = LinRegModel()
+!Simple linear regression with learning rate decay!
 
-  Let us use the class LearnParam_ to implement a dynamic
-  learning rate that decays over time.
+The data for this demonstration are those of the previous one,
+which are already centered and normalized. First we re-instance
+the model, thereby re-initialing the weights. The criterion is
+still `MSELoss`.
 
-  >>> from du.lib import LearnParams_
-  >>> class LR_decay(LearnParams_):
-  ...   def __init__(self, lr, rate):
-  ...     super().__init__(lr)
-  ...     self.rate = rate
-  ...   def update(self, params):
-  ...     self.lr = self.rate * self.lr
-  ...     super().update(params)
+>>> `model = LinRegModel()`
 
-  Now we train using an instance of the above class.
-  >>> learning_rate = 0.1; epochs = 2000
-  >>> decay_rate = 1-75*learning_rate/epochs
-  >>> print(decay_rate)
-  0.99625
-  >>> model = train(
-  ...   model,
-  ...   criterion,
-  ...   (xss, yss),
-  ...   learn_params = LR_decay(learning_rate, decay_rate),
-  ...   epochs = epochs,
-  ...   verb = 0)
+Let us use the class `LearnParams_` in `DUlib` to implement a dyna-
+mic learning rate that decays over time. (Read the documenta-
+tion for `LearnParams_`, which is a convenient base class for im-
+plementing various adaptive schemes that tune learning hyper-
+parameters, by issuing `pd du.lib.LearnParams_` at your command
+line.)
 
-  Now we check that the weights of our model converged to about
-  2 and 9, the slope and intercept of the line we used to gen-
-  erate the original data.
+>>> `from du.lib import LearnParams_`
+>>> `class LR_decay(LearnParams_):`
+...   `def __init__(self, lr, rate):`
+...     `super().__init__(lr)`
+...     `self.rate = rate`
+...   `def update(self, params):`
+...     `self.lr = self.rate * self.lr`
+...     `super().update(params)`
 
-  >>> params = list(model.parameters())
-  >>> m = params[0].item(); b = params[1].item()
+Now we train using an instance of the above class.
 
-  Now map the weights back to unnormalized/uncentered data, and
-  check that the slope and intercept are close to 2 and 9,
+>>> `learning_rate = 0.1; epochs = 2000`
+>>> `decay_rate = 1-85*learning_rate/epochs`
+>>> `print(decay_rate)`
+$0.99575$
+>>> `model = train(`
+...   `model = model`,
+...   `crit = criterion`,
+...   `train_data = (xss, yss)`,
+...   `learn_params = LR_decay(learning_rate, decay_rate)`,
+...   `epochs = epochs`,
+...   `verb = 0)`
 
-  >>> my=yss_means.item(); mx=xss_means.item()
-  >>> sy=yss_stds.item(); sx=xss_stds.item()
-  >>> slope = m*sy/sx; intercept = my+b*sy-slope*mx
-  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 10.0])
-  True
+Let us check that the weights of our model converged to about 2
+and 9, the slope and intercept of the line we used to generate
+the original data.
 
-Simple linear regression without normalizing or centering:
+>>> `params = list(model.parameters())`
+>>> `m = params[0].item(); b = params[1].item()`
 
-  There is no reason not to center and normalize for this
-  problem. But, just for the sport of it, one can use the
-  `optimize_ols` function:
+Now map the weights back to unnormalized/uncentered data, and
+check that the slope and intercept are close to 2 and 9,
 
-  >>> model = LinRegModel()
-  >>> xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)
-  >>> xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
-  >>> from du.lib import optimize_ols
-  >>> model = train(
-  ...     model = model,
-  ...     crit = criterion,
-  ...     train_data = (xss, yss),
-  ...     learn_params = optimize_ols(xss),
-  ...     epochs = 3000,
-  ...     verb = 0)
-  >>> params = list(model.parameters())
-  >>> slope = params[0].item(); intercept = params[1].item()
-  >>> all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 10.0])
-  True
+>>> `my=yss_means.item(); mx=xss_means.item()`
+>>> `sy=yss_stds.item(); sx=xss_stds.item()`
+>>> `slope = m*sy/sx; intercept = my+b*sy-slope*mx`
+>>> `all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 10.0])`
+$True$
 
-  Another way to validate the models above is simply to compute
-  r^2, which is called the coefficient of determination. For the
-  last example, r^2 can be computed by
+Why are the numbers not exactly 2 and 9?
 
-  >>> from du.lib import r_squared
-  >>> yhatss = model(xss)
-  >>> r_squared(yhatss, yss) # doctest: +SKIP
-  .9711...
+!Simple linear regression without normalizing or centering!
 
-  This means that about 97% of the variation in the data is ex-
-  plained by the regression line. Said differently, the model
-  performs very well.
+There is no reason not to center and normalize for this prob-
+lem. But, for the sport of it, one can use the `optimize_ols`
+function in `DUlib` as follows:
+
+>>> `model = LinRegModel()`
+>>> `xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)`
+>>> `xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)`
+>>> `from du.lib import optimize_ols`
+>>> `model = train(`
+...     `model = model`,
+...     `crit = criterion`,
+...     `train_data = (xss, yss)`,
+...     `learn_params = optimize_ols(xss)`,
+...     `epochs = 4000`,
+...     `verb = 0`)
+>>> `params = list(model.parameters())`
+>>> `slope = params[0].item(); intercept = params[1].item()`
+>>> `all([abs(slope - 2)  < 0.1, abs(intercept - 9.0) < 10.0])`
+$True$
+
+Another way to validate the trained model above is to compute
+r^2, the ~coefficient of determination~. For the current demon-
+stration, r^2 can be computed with
+
+>>> `from du.lib import r_squared`
+>>> `yhatss = model(xss)`
+>>> `0.96 < r_squared(yhatss, yss) < 0.985`
+$True$
+
+This means that about 97% of the variation in the data is ex-
+plained by the regression line; i.e., the model performs very
+well. Why is this not 100%?
+
                     _____________________
 
-_Note on visualizations_
+
+!Note on visualizations!
 
 If you have `matplotlib` installed, you can easily take in some
-visualizations of the ideas in the last sections.
+visualizations of the ideas in the last section.
 
 To see the graph of the 40-point point-cloud along with the or-
-iginal line (y=2x+9) that we used to generate the cloud, along
-with the regression line that we found using gradient descent
-(via our code in the last demo), simply type this at the com-
-mand line:
+iginal line (y=2x+9) that we used to generate the cloud along
+with the regression line that we found using gradient descent,
+simply type this at the command line:
 
-  dulib_linreg
+  `dulib_linreg`
 
 Run the program a couple of times. Each time, the initial point
 cloud is slightly different since we add noise when we generate
 it.
 
 You can watch the models best guess as to the best fit regres-
-sion line improve over each epoch of training by type at the
+sion line improve over each epoch of training by typing at the
 command line
 
-  dulib_linreg_anim
-                    _____________________
-
-Polynomial regression
-
-  The three demonstration above were examples of simple linear
-  regression.  More generally, (ols) polynomial regression ref-
-  ers to fitting a polynomial (of pre-specified degree) to data
-  in a way optimimal in the least-squares sense.
-
-  In this example both our features and targets will have shape
-  `(n,1)`.  To fit higher degree polynomials (so quadratic,
-  cubics, etc. rather than just lines), we regress over not
-  just the xs in xss but also over xs^2, xs^3, ect. (we get
-  constant term in our polynomial since our model classes have
-  a bias by default).
-
-  Let us generate some data by adding noise to a sampled non-
-  linear function.
-
-  >>> xs = 100*torch.rand(40)
-  >>> ys = torch.normal(20*torch.sin(xs)+9, 10.0)
-  >>> xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
-
-  And try to fit a polynomial of the following degree.
-
-  >>> degree = 5
-
-  We need to build a new model class.
-
-  >>> class SimpleLinReg(nn.Module):
-  ...   def __init__(self, degree):
-  ...     super().__init__()
-  ...     self.deg = degree
-  ...     self.layer = nn.Linear(degree, 1)
-  ...   def forward(self, xss):
-  ...     #copy xss to the cols of a (len(xss),deg) tensor
-  ...     powers = xss * torch.ones(len(xss), self.deg)
-  ...     #square entries in 2rd col, cube those in the 3rd,...
-  ...     powers = powers.pow(torch.arange(1.,self.deg+1))
-  ...     return self.layer(powers)
-
-  Let us instance and train this new class.
-
-  >>> model = train(
-  ...     model = SimpleLinReg(degree),
-  ...     crit = nn.MSELoss(),
-  ...     train_data = (xss, yss),
-  ...     learn_params = {'lr': 0.00001, 'mo': 0.9},
-  ...     epochs = 3000,
-  ...     verb = 0)
-
-  Let's check how well this trained model works.
-
-  >>> test_xss=(100*torch.rand(40)).unsqueeze(1)
-  >>> test_ys = torch.normal(20*torch.sin(xs)+9, 10.0)
-  >>> test_yss = test_ys.unsqueeze(1)
-  >>> yhatss = model(test_xss)
-  >>> from du.lib import r_squared
-  >>> r_squared(yhatss, test_yss)
+  `dulib_linreg_anim`
 
                     _____________________
 
-Nonlinear regression
 
-  >>> xs = 100*torch.rand(40)
-  >>> ys = torch.normal(20*torch.sin(xs)+9, 10.0)
-  >>> xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
-  >>> from du.models import OneLayerFC
-  >>> #model = OneLayerFC(width = 10)
+!Polynomial regression!
+
+The demonstrations above were examples of simple linear regres-
+sion.  More generally, (ols) ~polynomial regression~ refers to
+fitting a polynomial (of pre-specified degree) to data in a way
+that is optimal in the least-squares error sense.
+
+In this demo, both our features and targets have shape `(n,1)`.
+To fit higher degree polynomials (so quadratics, cubics, etc.
+rather than just lines), we regress over not just the `xs` in
+`xss` but also over `xs`^2, `xs`^3, and so on. (we get the constant
+term of our polynomial for free since our model classes include
+a bias by default).
+
+Let us generate some data by adding i.i.d. noise to a sampled
+non-linear function:
+
+>>> `xs = 40*torch.rand(20)-80/3`
+>>> `ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
+>>> `xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)`
+
+and try to fit to those data a polynomial of degree:
+
+>>> `degree = 3`
+
+We need to build a new model class.
+
+>>> `class SimpleLinReg(nn.Module):`
+...   `def __init__(self, degree):`
+...     `super().__init__()`
+...     `self.deg = degree`
+...     `self.layer = nn.Linear(degree, 1)`
+...   `def forward(self, xss):`
+...     #copy xss to the cols of a (len(xss),deg) tensor
+...     `powers = xss * torch.ones(len(xss), self.deg)`
+...     #square entries in 2rd col, cube those in the 3rd,...
+...     `powers = powers.pow(torch.arange(1.,self.deg+1))`
+...     `return self.layer(powers)`
+
+Let us instance and train this new class.
+
+>>> `model = train(`
+...     `model = SimpleLinReg(degree)`,
+...     `crit = nn.MSELoss()`,
+...     `train_data = (xss, yss)`,
+...     `learn_params = {'lr': 1e-9, 'mo': 0.999}`,
+...     `epochs = 8000`,
+...     `verb = 0)`
+
+Let us now compute r^2 for regression polynomial found by the
+model, though we should ask ourselves if using r^2 is appropr-
+iate in this scenario.
+
+>>> `r_squared(model(xss), yss)` #doctest:+SKIP
+
+We can also pick 20 test points not seen during training.
+
+>>> `xs = 40*torch.rand(20)-80/3`
+>>> `xss_test = xs.unsqueeze(1)`
+>>> `ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
+>>> `yss_test = ys.unsqueeze(1)`
+>>> `r_squared(model(xss_test), yss_test)` #doctest:+SKIP
+
+These r^2 values jump around, over multiple runs of the code
+above. Sometimes r^2 is around 0.5 which means that the reqres-
+sion poly captures about 50% of the variation in the data. But
+sometimes it turns up negative.
+
+Try running the commandline program `dulib_polyreg` which dis-
+plays the (sample) point cloud along with the regression poly.
+The r^2 values are also computed and displayed.
+
+How can r^2 be negative? What is r^2 actually computing in the
+cas of polynomial regression? Why is r^2 never negative in the
+case of a degree 1 poly (i.e., a line)?
+
+For the (ols) regression line, r^2 computes the proportion of
+the variation of the data explained by the regression line `over`
+`and above that explained by a horizontal line` (with intercept
+the mean of the `y` values of the data).
+
+A central question arises: should we even use poly regression
+and, if so, what's the best degree?
+
+Note: Another commandline program, `dulib_polyreg_anim`, is pro-
+vided that plays an animation of the regression polynomial con-
+verging.  (The data is generated by adding i.i.d. noise to the
+outputs of f(x) = 2x*cos(x/10)-5, as in the last demonstration.
 
                     _____________________
 
-Entire programs that employ the complete functionality of DUlib
-can be found at The DL@DU Project.
+
+!Nonlinear regression!
+
+                    ... Coming soon ...
 
 '''
+import os
+import argparse
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
-from du.lib import optimize_ols, train
-from du.util import _markup
+import tkinter
+import du.lib as dulib
+import du.util
+import du.models
 
 __author__ = 'Scott Simmons'
-__version__ = '0.8.5'
+__version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/05/19'
-__doc__ = _markup(__doc__)
+__date__ = '12/16/19'
+__copyright__ = """
+  Copyright [2019] Scott Simmons
 
-class LinRegModel(nn.Module):
-  def __init__(self):
-    super().__init__()
-    self.layer = nn.Linear(1, 1)
-  def forward(self, xss):
-    return self.layer(xss)
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+"""
+__license__= 'Apache 2.0'
+
+_has_display = 'DISPLAY' in os.environ
 
 def simple_linear_regression():
-  import argparse
-
+  """Commandline program that graphs a regression line."""
   xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 20.0)
   xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
 
-  d = optimize_ols(xss)
+  d = dulib.optimize_ols(xss)
   parser = argparse.ArgumentParser(
       description = 'Simple linear regression via gradient descent',
       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('-lr',type=float,help='learning rate',default=d['lr'])
-  parser.add_argument('-mo',type=float,help='momentum',default=d['mo'])
-  parser.add_argument('-epochs',type=int,help='epochs',default=3000)
-  parser.add_argument('-gr',type=int,help='1 to show loss',default=0)
+  parser.add_argument('-lr', type=float, help='learning rate',
+      default=du.util.format_num(d['lr']))
+  parser.add_argument('-mo', type=float, help='momentum',
+      default=du.util.format_num(d['mo']))
+  parser.add_argument('-epochs', type=int, help='epochs', default=200)
+  h_str = '1 to show graph of loss during training'
+  parser.add_argument('-gr', type=int, help=h_str, default=0)
   args = parser.parse_args()
 
-  model = LinRegModel()
-  model = train(
-      model = model,
+  model = dulib.train(
+      model = du.models.SimpleLinReg(),
       crit = nn.MSELoss(),
       train_data = (xss, yss),
       learn_params = {'lr':args.lr, 'mo':args.mo},
@@ -441,30 +497,40 @@ def simple_linear_regression():
   params = list(model.parameters())
   slope = params[0].item(); intercept = params[1].item()
 
-  fig, _ = plt.subplots()
-  plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
-  plt.scatter(xs.tolist(),ys.tolist(),s=9)
-  xs = torch.arange(101.)
-  plt.plot(xs, 2*xs+9, c='black', lw=.5, label='y = 2x + 9')
-  plt.plot(xs, slope*xs+intercept, c='red', lw=.9,\
-      label='reg. line: y = {:.2f}x + {:.2f}'.format(slope, intercept))
-  plt.legend(loc=1);
-  plt.show()
+  if _has_display:
+    fig, _ = plt.subplots()
+    plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
+    plt.scatter(xs.tolist(),ys.tolist(),s=9)
+    xs = torch.arange(101.)
+    plt.plot(xs, 2*xs+9, c='black', lw=.5, label='y = 2x + 9')
+    plt.plot(xs, slope*xs+intercept, c='red', lw=.9,\
+        label='reg. line: y = {:.2f}x + {:.2f}'.format(slope, intercept))
+    plt.legend(loc=1);
+    plt.show()
+
+  print('r^2 for the original data: {}'.\
+      format(du.lib.r_squared(model(xss),yss)))
+  xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 20.0)
+  xss_test = xs.unsqueeze(1); yss_test = ys.unsqueeze(1)
+  print('r^2 on 20 new test points: {}'.\
+      format(du.lib.r_squared(model(xss_test),yss_test)))
 
 def simple_linear_regression_animate():
-  import argparse
-  from du.lib import train, optimize_ols
+  """Program that plays a regression line animation."""
+  assert _has_display, 'no X-server found'
 
   xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 50.0)
   xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
 
-  d = optimize_ols(xss)
+  d = du.lib.optimize_ols(xss)
   parser = argparse.ArgumentParser(
       description = 'Simple linear regression via gradient descent',
       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('-lr',type=float,help='learning rate',default=d['lr'])
-  parser.add_argument('-mo',type=float,help='momentum',default=d['mo'])
-  parser.add_argument('-epochs',type=int,help='epochs',default=3000)
+  parser.add_argument('-lr',type=float,help='learning rate',
+      default=du.util.format_num(d['lr']))
+  parser.add_argument('-mo',type=float,help='momentum',
+      default=du.util.format_num(d['mo']))
+  parser.add_argument('-epochs',type=int,help='epochs',default=200)
   parser.add_argument('-bs',type=int,help='batchsize <=40',default=-1)
   args = parser.parse_args()
 
@@ -474,9 +540,9 @@ def simple_linear_regression_animate():
   plt.plot(xs_, 2*xs_+9, c='black', lw=.5, label='y = 2x + 9')
   plt.scatter(xs.tolist(),ys.tolist(),s=9)
 
-  model = LinRegModel()
+  model = du.models.SimpleLinReg()
   for epoch in range(args.epochs):
-    model = train(
+    model = dulib.train(
         model = model,
         crit = nn.MSELoss(),
         train_data = (xss, yss),
@@ -488,6 +554,7 @@ def simple_linear_regression_animate():
     slope = params[0].item(); intercept = params[1].item()
 
     plt.clf()
+    plt.title('epoch: {}/{}'.format(epoch+1, args.epochs))
     plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
     plt.scatter(xs.tolist(),ys.tolist(),s=9)
     plt.plot(xs_, 2*xs_+9, c='black', lw=.5, label='y = 2x + 9')
@@ -503,10 +570,7 @@ def simple_linear_regression_animate():
   plt.show()
 
 def simple_polynomial_regression():
-  import argparse
-  from du.models import polyize, SimpleLinReg
-  from du.lib import optimize_ols
-
+  """Program that displays a regression polynomial."""
   num_points = 20; x_width = 40.0; h_scale = 1.5; v_shift = 5
   xs = x_width*torch.rand(num_points) - x_width /h_scale
   ys = torch.normal(2*xs*torch.cos(xs/10)-v_shift, 10.0)
@@ -520,14 +584,14 @@ def simple_polynomial_regression():
   parser.add_argument('-deg',type=int,help='degree of poly',default=3)
   parser.add_argument('-lr',type=float,help='learning rate',default=1e-9)
   parser.add_argument('-mo',type=float,help='momentum',default=.999)
-  parser.add_argument('-epochs',type=int,help='epochs',default=10000)
+  parser.add_argument('-epochs',type=int,help='epochs',default=8000)
   parser.add_argument('-gr',type=int,help='1 to show loss',default=0)
   parser.add_argument('-show_opt',\
       help='show optimal learning parameters and quit',action='store_true')
   args = parser.parse_args()
 
   degree = args.deg
-  xss = polyize(xss, degree)
+  xss = du.models.polyize(xss, degree)
   print('degree is',degree)
 
   if args.show_opt:
@@ -538,8 +602,8 @@ def simple_polynomial_regression():
   else:
     learn_params = {'lr':args.lr, 'mo':args.mo}
 
-  model = train(
-      model = SimpleLinReg(degree),
+  model = dulib.train(
+      model = du.models.SimpleLinReg(degree),
       crit = nn.MSELoss(),
       train_data = (xss, yss),
       learn_params = learn_params,
@@ -547,27 +611,174 @@ def simple_polynomial_regression():
       graph = args.gr,
       verb = 2)
 
-  fig, _ = plt.subplots()
+  if _has_display:
+    fig, _ = plt.subplots()
+    plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
+    plt.scatter(xs.tolist(),ys.tolist(),s=9,
+        label='y = 2x*cos(x/10)-{}+10*N(0,1)'.format(v_shift))
+    xs_ = torch.arange(float(int(x_width)+1)) - x_width/h_scale;
+    plt.plot(xs_, xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,\
+        label='y = 2x*cos(x/10)-{}'.format(v_shift))
+    yhatss = model(du.models.polyize(xs_.unsqueeze(1),degree)).squeeze(1)
+    plt.plot(xs_, yhatss.detach(), c='red', lw=.9,
+        label='reg. poly (deg={})'.format(degree))
+    plt.legend(loc=1);
+    plt.show()
+
+  print('r^2 on the original data: {}'.format(du.lib.r_squared(model(xss),yss)))
+  xs = 40*torch.rand(20)-80/3
+  xss_test = xs.unsqueeze(1)
+  ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)
+  yss_test = ys.unsqueeze(1)
+  print('r^2 on 20 new test points: {}'.\
+      format(
+          du.lib.r_squared(model(du.models.polyize(xss_test,degree)),yss_test)))
+
+def poly_string(coeffs):
+  """Rudimentary poly string representation
+
+  Args:
+    $coeffs$ (`list`): The coefficients with the constant
+        term first.
+
+  Returns:
+    `str`.
+
+  >>> print(poly_string([-5,2,3]))
+  3x^2+2x+-5
+  """
+  coeffs = coeffs[::-1]
+  degree = len(coeffs) - 1
+
+  string_rep = ''
+  for i, coeff in enumerate(coeffs):
+    coeff = du.util.format_num(coeff)
+    if i < degree - 1:
+      string_rep += '{}x^{}+'.format(coeff, degree - i)
+    elif i < degree:
+      string_rep += '{}x+'.format(coeff)
+    else:
+      string_rep += str(coeff)
+  return string_rep
+
+def simple_polynomial_regression_animate():
+  """Program that plays a regression polynomial animation."""
+  assert _has_display, 'no X-server found'
+  num_points = 20; x_width = 40.0; h_scale = 1.5; v_shift = 5
+  xs = x_width*torch.rand(num_points) - x_width /h_scale
+  ys = torch.normal(2*xs*torch.cos(xs/10)-v_shift, 10.0)
+  xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
+
+  parser = argparse.ArgumentParser(
+      description =\
+         'Simple poly regression via gradient descent'+
+         '\n  put lr = -1 to try optimal learning params',
+      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument('-deg',type=int,help='degree of poly',default=3)
+  parser.add_argument('-lr',type=float,help='learning rate',default=1e-9)
+  parser.add_argument('-mo',type=float,help='momentum',default=.999)
+  parser.add_argument('-epochs',type=int,help='epochs',default=5000)
+  parser.add_argument('-gr',type=int,help='1 to show loss',default=0)
+  parser.add_argument('-show_opt',\
+      help='show optimal learning parameters and quit',action='store_true')
+  args = parser.parse_args()
+
+  degree = args.deg
+  xss = du.models.polyize(xss, degree)
+  print('degree is',degree)
+
+  if args.show_opt:
+    print(optimize_ols(xss, verb=2))
+    exit()
+  if args.lr < 0 or args.mo < 0:
+    learn_params = optimize_ols(xss, verb=1)
+  else:
+    learn_params = {'lr':args.lr, 'mo':args.mo}
+
+  model = du.models.SimpleLinReg(degree)
+  train_first = 0.5
+  model = dulib.train(
+      model = model,
+      crit = nn.MSELoss(),
+      train_data = (xss, yss),
+      learn_params = learn_params,
+      epochs = int(train_first*args.epochs),
+      graph = args.gr,
+      verb = 2)
+
+  plt.ion(); fig, _ = plt.subplots()
   plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
+  xs_ = torch.arange(float(int(x_width)+1)) - x_width/h_scale;
+  plt.plot(xs_, 2*xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,
+      label='y = 2x*cos(x/10)-{}'.format(v_shift))
   plt.scatter(xs.tolist(),ys.tolist(),s=9,
       label='y = 2x*cos(x/10)-{}+10*N(0,1)'.format(v_shift))
-  xs_ = torch.arange(float(int(x_width)+1)) - x_width/h_scale;
-  plt.plot(xs_, xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,\
-      label='y = 2x*cos(x/10)-{}'.format(v_shift))
-  yhatss = model(polyize(xs_.unsqueeze(1),degree)).squeeze(1)
-  plt.plot(xs_, yhatss.detach(), c='red', lw=.9,
-      label='reg. poly (deg={})'.format(degree))
-  plt.legend(loc=1);
+
+  for epoch in range(int((1-train_first)*args.epochs)):
+    model = dulib.train(
+        model = model,
+        crit = nn.MSELoss(),
+        train_data = (xss, yss),
+        learn_params = learn_params,
+        epochs = 1,
+        verb = 0)
+    params = list(model.parameters())
+    coeffs = [params[-1].item()]
+    for param in params[0].squeeze(0):
+      coeffs.append(param.item())
+
+    plt.clf()
+    plt.title('epoch: {}/{}'.\
+        format(int(train_first*args.epochs+epoch+1),args.epochs))
+    plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
+    plt.scatter(xs.tolist(),ys.tolist(),s=9,
+        label='y = 2x*cos(x/10)-{}+10*N(0,1)'.format(v_shift))
+    plt.plot(xs_, 2*xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,
+        label='y = 2x*cos(x/10)-{}'.format(v_shift))
+    yhatss = model(du.models.polyize(xs_.unsqueeze(1),degree)).squeeze(1)
+    plt.plot(xs_, yhatss.detach(), c='red', lw=.9,
+        label=poly_string(coeffs).format(degree))
+    plt.legend(loc=1)
+    try:
+      fig.canvas.flush_events()
+    except tkinter.TclError:
+      plt.ioff()
+      exit()
+  plt.ioff()
   plt.show()
 
-  #test_xss=(100*torch.rand(40)).unsqueeze(1)
-  #test_ys = torch.normal(20*torch.sin(xs)+9, 10.0)
-  #test_yss = test_ys.unsqueeze(1)
-  #yhatss = model(polyize(test_xss, degree))
-  #from du.lib import r_squared
-  #r_squared(yhatss, test_yss)
-
 if __name__ == '__main__':
-  simple_polynomial_regression()
+  import inspect
   import doctest
-  doctest.testmod()
+
+  # find the user defined functions
+  _local_functions = [(name,ob) for (name, ob) in sorted(locals().items())\
+       if callable(ob) and ob.__module__ == __name__]
+
+  #remove markdown
+  #  from the docstring for this module
+  globals()['__doc__'] = du.util._markup(globals()['__doc__'],strip = True)
+  #  from the functions (methods are fns in Python3) defined in this module
+  for _, _ob in _local_functions:
+    if inspect.isfunction(_ob):
+      _ob.__doc__ = du.util._markup(_ob.__doc__,strip = True)
+    # below we find all the methods that are not inherited
+    if inspect.isclass(_ob):
+      _parents = inspect.getmro(_ob)[1:]
+      _parents_methods = set()
+      for _parent in _parents:
+        _members = inspect.getmembers(_parent, inspect.isfunction)
+        _parents_methods.update(_members)
+      _child_methods = set(inspect.getmembers(_ob, inspect.isfunction))
+      _child_only_methods = _child_methods - _parents_methods
+      for name,_meth in _child_only_methods:
+        _ob.__dict__[name].__doc__ = du.util._markup(_meth.__doc__,strip = True)
+
+  # run doctests
+  failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)
+
+  # print signatures
+  if failures == 0:
+    from inspect import signature
+    for name, ob in _local_functions:
+      print(name,'\n  ', inspect.signature(ob))

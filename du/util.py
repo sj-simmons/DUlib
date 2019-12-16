@@ -1,128 +1,144 @@
 #!/usr/bin/env python3
-"""Utilities
+"""various utilities
+
 """
 # Todo:
 #   - finish compiling the regexs
 #     - compile these once when the package is installed.
 #   - implement strip to remove all char escape sequences used
 #     in the markdown and see just plain text
+#     - this is done for backticks, so do it for the rest.
 #   - use inspect or whatever to transform all docstring in
 #     all modules in DUlib
 #   - in argparse check that all stuff was passed, like with
 #     serial, before setting up that option.
+#   - you have to implement strip because none of the doctest-
+#     ing will work unless you strip off the markdown first.
 
 import torch
 import argparse
 import re
 import signal
 import inspect
-import du.util
 
 __author__ = 'Scott Simmons'
-__version__ = '0.8.5'
+__version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/05/19'
+__date__ = '12/16/19'
+__copyright__ = """
+  Copyright [2019] Scott Simmons
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+"""
+__license__= 'Apache 2.0'
 
 def stand_args(desc = '', **kwargs):
-  '''Factory for command line switches.
+  """Factory for command line switches.
 
-  Painlessly, setup argparse switches, etc. for common hyper-
-  parameters, and return the parser object in such a way that
-  the calling program can add more switches, if desired.
+  Painlessly setup argparse command line switches for common
+  hyperparameters, and return the parser object in such a way
+  that the calling program can add more switches, if desired.
 
-  Notes:
+  !Notes!
 
   This function does not implement, for example, `bs` being set
-  to -1 leading to (full) batch gradient descent. That is imp-
-  lemented elsewhere (in the `du.lib.train` function). This
-  function is handy solely for eliminating boilerplate code
-  when adding to one's program commandline switches for common
-  hyper-parameters like learning rate, momentum, etc.
+  to -1 leading to (full) batch gradient descent. That should
+  be implemented elsewhere (in `DUlib` it is implemented in the
+  `du.lib.train` function). The `stand_args` function is handy only
+  for eliminating boilerplate code when adding to one's program
+  command-line switches for common hyper-parameters like learn-
+  ing rate, momentum, etc.
 
-  Simple usage:
+  !Simple usage!
 
   Suppose that you want your program to have commandline op-
-  tions for the learning rate, the momentum, and number of
-  epochs to train; and further that you want to provide your-
-  self or some other user of your program with default values
-  for the learning rate, and momentum, but that you want to
-  require the user to specify the number of epochs on the com-
-  mand line. Additionally suppose that you want to add a less
-  common commandline switch called 'foo'.
-
-  Then, in your program, put
+  tions for the learning rate, the momentum, and the no. of ep-
+  ochs to train; and further that you want to provide yourself
+  or some other user of your program with default values for
+  the learning rate, and momentum, but that you want to require
+  the user to specify the number of epochs on the command line.
+  Additionally suppose that you want to add a less common com-
+  mandline switch called 'foo'. Then, in your program, put:
 
     `import du.util`
 
     `parser = du.util.stand_args(`
         `'a short description of your program'`,
-        `lr = 0.1`,
-        `mo = 0.9`,
-        `epochs = True`)
-    `parser.add_argument('-foo',help='some new switch')`
+        `lr = 0.1`, `mo = 0.9`, `epochs = True`)
+    `parser.add_argument('-foo', help='the new thing', ...)`
     `args = parser.parse_args()`
     ...
     `print('the learning rate is', args.lr)`
+    ...
 
   Args:
-    desc (str): A short description of what the calling pro-
-        gram does.  Default: ''.
+    $desc$ (`str`): A short description of what the calling program
+        does.  Default: `''`.
 
   Kwargs:
-    lr (Union[bool,float]): If `True`, then add a commandline
+    $lr$ (`Union[bool,float]`): If `True`, then add a commandline
         switch for the learning rate, returned to the calling
-        program via the return parser object with name `'lr'`.
-        If a `float`, then setup the commandline switch to
-        use that float as the default `lr`. Default: False.
-    mo (Union[bool,float]): If `True`, add a switch for mom-
-        entum.  If a `float`, set that as the default momen-
-        tum. Default: False.
-    bs (Union[bool,int]): Similarly to above, set up batchsize
-        as a commandline switch, and note in the description
-        the typical behavior that -1 leads to batch gradient
-        descent. Default: False.
-    epochs (Union[bool,int]): As above for number of epochs
-        over which train. Default: False.
-    prop (Union[bool,float]): As above, but for the propor-
-        tion on which train. Default: False.
-    gpu (Union[bool,int]): Add a `gpu` switch. with a note
-        in the description to the effect: which gpu, if more
-        than one is found; -1 for last gpu found; -2 for cpu
-        Default: False.
-    graph (Union[bool,int]): Whether to add commandline switch
-        for showing a graph during training, with a note in the
-        description to the effect: graph losses during train-
-        ing; redraw after this many epochs. Just put `True` to
-        enable a `-graph` switch that simply toggles on graph-
-        ing. Default: False.
-    widths (Union[bool,List[int]]): This switch is used in
+        program via the return parser object, with name `'lr'`.
+        If a `float`, then setup the commandline switch to use
+        that float as the default for the switch `-lr`. Default:
+        `False`.
+    $mo$ (`Union[bool,float]`): If `True`, add a switch for momentum.
+        If a `float`, set that as the default momentum. Default:
+        `False`.
+    $bs$ (`Union[bool,int]`): Similarly to above, set up batchsize
+        as a commandline switch, and note in the help string
+        for the resulting switch the typical behavior that -1
+        leads to batch gradient descent. Default: `False`.
+    $epochs$ (`Union[bool,int]`): As above for the number of epochs
+        over which train. Default: `False`.
+    $prop$ (`Union[bool,float]`): As above, but for the proportion
+        on which train. Default: `False`.
+    $gpu$ (`Union[bool,int]`): Add a `gpu` switch. with a note in the
+        help string to the effect: ~which gpu, if more than one~
+        ~is found; -1 for last gpu found; -2 for cpu~. Default:
+        `False`.
+    $graph$ (`Union[bool,int]`): Whether to add a switch for show-
+        ing a graph during training, with a note in help to the
+        effect: ~graph losses during training; redraw after this~
+        ~many epochs~. Put `True` to enable a `-graph` switch that
+        simply toggles `args.graph` to `True`. Default: `False`.
+    $widths$ (`Union[bool,List[int]]`): This switch is used in
         DUlib demos to pass in, for example, the number and
-        widths of the layers of a dense feed-forward network.
-        Default: False.
-    verb (Union[bool,int]): Whether or not to have a verbosity
-        commandline switch. Default: False.
-    pred (bool): Whether or not add a `pred` switch, which re-
-        fers to whether the program should simply make a pred-
-        iction and exit. If this is True then files can provid-
-        ed on the command line after the `-pred` switch. The
-        help string returned is: don't train, only predict (on
-        any filenames that are optionally listed).
-        Default: False.
-    ser (bool): Whether to have a commandline switch to deter-
-        whether to serialize in the calling program. If this
-        is true then the returned `parser` will be set up so
-        that the switch `-ser` is stores `True`. The help
-        string returned is: toggle setting random seed. See
-        above for an example.
-        Default: False.
-    seed (bool): Same as `ser` but for `seed` which refers to
-        the random seed. Default: False.
+        widths of the hidden layers of a dense feed-forward
+        network. Default: `False`.
+    $verb$ (`Union[bool,int]`): Whether or not to have a verbosity
+        commandline switch. Default: `False`.
+    $pred$ (`bool`): Whether or not add a `pred` switch, which refers
+        to whether the program should simply make a prediction
+        and exit. If this is set to `True` then files can be pro-
+        vided on the commandline after the `-pred` switch. The
+        help string returned is: ~don't train, only predict (on~
+        ~any filenames that are optionally listed)~. Default:
+        `False`.
+    $ser$ (`bool`): Whether to have a commandline switch to deter-
+        mine whether to serialize in the calling program. If
+        this is `True` then the returned `parser` object will be
+        set up so that the switch `-ser` stores `True`. The help
+        string returned is: ~toggle setting random seed~. De-
+        fault: `False`.
+    $seed$ (`bool`): Same as `ser` but for `seed` which refers to the
+        random seed. Default: `False`.
 
   Returns:
-    (argparse.ArgumentParser). The parser object to which the
+    (`argparse.ArgumentParser`). The parser object to which the
         calling program can add more names.
-  '''
-  du.util._check_kwargs(kwargs,['lr','mo','bs','epochs','seed','prop', 'gpu',\
+  """
+  _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','prop', 'gpu',\
       'graph','ser','pred','widths','verb'])
   lr = kwargs.get('lr', False)
   mo = kwargs.get('mo', False)
@@ -215,13 +231,13 @@ def get_device(gpu = -1):
   """Get the best device to run on.
 
   Args:
-    gpu (int): The gpu to use. Set to -1 to use the last gpu
+    $gpu$ (`int`): The gpu to use. Set to -1 to use the last gpu
         found when gpus are present; set to -2 to override
         using a found gpu and use the cpu. Default -1.
 
   Returns:
-    str. A string that can be passed using the `to` method
-        of `Torch` tensors and modules.
+    `str`. A string that can be passed using the `to` method of
+        `Torch` tensors and modules.
   """
   if gpu > -2:
     return torch.device( "cuda:{0}".format(
@@ -231,27 +247,30 @@ def get_device(gpu = -1):
     return 'cpu'
 
 def format_num(number):
-  '''Format a small number nicely.
+  """Format a small number nicely.
 
   Args:
-    number (float): A number.
+    $number$ (`float`): A number.
 
   Returns:
-    str.
-  '''
+    `str`.
+
+  >>> `print(format_num(.00000006))`
+  6e-08
+  """
   if number < .005: string = '{:.4g}'.format(number)
   else: string = '{:.5g}'.format(number)
   return string
 
 def _parse_data(data_tuple, device = 'cpu'):
-  '''Helper function for the train function.
+  """Helper function for the train function.
 
   Args:
     data_tuple Tuple[tensor]: Length either 2 or 3.
 
   Returns:
     Tuple[tensor].
-  '''
+  """
   feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
   if len(data_tuple) == 3:
     feats_lengths = data_tuple[1].to(device)
@@ -290,30 +309,28 @@ def _catch_sigint():
   signal.signal(signal.SIGINT, keyboardInterruptHandler)
 
 def _catch_sigint_and_break():
-  """Catch keyboard interrupt signal and break out of a `for` or
-  `while` loop.
+  """Catch keyboard interrupt.
+
+  Catch a user's <CONTROL>-C and try to break out of a `for` or
+  a `while` loop.
   """
   def keyboardInterruptHandler(signal, frame):
     global interrupted
     interrupted = True
   signal.signal(signal.SIGINT, keyboardInterruptHandler)
 
-def _catch_wrong_tensors(crit, xss, yss):
-  '''Try to catch when someone passes the wrong size or type.
-  '''
-  pass
-
-class _Color:
-  """Mini markdown.
+class _Markdown:
+  """Markdown for bold, underline, and a few colors.
 
   Here is the markdown
+
     `bold`, !underline somthing!, $make red$, ~blue~, |cyan|
 
   Don't try to use across line breaks. (Do that by hand)
 
   Also:
       ... become grey (kind of)
-      seperators like ______________ get underlined too
+      seperators like ______________ get underlined, too
   """
   def __init__(self):
     self.PURPLE = '\033[95m'
@@ -336,15 +353,21 @@ class _Color:
 
   def bold(self, docstring, strip=False):
     """Makes bold words or phrases on one line surrounded by ` symbols."""
-    return re.sub(self.bold_pat, self.BOLD+r'\1'+ self.END, docstring)
+    if not strip:
+      return re.sub(self.bold_pat, self.BOLD+r"\1"+ self.END, docstring)
+    else:
+      return docstring.translate(docstring.maketrans(dict.fromkeys('`')))
 
   def red(self, docstring, strip=False):
     """Makes red words or phrases on one line surrounded by $ symbols."""
-    return re.sub(self.red_pat, self.BOLD+self.RED+r'\1'+ self.END, docstring)
+    if not strip:
+      return re.sub(self.red_pat, self.BOLD+self.RED+r"\1"+ self.END, docstring)
+    else:
+      return docstring.translate(docstring.maketrans(dict.fromkeys('$')))
 
   def blue(self, docstring, strip=False):
     """Makes blue words or phrases on one line surrounded by ~ symbols."""
-    return re.sub(self.blue_pat , self.BOLD+self.BLUE+r'\1'+ self.END,docstring)
+    return re.sub(self.blue_pat, self.BOLD+self.BLUE+r"\1"+ self.END,docstring)
 
   def cyan(self, docstring, strip=False):
     """Makes cyan words or phrases on one line surrounded by | symbols."""
@@ -353,30 +376,22 @@ class _Color:
 
   def gray(self, docstring, strip=False):
     """Makes gray >>> and ... ."""
-    return re.sub(r'(>>>|\.\.\.)', self.BLUE+r'\1'+ self.END, docstring)
+    if not strip:
+      return re.sub(r'(>>>|\.\.\.)', self.BLUE+r'\1'+ self.END, docstring)
+    else:
+      return docstring
 
   def underline(self, docstring, strip=False):
     """Underlines words or phrases on one line surrounded by _ symbols."""
     s = re.sub(r'!([a-zA-Z][a-zA-Z \-]+)!',\
         self.UNDERLINE+r'\1'+self.END,docstring)
-    return re.sub(r'[\_\_\_]([\_]+)',self.UNDERLINE+r'___\1'+self.END,s)
+    return re.sub(r'\_\_\_([\_]+)',self.UNDERLINE+r'___\1'+self.END,s)
 
-#def _shorten_doc(docstring):
-#  """Strip out un-useful info from a docstring of a subclass about
-#  attributes etc from the base class.
-#
-#  docstring = "blah blab stuff\n"+'-'*70+"\n"+"Methods inherited from"
-#  docstring = "blah blab stuff"+"Methods inherited from"
-#  shorten_doc(docstring)
-#  -----------------------
-#  """
-#  return docstring.split('-'*70)[0]
-
-def _markup(docstring, md_mappings = _Color(), strip = False):
+def _markup(docstring, md_mappings = _Markdown(), strip = False):
   """Process markdown.
 
-  Looks at markdown and wraps with the appropriate char
-  escape sequences, or strips away the markdown.
+  Looks at markdown and wraps with the appropriate char es-
+  cape sequences, or strips away the markdown.
 
   Args:
     docstring (str): The docstring to process.
@@ -388,23 +403,41 @@ def _markup(docstring, md_mappings = _Color(), strip = False):
   '\x1b[1m\x1b[91mLoren\x1b[0m \x1b[4mlipsum\x1b[0m \x1b[36mdolor\x1b[0m'
   """
   for _, f in inspect.getmembers(md_mappings, inspect.ismethod)[1:]:
-    docstring = f(docstring)
+    if docstring is not None:
+      docstring = f(docstring, strip = strip)
   return docstring
 
 if __name__ == '__main__':
   import doctest
-  failures, _ = doctest.testmod()
 
+  # find the user defined functions
+  _local_functions = [(name,ob) for (name, ob) in sorted(locals().items())\
+       if callable(ob) and ob.__module__ == __name__]
+
+  #remove markdown
+  #  from the docstring for this module
+  globals()['__doc__'] = _markup(globals()['__doc__'],strip = True)
+  #  from the functions (methods are fns in Python3) defined in this module
+  for _, _ob in _local_functions:
+    if inspect.isfunction(_ob):
+      _ob.__doc__ = _markup(_ob.__doc__,strip = True)
+    # below we find all the methods that are not inherited
+    if inspect.isclass(_ob):
+      _parents = inspect.getmro(_ob)[1:]
+      _parents_methods = set()
+      for _parent in _parents:
+        _members = inspect.getmembers(_parent, inspect.isfunction)
+        _parents_methods.update(_members)
+      _child_methods = set(inspect.getmembers(_ob, inspect.isfunction))
+      _child_only_methods = _child_methods - _parents_methods
+      for name,_meth in _child_only_methods:
+        _ob.__dict__[name].__doc__ = _markup(_meth.__doc__,strip = True)
+
+  # run doctests
+  failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)
+
+  # print signatures
   if failures == 0:
-    # Below prints only the signature of locally defined functions.
     from inspect import signature
-    local_functions = [(name,ob) for (name, ob) in sorted(locals().items())\
-        if callable(ob) and ob.__module__ == __name__]
-    for name, ob in local_functions:
-      print(name,'\n  ',signature(ob))
-
-#globals()['__doc__']=_markup(globals()['__doc__'])
-
-#stand_args.__doc__=_markup(stand_args.__doc__)
-
-
+    for name, ob in _local_functions:
+      print(name,'\n  ', inspect.signature(ob))

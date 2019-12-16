@@ -7,9 +7,11 @@ def readme():
 setup(
   entry_points={
       'console_scripts': [
+          'pd = du._pydoc:cli',
           'dulib_linreg = du.examples:simple_linear_regression',
           'dulib_linreg_anim = du.examples:simple_linear_regression_animate',
           'dulib_polyreg = du.examples:simple_polynomial_regression',
+          'dulib_polyreg_anim = du.examples:simple_polynomial_regression_animate',
       ],
       'gui_scripts': [],
   },
@@ -25,7 +27,7 @@ setup(
   #Do the same for matplotlib
   #install_requires=['matplotlib<3.1'],
   install_requires=[],
-  version='0.8.5',
+  version='0.9',
   license='Apache 2.0',
   description='tools from The DL@DU Project',
   long_description=readme(),
