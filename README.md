@@ -5,26 +5,97 @@
 ---
 
 #### Quickstart
+
 * At the command line, install the latest release:
-  `pip3 install DUlib` (or `pip install -U DUlib3 --user` in the
-  presence of a previously installed version). Try first installing without the `--user`
-  switch but, if necessary, run `pip3 install DUlib --user`.
-* Then have a look at the functions provided by the core library: `pydoc3 du.lib`
-* and perhaps some examples of their usage: `pydoc3 du.examples`
+  ``` bash
+  pip3 install DUlib --user
+  ```
+  (or `pip3 install -U DUlib --user` in the presence of a previously installed version).
+
+You can now:
+* have a look at the module structure of DUlib: `pd du`
+* work through some demonstrations that illustrate basic usage: `pd du.examples`
+
+#### Installation notes
+
+By now you are likely aware of [python environment
+hell](https://imgs.xkcd.com/comics/python_environment.png).  We recommend simply
+*always* installing `DUlib` using the `--user` option with `pip3` &mdash; unless
+you are installing system-wide for multiple users, in which case prefacing with
+`sudo` might be best.
+
+* At the command line, install the latest release:
+  ``` bash
+  pip3 install DUlib --user
+  ```
+  (or `pip3 install -U DUlib --user` in the presence of a previously installed version).
+
+  Notes:
+  * If you don't have a `pip3` command then your `pip` command  must in fact
+    *be* pip3 (you can check this with `pip -V`).  In this case just use
+    ``` bash
+    pip install DUlib --user
+    ```
+
+  * If you've previously installed  many different versions of DUlib, and especially
+    if you've installed from a local cloned version of this repo, then things
+    on your system might be kind of a mess. Consider first uninstalling DUlib:
+    ``` bash
+    pip3 uninstall DUlib
+    ```
+    and/or forcing an upgrade
+    ``` bash
+    pip3 install -U  DUlib --force
+    ```
+
+  * The most fail-safe way to use pip is
+     ``` bash
+     python -m pip install ...
+     ```
+     This is good because you almost certainly have more than one version Python
+     installed, and `python` is pointing to whichever version your system thinks
+     is *the* python.
+  * Mere mortals should never type `sudo pip...`.
+
+Assuming that you installed using `--user`, some DUlib related executables should
+now be installed in a local subdirectory below your home directory. On Linux, the
+directory is `~/.local/bin/`.
+
+* Type `which pd` at the command line. If you see something
+  like `/home/your_username/.local/bin/pd`, then you are in good shape so you
+  can skip the next bullet-point.
+* If you see nothing, then likely you need to adjust your `PATH` by running the
+  following command at the command line:
+  ``` bash
+  echo "export PATH=$PATH:~/.local/bin" >> ~/.profile
+  ```
+  Note: your PATH will **not** automatically be updated for the remainder of
+  your shell session.  To update without exiting and restarting your shell do:
+  ``` bash
+  source ~/.profile
+  ```
+
+To verify without doubt that DUlib is installed:
+* start up the Python3 interpreter and type, say, `import du.lib`. If you see
+  no errors, then you are good.
+
+
+<!---
 * Suppose you decide to use the `train` function.
   Then, in your program, put `from du.lib import train`
 * To see what is available in DUlib in addition to the core
   library: `pydoc3 du`
   * and then maybe `pydoc3 du.conv.models` depending on what you are working on.
-* You can find programs that together demonstrate the full functionality of `DUlib` at
-  the [DL@DU Project](https://github.com/sj-simmons/deep-learning#dldu).
+* You can find programs that together demonstrate the full functionality of
+  `DUlib` at the [DL@DU Project](https://github.com/sj-simmons/deep-learning#dldu).
 * If you are in the Python interpreter and have imported say the `train`
   function with `from du.lib import train`, then you can get help on `train`
   function with: `help(train)`
 * At the command line, you would issue the command `pydoc3 du.lib.train`
   for help on `train`.
 * The downstream repo for DUlib
-    is: [pypi.org/project/DUlib/](https://pypi.org/project/DUlib).
+    is: [pypi.org/project/DUlib/](https://pypi.org/project/DUlib/).
+-->
 
 ---
 
@@ -45,13 +116,6 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
     ``` python
     from du.lib import center, normalize, train, confusion_matrix
     ```
-**Version 0.2** (November 6, 2019).
-  * A library for NLP applications, [rec/lib.py](du/rec/lib.py), has been added.
-
-**Version 0.3** (November 14, 2019).
-  * Lots of new functionality was added in this release, but there is little reason
-    to prefer this over a later release.
-
 **Version 0.6** (November 17, 2019).
   * DUlib now has a downstream repo on [pypi.org](https://pypi.org/) so that it can now
     be installed by simply issuing the command `pip3 install DUlib` (or, depending
@@ -71,7 +135,7 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
     of network for image classification).
 
     <p align="center">
-      <img height="400" src="graph1.svg">
+      <img height="400" src="images/graph1.svg">
     </p>
 
     Putting `graph = 5`, for example, when calling `train`, redraws the graph at epoch 5, throwing
@@ -134,22 +198,32 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.8.5** (December 5th, 2019)
+**Version 0.9** (December 23rd, 2019)
+  * DUlib now includes a custom documentation viewer. Now you can type at the
+    command line `pd du.lib.train` and have nicer viewing experience that when
+    typing `pydoc3 du.lib.train`.
   * The current module structure is show below, with the modules in blue and
     some of the more common functions in red.  To view the current module
-    structure, and to see suggested usage and more, type `pydoc3 du` at the
+    structure, and to see suggested usage and more, type `pd du` at the
     command line.
 
     <p align="center">
-      <img height="550" src="screenshot1.png">
+      <img height="550" src="images/screenshot1.png">
     </p>
 
   * The core library is `du.lib`.  To quickly see usage and synopsis of the
-    functions and classes available in `du.lib`, type `pydoc3 du.lib` at the
+    functions and classes available in `du.lib`, type `pd du.lib` at the
     command line (and scroll down to peruse detailed usage).
 
     <p align="center">
-      <img height="550" src="screenshot2.png">
+      <img height="550" src="images/screenshot2.png">
+    </p>
+  * Some command-line programs are now included. Try typing `dulib_polyreg_anim`
+    at your command line.  You should see an animation that, along the way, looks
+    something like:
+
+    <p align="center">
+      <img height="400" src="images/polyreg.svg">
     </p>
 
 ---

@@ -13,9 +13,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 __author__ = 'Scott Simmons'
-__version__ = '0.8.5'
+__version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/06/19'
+__date__ = '12/23/19'
+__copyright__ = """
+  Copyright 2019 Scott Simmons
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+"""
+__license__= 'Apache 2.0'
 
 class SimpleRNN(nn.Module):
   def __init__(self, n_in, enc_dim, n_hid, n_out, padding_idx, device = 'cpu'):
@@ -40,7 +56,7 @@ class SimpleRNN(nn.Module):
 
 if __name__ == '__main__':
   import doctest
-  failures, _ = doctest.testmod()
+  failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)
 
   if failures == 0:
     # Below prints only the signature of locally defined functions.
@@ -49,3 +65,39 @@ if __name__ == '__main__':
         if callable(ob) and ob.__module__ == __name__]
     for name, ob in local_functions:
       print(name,'\n  ',signature(ob))
+
+if __name__ == '__main__':
+  import inspect
+  import doctest
+
+  # find the user defined functions
+  _local_functions = [(name,ob) for (name, ob) in sorted(locals().items())\
+       if callable(ob) and ob.__module__ == __name__]
+
+  #remove markdown
+  #  from the docstring for this module
+  globals()['__doc__'] = du.util._markup(globals()['__doc__'],strip = True)
+  #  from the functions (methods are fns in Python3) defined in this module
+  for _, _ob in _local_functions:
+    if inspect.isfunction(_ob):
+      _ob.__doc__ = du.util._markup(_ob.__doc__,strip = True)
+    # below we find all the methods that are not inherited
+    if inspect.isclass(_ob):
+      _parents = inspect.getmro(_ob)[1:]
+      _parents_methods = set()
+      for _parent in _parents:
+        _members = inspect.getmembers(_parent, inspect.isfunction)
+        _parents_methods.update(_members)
+      _child_methods = set(inspect.getmembers(_ob, inspect.isfunction))
+      _child_only_methods = _child_methods - _parents_methods
+      for name,_meth in _child_only_methods:
+        _ob.__dict__[name].__doc__ = du.util._markup(_meth.__doc__,strip = True)
+
+  # run doctests
+  failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)
+
+  # print signatures
+  if failures == 0:
+    from inspect import signature
+    for name, ob in _local_functions:
+      print(name,'\n  ', inspect.signature(ob))

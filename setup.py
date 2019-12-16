@@ -7,9 +7,11 @@ def readme():
 setup(
   entry_points={
       'console_scripts': [
+          'pd = du._pydoc:cli',
           'dulib_linreg = du.examples:simple_linear_regression',
           'dulib_linreg_anim = du.examples:simple_linear_regression_animate',
           'dulib_polyreg = du.examples:simple_polynomial_regression',
+          'dulib_polyreg_anim = du.examples:simple_polynomial_regression_animate',
       ],
       'gui_scripts': [],
   },
@@ -18,14 +20,15 @@ setup(
   download_url='https://github.com/sj-simmons/DUlib/archive/v0.4.tar.gz',
   author='Scott Simmons',
   author_email='ssimmons@drury.edu',
-  packages=find_packages(include=['du']),
+  packages=find_packages(),
   #install_requires=['torch>=1.2.0+cpu', 'scipy', 'matplotlib<3.1', 'scikit-image<0.16'],
   #We do not include torch in install_requires since then users can install
   #the appropriate verion of torch (e.gl, cpu vs. gpu) for their machine.
   #Do the same for matplotlib
   #install_requires=['matplotlib<3.1'],
+  python_requires='>=3.5',
   install_requires=[],
-  version='0.8.5',
+  version='0.9',
   license='Apache 2.0',
   description='tools from The DL@DU Project',
   long_description=readme(),
