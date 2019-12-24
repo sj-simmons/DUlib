@@ -495,7 +495,7 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import tkinter
 import du.lib as dulib
-import du.util
+import du.utils
 import du.models
 
 __author__ = 'Scott Simmons'
@@ -531,9 +531,9 @@ def simple_linear_regression():
       description = 'Simple linear regression via gradient descent',
       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('-lr', type=float, help='learning rate',
-      default=du.util.format_num(d['lr']))
+      default=du.utils.format_num(d['lr']))
   parser.add_argument('-mo', type=float, help='momentum',
-      default=du.util.format_num(d['mo']))
+      default=du.utils.format_num(d['mo']))
   parser.add_argument('-epochs', type=int, help='epochs', default=200)
   h_str = '1 to show graph of loss during training'
   parser.add_argument('-gr', type=int, help=h_str, default=0)
@@ -580,9 +580,9 @@ def simple_linear_regression_animate():
       description = 'Simple linear regression via gradient descent',
       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('-lr',type=float,help='learning rate',
-      default=du.util.format_num(d['lr']))
+      default=du.utils.format_num(d['lr']))
   parser.add_argument('-mo',type=float,help='momentum',
-      default=du.util.format_num(d['mo']))
+      default=du.utils.format_num(d['mo']))
   parser.add_argument('-epochs',type=int,help='epochs',default=200)
   parser.add_argument('-bs',type=int,help='batchsize <=40',default=-1)
   args = parser.parse_args()
@@ -705,7 +705,7 @@ def poly_string(coeffs):
 
   string_rep = ''
   for i, coeff in enumerate(coeffs):
-    coeff = du.util.format_num(coeff)
+    coeff = du.utils.format_num(coeff)
     if i < degree - 1:
       string_rep += '{}x^{}+'.format(coeff, degree - i)
     elif i < degree:
@@ -811,11 +811,11 @@ if __name__ == '__main__':
 
   #remove markdown
   #  from the docstring for this module
-  globals()['__doc__'] = du.util._markup(globals()['__doc__'],strip = True)
+  globals()['__doc__'] = du.utils._markup(globals()['__doc__'],strip = True)
   #  from the functions (methods are fns in Python3) defined in this module
   for _, _ob in _local_functions:
     if inspect.isfunction(_ob):
-      _ob.__doc__ = du.util._markup(_ob.__doc__,strip = True)
+      _ob.__doc__ = du.utils._markup(_ob.__doc__,strip = True)
     # below we find all the methods that are not inherited
     if inspect.isclass(_ob):
       _parents = inspect.getmro(_ob)[1:]
@@ -826,7 +826,7 @@ if __name__ == '__main__':
       _child_methods = set(inspect.getmembers(_ob, inspect.isfunction))
       _child_only_methods = _child_methods - _parents_methods
       for name,_meth in _child_only_methods:
-        _ob.__dict__[name].__doc__ = du.util._markup(_meth.__doc__,strip = True)
+        _ob.__dict__[name].__doc__ = du.utils._markup(_meth.__doc__,strip =True)
 
   # run doctests
   failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)

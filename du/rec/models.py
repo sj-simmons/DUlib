@@ -11,6 +11,7 @@ SimpleRNN
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import du.utils
 
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
@@ -76,11 +77,11 @@ if __name__ == '__main__':
 
   #remove markdown
   #  from the docstring for this module
-  globals()['__doc__'] = du.util._markup(globals()['__doc__'],strip = True)
+  globals()['__doc__'] = du.utils._markup(globals()['__doc__'],strip = True)
   #  from the functions (methods are fns in Python3) defined in this module
   for _, _ob in _local_functions:
     if inspect.isfunction(_ob):
-      _ob.__doc__ = du.util._markup(_ob.__doc__,strip = True)
+      _ob.__doc__ = du.utils._markup(_ob.__doc__,strip = True)
     # below we find all the methods that are not inherited
     if inspect.isclass(_ob):
       _parents = inspect.getmro(_ob)[1:]
@@ -91,7 +92,7 @@ if __name__ == '__main__':
       _child_methods = set(inspect.getmembers(_ob, inspect.isfunction))
       _child_only_methods = _child_methods - _parents_methods
       for name,_meth in _child_only_methods:
-        _ob.__dict__[name].__doc__ = du.util._markup(_meth.__doc__,strip = True)
+        _ob.__dict__[name].__doc__ = du.utils._markup(_meth.__doc__,strip =True)
 
   # run doctests
   failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)

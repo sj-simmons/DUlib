@@ -210,7 +210,7 @@ import torch.nn as nn
 from types import FunctionType
 from typing import Dict
 from textwrap import dedent
-import du.util
+import du.utils
 
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
@@ -408,7 +408,7 @@ class LearnParams_:
 
   def __str__(self):
     """Make a string representation."""
-    return 'learning rate: ' + du.util.format_num(self.lr)
+    return 'learning rate: ' + du.utils.format_num(self.lr)
 
   def set_device(self, device):
     """`pass` here, but sub-classes might want this."""
@@ -453,7 +453,7 @@ class Momentum(LearnParams_):
 
   def __str__(self):
     """Append momentum info to string rep of the base class."""
-    return super().__str__() + ', momentum: ' + du.util.format_num(self.mo)
+    return super().__str__() + ', momentum: ' + du.utils.format_num(self.mo)
 
   def set_device(self, device):
     """Send `z_params` to live on device."""
@@ -570,9 +570,9 @@ def train(model, crit, train_data, **kwargs):
     `nn.Module`. The trained model sent to device 'cpu'.
   """
   # this is train
-  du.util._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
+  du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
       'graph','print_lines','verb','gpu'])
-  du.util._catch_sigint()
+  du.utils._catch_sigint()
 
   test_data = kwargs.get('test_data', None)
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
@@ -583,9 +583,9 @@ def train(model, crit, train_data, **kwargs):
 
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
-  device = du.util.get_device(gpu)
+  device = du.utils.get_device(gpu)
   train_feats, train_feats_lengths, train_targs =\
-      du.util._parse_data(train_data, device)
+      du.utils._parse_data(train_data, device)
   num_examples = len(train_feats)
 
   if bs <= 0: bs = num_examples
@@ -602,13 +602,13 @@ def train(model, crit, train_data, **kwargs):
         "keys of learn_params dict should be 'lr' or 'mo', not {}.".format(key)
     assert 'lr' in learn_params.keys(), "input dict must map 'lr' to float"
     lr = learn_params['lr']
-    if verb > 1: print('learning rate:', du.util.format_num(lr), end=', ')
+    if verb > 1: print('learning rate:', du.utils.format_num(lr), end=', ')
     if 'mo' not in learn_params.keys():
       learn_params = LearnParams_(lr = lr)
       mo = None
     else:
       mo = learn_params['mo']
-      if verb > 1: print('momentum:', du.util.format_num(mo), end=', ')
+      if verb > 1: print('momentum:', du.utils.format_num(mo), end=', ')
       learn_params = Momentum(model, lr = lr, mo = mo)
       learn_params.set_device(device)
     if verb > 1: print('batchsize:', bs)
@@ -627,7 +627,7 @@ def train(model, crit, train_data, **kwargs):
     if len(test_data[0]) == 0: test_data = None
     else:
       test_feats, test_feats_lengths, test_targs =\
-          du.util._parse_data(test_data, device)
+          du.utils._parse_data(test_data, device)
       losses_test=[]
 
   if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
@@ -782,9 +782,9 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         its `k` validations.
   """
   # This is cross_validate_train
-  du.util._check_kwargs(kwargs,['k','valid_crit','cent_norm_feats',\
+  du.utils._check_kwargs(kwargs,['k','valid_crit','cent_norm_feats',\
       'cent_norm_targs','learn_params','bs','epochs','gpu','verb'])
-  du.util._catch_sigint()
+  du.utils._catch_sigint()
   valid_crit = kwargs.get('valid_crit', None)
   assert 2 <= len(train_data) <= 3, dedent("""\
       Argument train_data tuple must have length 2 or 3, not {}
@@ -911,7 +911,7 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         average of that model's `k` validations.
   """
   # This is cross_validate
-  du.util._check_kwargs(kwargs,['k','bail_after','valid_crit',\
+  du.utils._check_kwargs(kwargs,['k','bail_after','valid_crit',\
       'cent_norm_feats','cent_norm_targs','learn_params','bs',\
       'epochs','verb','gpu'])
   import copy
@@ -1037,7 +1037,7 @@ def optimize_ols(feats, **kwargs):
     problematic = True
 
   if problematic:
-    from importlib.util import find_spec
+    from importlib.utils import find_spec
     spec = find_spec('scipy.sparse')
     if spec is None:
       if verb: print('  warning: scipy.sparse not installed.')
@@ -1118,7 +1118,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
         io (i.e., the error rate).
   """
   # this is confusion_matrix
-  du.util._check_kwargs(kwargs,['return_error','show','class2name'])
+  du.utils._check_kwargs(kwargs,['return_error','show','class2name'])
   assert len(prob_dists) == len(yss),\
       'Number of features ({}) must equal number of targets ({}).'\
           .format(len(prob_dists), len(yss))
@@ -1160,7 +1160,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
           string = '{:.1f}'.format(100*entry).lstrip('0')
           length = len(string)
           if i==j:
-            string = du.util._markup('~'+string+'~')
+            string = du.utils._markup('~'+string+'~')
           print(' '*(cell_length-length)+string, end='')
       n_examples = cm_counts[:,i].sum()
       pct = 100*(cm_counts[i,i]/n_examples) if n_examples != 0 else 0
@@ -1209,10 +1209,10 @@ def r_squared(yhatss, yss, **kwargs):
   >>> r_squared(yhatss, yss)
   0.09333...
   """
-  du.util._check_kwargs(kwargs,['return_error','gpu'])
+  du.utils._check_kwargs(kwargs,['return_error','gpu'])
   return_error = kwargs.get('return_error', False)
   gpu = kwargs.get('gpu', -1)
-  device = du.util.get_device(gpu)
+  device = du.utils.get_device(gpu)
   if not isinstance(yhatss, torch.Tensor):
     assert (isinstance(yhatss, tuple) or isinstance(yhatss, list)),\
         'Argument yhatss must be a tuple or a list'
@@ -1258,11 +1258,11 @@ if __name__ == '__main__':
 
   #remove markdown
   #  from the docstring for this module
-  globals()['__doc__'] = du.util._markup(globals()['__doc__'],strip = True)
+  globals()['__doc__'] = du.utils._markup(globals()['__doc__'],strip = True)
   #  from the functions (methods are fns in Python3) defined in this module
   for _, _ob in _local_functions:
     if inspect.isfunction(_ob):
-      _ob.__doc__ = du.util._markup(_ob.__doc__,strip = True)
+      _ob.__doc__ = du.utils._markup(_ob.__doc__,strip = True)
     # below we find all the methods that are not inherited
     if inspect.isclass(_ob):
       _parents = inspect.getmro(_ob)[1:]
@@ -1273,7 +1273,7 @@ if __name__ == '__main__':
       _child_methods = set(inspect.getmembers(_ob, inspect.isfunction))
       _child_only_methods = _child_methods - _parents_methods
       for name,_meth in _child_only_methods:
-        _ob.__dict__[name].__doc__ = du.util._markup(_meth.__doc__,strip = True)
+        _ob.__dict__[name].__doc__ = du.utils._markup(_meth.__doc__,strip =True)
 
   # run doctests
   failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)

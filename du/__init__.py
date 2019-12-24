@@ -38,7 +38,7 @@ $classes$ are, as of this release,
   │  │  └─ |cbow.py|      model CBOW wordvecs given a corpus
   │  ├─ |models.py|
   │  └─ |examples.py|
-  └─ |util.py|    !potentially helpful utilites!
+  └─ |utils.py|    !potentially helpful utilites!
      └─ $stand_args$     easily set command-line options
 
 Note: consume the examples by typing, e.g., `pd du.examples` or
@@ -169,7 +169,7 @@ xterm-256color, or ansi.
 You can set TERM in bash with, e.g.: export TERM=xterm-256color
 
 """
-import du.util
+import du.utils
 
 __author__ = 'Scott Simmons'
 __status__ = 'Development'
@@ -191,4 +191,4 @@ __copyright__ = """
   limitations under the License.
 """
 __license__= 'Apache 2.0'
-__doc__ = du.util._markup(__doc__)
+__doc__ = du.utils._markup(__doc__)

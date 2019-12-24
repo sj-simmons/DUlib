@@ -59,7 +59,7 @@ from textwrap import dedent
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import du.util
+import du.utils
 
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
@@ -114,7 +114,7 @@ def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
     (lin1): Linear(in_features=8, out_features=1, bias=True)
   )
   """
-  du.util._check_kwargs(kwargs, ['nonlins'])
+  du.utils._check_kwargs(kwargs, ['nonlins'])
   nonlins = kwargs.get('nonlins', tuple([nn.ReLU()]))
   assert isinstance(nonlins, (tuple, list)), dedent("""\
       'nonlins should be a tuple or a list. not a {}
@@ -209,7 +209,7 @@ class SimpleLinReg(FFNet_):
           ault: `None`.
     """
     assert degree > 0, 'just take the means of the ys'
-    du.util._check_kwargs(kwargs,['means','stdevs'])
+    du.utils._check_kwargs(kwargs,['means','stdevs'])
     means=kwargs.get('means',None); stdevs=kwargs.get('stdevs',None)
     super().__init__(means = means, stdevs = stdevs)
     self.layer = nn.Linear(degree, 1)
@@ -257,7 +257,7 @@ class DenseFFNet(FFNet_):
           the standard deviations of the training data. Def-
           ault: `None`.
     """
-    du.util._check_kwargs(kwargs,['nonlins','outfn','means','stdevs'])
+    du.utils._check_kwargs(kwargs,['nonlins','outfn','means','stdevs'])
     means=kwargs.get('means',None); stdevs=kwargs.get('stdevs',None)
     super().__init__(means = means, stdevs = stdevs)
     nonlins = kwargs.get('nonlins', tuple([nn.ReLU()]))
@@ -307,11 +307,11 @@ if __name__ == '__main__':
 
   #remove markdown
   #  from the docstring for this module
-  globals()['__doc__'] = du.util._markup(globals()['__doc__'],strip = True)
+  globals()['__doc__'] = du.utils._markup(globals()['__doc__'],strip = True)
   #  from the functions (methods are fns in Python3) defined in this module
   for _, _ob in _local_functions:
     if inspect.isfunction(_ob):
-      _ob.__doc__ = du.util._markup(_ob.__doc__,strip = True)
+      _ob.__doc__ = du.utils._markup(_ob.__doc__,strip = True)
     # below we find all the methods that are not inherited
     if inspect.isclass(_ob):
       _parents = inspect.getmro(_ob)[1:]
@@ -322,7 +322,7 @@ if __name__ == '__main__':
       _child_methods = set(inspect.getmembers(_ob, inspect.isfunction))
       _child_only_methods = _child_methods - _parents_methods
       for name,_meth in _child_only_methods:
-        _ob.__dict__[name].__doc__ = du.util._markup(_meth.__doc__,strip = True)
+        _ob.__dict__[name].__doc__ = du.utils._markup(_meth.__doc__,strip =True)
 
   # run doctests
   failures, _ = doctest.testmod(optionflags=doctest.ELLIPSIS)

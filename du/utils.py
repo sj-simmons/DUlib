@@ -84,9 +84,9 @@ def stand_args(desc = '', **kwargs):
   Additionally suppose that you want to add a less common com-
   mandline switch called 'foo'. Then, in your program, put:
 
-    `import du.util`
+    `import du.utils`
 
-    `parser = du.util.stand_args(`
+    `parser = du.utils.stand_args(`
         `'a short description of your program'`,
         `lr = 0.1`, `mo = 0.9`, `epochs = True`)
     `parser.add_argument('-foo', help='the new thing', ...)`
@@ -131,7 +131,7 @@ def stand_args(desc = '', **kwargs):
         a dense feedforward network; the help string is ~the hid~
         ~den layer widths (integers separated by white-space)~.
         Add this to your program like, for example,
-          `parser = du.util.stand_args(..., widths=(100,), ...)`
+          `parser = du.utils.stand_args(..., widths=(100,), ...)`
         to have a single hidden layer.
         Default: `False`.
     $channels$ (`Union[bool,List[int]]`): Similar to `widths`; use-
