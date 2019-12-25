@@ -312,29 +312,6 @@ def format_num(number):
   else: string = '{:.5g}'.format(number)
   return string
 
-def _parse_data(data_tuple, device = 'cpu'):
-  """Helper function for the train function.
-
-  Args:
-    $data_tuple$ (`Tuple[tensor]`): Length either 2 or 3.
-
-  Returns:
-    `Tuple[tensor]`.
-  """
-  feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
-  if len(data_tuple) == 3:
-    feats_lengths = data_tuple[1].to(device)
-    assert len(feats_lengths) == len(feats),\
-        "No. of feats lengths ({}) must equal no. of feats ({}).".\
-            format(len(feats_lengths), len(feats))
-  else:
-    assert len(data_tuple) == 2, 'data_tuple must have len 2 or 3'
-    feats_lengths = None
-  assert len(feats) == len(targs),\
-      "Number of features ({}) must equal number of targets ({}).".\
-          format(len(feats), len(targs))
-  return feats, feats_lengths, targs
-
 def _check_kwargs(passed, valid_keywords):
   """Check that kwargs are valid.
 

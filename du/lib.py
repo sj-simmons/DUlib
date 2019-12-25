@@ -149,7 +149,6 @@ trained models.
                     _____________________
 """
 #Todo:
-#  - Looks like the graphing epochs values on axis are off by one
 #  - Fix the packing issue for minibatch in rec nets - graphing
 #    against test loss on rec nets doesn't naturally work until
 #    then (without accumulating it with a loop).
@@ -167,8 +166,6 @@ trained models.
 #  - Add option to train to show progress on training / testing
 #    data each epoch.  Done for losses, but add another pane
 #    to the graph with percentage correct training/testing.
-#  - Add percentage or loss to ascii output in the presence of
-#    testing data. (Take into account forget_after here).
 #  - Implement stratified sampling at least when splitting out
 #    testing data.  Maybe pass the relevant proportions to
 #    coh_split.
@@ -185,6 +182,7 @@ trained models.
 #    verbosity so nothing is printed by default. Use
 #    textwrap.dedent.
 #  -  Use _check_kwargs everywhere in the other modules.
+#     - this file is good
 #  - fix asserts, like you did in r-squared, throughout
 #  - catch tkinter error when bailing early on any graphing.
 #  - optimize_ols is still somehow spitting out complex numbers
@@ -204,6 +202,10 @@ trained models.
 #  - use '\r' where possible in train printing (doesn't matter??)
 #  - add option to confusion matrix to push through on gpu, like
 #    you did for r_squared
+# Done or didn't do:
+#  - Add percentage or loss to ascii output in the presence of
+#    testing data. DON"T DO THIS so that training without graph
+#    will be fast.
 
 import torch
 import torch.nn as nn
@@ -474,6 +476,30 @@ class Momentum(LearnParams_):
       self.z_params[i] = z_param.mul_(self.mo).add_(param.grad.data)
       param.data.sub_(self.z_params[i] * self.lr)
 
+def _parse_data(data_tuple, device = 'cpu'):
+  """Helper function for the train function.
+
+  Args:
+    $data_tuple$ (`Tuple[tensor]`): Length either 2 or 3.
+
+  Returns:
+    `Tuple[tensor]`.
+  """
+  feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
+  if len(data_tuple) == 3:
+    feats_lengths = data_tuple[1].to(device)
+    assert len(feats_lengths) == len(feats),\
+        "No. of feats lengths ({}) must equal no. of feats ({}).".\
+            format(len(feats_lengths), len(feats))
+  else:
+    assert len(data_tuple) == 2, 'data_tuple must have len 2 or 3'
+    feats_lengths = None
+  assert len(feats) == len(targs),\
+      "Number of features ({}) must equal number of targets ({}).".\
+          format(len(feats), len(targs))
+  return feats, feats_lengths, targs
+
+
 def train(model, crit, train_data, **kwargs):
   """Train a model.
 
@@ -569,7 +595,7 @@ def train(model, crit, train_data, **kwargs):
   Returns:
     `nn.Module`. The trained model sent to device 'cpu'.
   """
-  # this is train
+  #_this is train
   du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
       'graph','print_lines','verb','gpu'])
   du.utils._catch_sigint()
@@ -585,7 +611,8 @@ def train(model, crit, train_data, **kwargs):
 
   device = du.utils.get_device(gpu)
   train_feats, train_feats_lengths, train_targs =\
-      du.utils._parse_data(train_data, device)
+      _parse_data(train_data, device)
+  has_lengths = True if train_feats_lengths is not None else False
   num_examples = len(train_feats)
 
   if bs <= 0: bs = num_examples
@@ -623,11 +650,14 @@ def train(model, crit, train_data, **kwargs):
     if verb > 1: print(learn_params, end=', ')
     if verb > 1: print('batchsize:', bs)
 
+  losses = []
+
   if test_data:
     if len(test_data[0]) == 0: test_data = None
     else:
       test_feats, test_feats_lengths, test_targs =\
-          du.utils._parse_data(test_data, device)
+          _parse_data(test_data, device)
+      num_test_examples = len(test_data)
       losses_test=[]
 
   if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
@@ -637,8 +667,6 @@ def train(model, crit, train_data, **kwargs):
     plt.ion(); fig, _ = plt.subplots()
     plt.xlabel('epoch', size='larger'); plt.ylabel('average loss',size='larger')
 
-  losses = []
-
   for epoch in range(epochs):
     accum_loss = 0
     indices = torch.randperm(len(train_feats)).to(device)
@@ -646,7 +674,7 @@ def train(model, crit, train_data, **kwargs):
     for idx in range(0, num_examples, bs):
       current_indices = indices[idx: idx + bs]
 
-      if isinstance(train_feats_lengths, torch.Tensor):
+      if has_lengths:
         loss = crit(
             model(
                 train_feats.index_select(0, current_indices),
@@ -683,20 +711,35 @@ def train(model, crit, train_data, **kwargs):
         print(base_str+loss_str, end='\b'*loss_len, flush=True)
 
     if graph:
-      if isinstance(train_feats_lengths, torch.Tensor):
-        loss = crit(model(train_feats, train_feats_lengths), train_targs).item()
-      else:
-        loss = crit(model(train_feats), train_targs).item()
-      losses.append(loss)
+      #This is too expensive for large datasets and/or models
+      #if has_lengths:
+      #  loss = crit(model(train_feats, train_feats_lengths), train_targs).item()
+      #else:
+      #  loss = crit(model(train_feats), train_targs).item()
+      losses.append(accum_loss*bs/num_examples)
       if test_data:
-        if isinstance(test_feats_lengths, torch.Tensor):
-          loss = crit(model(test_feats, test_feats_lengths), test_targs).item()
-        else:
-          loss = crit(model(test_feats), test_targs).item()
-        losses_test.append(loss)
+        accum_loss = 0
+        indices = torch.randperm(num_test_examples).to(device)
+        for idx in range(0, num_test_examples, bs):
+          current_indices = indices[idx: idx + bs]
+          if has_lengths:
+            accum_loss+=crit(
+                model(test_feats.index_select(0,current_indices),
+                test_feats_lengths.index_select(0,current_indices)),
+                test_targs.index_select(0,current_indices)).item()
+          else:
+            accum_loss += crit(
+                model(test_feats.index_select(0,current_indices)),
+                test_targs.index_select(0,current_indices)).item()
+        losses_test.append(accum_loss*bs/num_test_examples)
+      #if has_lengths:
+      #  loss=crit(model(test_feats,test_feats_lengths),test_targs).item()
+      #else:
+      #  loss = crit(model(test_feats), test_targs).item()
+      #losses_test.append(loss)
       if epoch == graph:
-        losses = losses[graph:]
-        if test_data: losses_test = losses_test[graph:]
+        losses = losses[graph-1:]
+        if test_data: losses_test = losses_test[graph-1:]
         plt.clf()
         plt.xlabel('epoch',size='larger');
         plt.ylabel('average loss',size='larger')
@@ -781,7 +824,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         (for one epoch, by default) along with a tensor holding
         its `k` validations.
   """
-  # This is cross_validate_train
+  #_this is cross_validate_train
   du.utils._check_kwargs(kwargs,['k','valid_crit','cent_norm_feats',\
       'cent_norm_targs','learn_params','bs','epochs','gpu','verb'])
   du.utils._catch_sigint()
@@ -910,7 +953,7 @@ def cross_validate(model, crit, train_data, k, **kwargs):
     `(nn.Module, float)`. The trained 'best' `model` along with the
         average of that model's `k` validations.
   """
-  # This is cross_validate
+  #_this is cross_validate
   du.utils._check_kwargs(kwargs,['k','bail_after','valid_crit',\
       'cent_norm_feats','cent_norm_targs','learn_params','bs',\
       'epochs','verb','gpu'])
@@ -1014,6 +1057,7 @@ def optimize_ols(feats, **kwargs):
     `dict`: A dictionary mapping either 'lr' to a float or, if
         `with_mo` is `True`, so mapping both 'lr' and 'mo'.
   """
+  du.utils._check_kwargs(kwargs,['with_mo','verb'])
 
   #from scipy.linalg import eigh
   from scipy.sparse.linalg import eigsh
@@ -1117,7 +1161,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
         correct predictions or (optionally) one minus that rat-
         io (i.e., the error rate).
   """
-  # this is confusion_matrix
+  #_this is confusion_matrix
   du.utils._check_kwargs(kwargs,['return_error','show','class2name'])
   assert len(prob_dists) == len(yss),\
       'Number of features ({}) must equal number of targets ({}).'\
