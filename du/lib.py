@@ -591,13 +591,16 @@ def train(model, crit, train_data, **kwargs):
         to -1 to use the last gpu found when gpus are present;
         set to -2 to override using a found gpu and use the
         cpu. Default -1.
+    $valid_crit$ (`function`): If `graph` is positive and this is
+        not `None` then, when graphing, ...
 
   Returns:
     `nn.Module`. The trained model sent to device 'cpu'.
   """
   #_this is train
+
   du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
-      'graph','print_lines','verb','gpu'])
+      'graph','print_lines','verb','gpu','valid_crit'])
   du.utils._catch_sigint()
 
   test_data = kwargs.get('test_data', None)
@@ -607,18 +610,15 @@ def train(model, crit, train_data, **kwargs):
   verb = kwargs.get('verb', 2); graph = kwargs.get('graph', 0)
   gpu = kwargs.get('gpu', -1)
 
+  graph = 1 if graph == True else graph
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
   device = du.utils.get_device(gpu)
-  train_feats, train_feats_lengths, train_targs =\
-      _parse_data(train_data, device)
+  train_feats, train_feats_lengths, train_targs=_parse_data(train_data, device)
   has_lengths = True if train_feats_lengths is not None else False
   num_examples = len(train_feats)
-
   if bs <= 0: bs = num_examples
-
   if verb > 0: print('training on', device)
-
   model = model.to(device)
   if verb > 2: print(model)
 
@@ -653,6 +653,9 @@ def train(model, crit, train_data, **kwargs):
   losses = []
 
   if test_data:
+    #assert len(test_data) < bs, dedent("""\
+    #    batchsize ({}) is greater than no. of examples ({}) in test data
+    #""".format(bs, len(test_data)))
     if len(test_data[0]) == 0: test_data = None
     else:
       test_feats, test_feats_lengths, test_targs =\
@@ -663,9 +666,15 @@ def train(model, crit, train_data, **kwargs):
   if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
 
   if graph:
+    # don't import this until now in case someone no haz matplotlib
     import matplotlib.pyplot as plt
-    plt.ion(); fig, _ = plt.subplots()
-    plt.xlabel('epoch', size='larger'); plt.ylabel('average loss',size='larger')
+    plt.ion()
+    fig, ax1 = plt.subplots()
+    ax1.set_xlabel('epoch', size='larger')
+    ax1.set_ylabel('average loss',size='larger')
+    ax2 = ax1.twinx()
+    ax2.set_ylabel('validation',size='larger');
+    xlim_start = 1
 
   for epoch in range(epochs):
     accum_loss = 0
@@ -693,6 +702,7 @@ def train(model, crit, train_data, **kwargs):
       if has_optim: learn_params.step()
       else: learn_params.update(model.parameters())
 
+    # print to terminal
     if print_init * print_last != 0 and verb > 0:
       loss_len = 20
       base_str = "epoch {0}/{1}; loss ".format(epoch+1, epochs)
@@ -737,23 +747,26 @@ def train(model, crit, train_data, **kwargs):
       #else:
       #  loss = crit(model(test_feats), test_targs).item()
       #losses_test.append(loss)
-      if epoch == graph:
-        losses = losses[graph-1:]
-        if test_data: losses_test = losses_test[graph-1:]
-        plt.clf()
-        plt.xlabel('epoch',size='larger');
-        plt.ylabel('average loss',size='larger')
-      plt.plot(range(graph,graph+len(losses)), losses, c='black', lw=.8);
+      if epoch > epochs - graph:
+        ax1.clear()
+        #ax1.set_xlabel('epoch', size='larger')
+        #ax1.set_ylabel('average loss',size='larger')
+        #ax2.set_ylabel('validation',size='larger')
+        xlim_start += 1
+      xlim = range(xlim_start, len(losses)+1)
+      #if xlim_start > 1: ax1.set_xlim(xlim_start, len(losses)-xlim_start)
+      ax1.plot(xlim,losses[xlim_start-1:],c='black',lw=.8);
       if test_data:
-        plt.plot(range(graph,graph+len(losses_test)),losses_test,c='red',lw=.8);
+        ax1.plot(xlim,losses_test[xlim_start-1:],c='red',lw=.8);
       fig.canvas.flush_events()
 
   if graph:
-    plt.plot(range(graph,graph+len(losses)),losses,c='black',lw=.8,\
-        label='training')
-    if test_data: plt.plot(range(graph,graph+len(losses_test)),\
-        losses_test,c='red',lw=.8,label='testing')
-    plt.legend(loc=1); plt.ioff(); plt.show()
+    ax1.clear()
+    curve1 = ax1.plot(xlim,losses[xlim_start-1:],c='black',lw=.8,label='training')
+    if test_data:
+      curve2 = ax1.plot(xlim,losses_test[xlim_start-1:],
+          c='red',lw=.8,label='testing')
+    ax1.legend(curve1+curve2,['train','test'], loc=0); plt.ioff(); plt.show()
 
   model = model.to('cpu')
   return model
