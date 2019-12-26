@@ -16,7 +16,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/23/19'
+__date__ = '12/29/19'
 __copyright__ = """
   Copyright 2019 Scott Simmons
 
@@ -36,7 +36,7 @@ __license__= 'Apache 2.0'
 
 class SimpleRNN(nn.Module):
   def __init__(self, n_in, enc_dim, n_hid, n_out, padding_idx, device = 'cpu'):
-    super(SimpleRNN, self).__init__()
+    super().__init__()
     self.n_in = n_in
     self.n_hid = n_hid
     self.device = device

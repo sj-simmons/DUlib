@@ -24,7 +24,7 @@ import inspect
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/23/19'
+__date__ = '12/29/19'
 __copyright__ = """
   Copyright 2019 Scott Simmons
 
@@ -42,19 +42,19 @@ __copyright__ = """
 """
 __license__= 'Apache 2.0'
 
-class Graph:
-  """Dynamically graph progress during training.
-
-  Coming Soon
-  """
-  def _init__(self):
-    """Constructor
-
-    """
-    pass
-
-  def update(self):
-    pass
+#class Graph:
+#  """Dynamically graph progress during training.
+#
+#  Coming Soon
+#  """
+#  def _init__(self):
+#    """Constructor
+#
+#    """
+#    pass
+#
+#  def update(self):
+#    pass
 
 def stand_args(desc = '', **kwargs):
   """Factory for command line switches.
@@ -134,8 +134,8 @@ def stand_args(desc = '', **kwargs):
           `parser = du.utils.stand_args(..., widths=(100,), ...)`
         to have a single hidden layer.
         Default: `False`.
-    $channels$ (`Union[bool,List[int]]`): Similar to `widths`; use-
-        ful for, for example, convolutional nets. Default: `False`.
+    $channels$ (`Union[bool,List[int]]`): Similar to `widths`; useful
+        for, for example, convolutional nets. Default: `False`.
     $verb$ (`Union[bool,int]`): Whether or not to have a verbosity
         commandline switch. Default: `False`.
     $pred$ (`bool`): Whether or not add a `pred` switch, which refers
@@ -282,8 +282,8 @@ def get_device(gpu = -1):
 
   Args:
     $gpu$ (`int`): The gpu to use. Set to -1 to use the last gpu
-        found when gpus are present; set to -2 to override using
-        a found gpu and use the cpu. Default: `-1`.
+        found when gpus are present; set to -2 to override us-
+        ing a found gpu and instead use the cpu. Default: `-1`.
 
   Returns:
     `str`. A string that can be passed using the `to` method of

@@ -149,6 +149,12 @@ trained models.
                     _____________________
 """
 #Todo:
+#  - Add to docs of confusion_matrix about passing in model too
+#    for speed and about then no need to set classes.
+#  - try to speed up evaluation by using model.eval() but be care
+#    ful the dropout etc.
+#  - Add notes to docstring about only fooling with testdate if
+#    graphing, and doing so for speed.  <--IMPORTANT
 #  - Fix the packing issue for minibatch in rec nets - graphing
 #    against test loss on rec nets doesn't naturally work until
 #    then (without accumulating it with a loop).
@@ -207,6 +213,7 @@ trained models.
 #    testing data. DON"T DO THIS so that training without graph
 #    will be fast.
 
+import tkinter
 import torch
 import torch.nn as nn
 from types import FunctionType
@@ -217,7 +224,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/23/19'
+__date__ = '12/29/19'
 __copyright__ = """
   Copyright 2019 Scott Simmons
 
@@ -606,9 +613,10 @@ def train(model, crit, train_data, **kwargs):
   test_data = kwargs.get('test_data', None)
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
   bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 10)
-  print_init, print_last = kwargs.get('print_lines',(8, 12))
+  print_init, print_last = kwargs.get('print_lines',(7, 8))
   verb = kwargs.get('verb', 2); graph = kwargs.get('graph', 0)
   gpu = kwargs.get('gpu', -1)
+  valid_crit = kwargs.get('valid_crit',True)
 
   graph = 1 if graph == True else graph
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
@@ -650,24 +658,20 @@ def train(model, crit, train_data, **kwargs):
     if verb > 1: print(learn_params, end=', ')
     if verb > 1: print('batchsize:', bs)
 
-  losses = []
-
-  if test_data:
-    #assert len(test_data) < bs, dedent("""\
-    #    batchsize ({}) is greater than no. of examples ({}) in test data
-    #""".format(bs, len(test_data)))
-    if len(test_data[0]) == 0: test_data = None
-    else:
-      test_feats, test_feats_lengths, test_targs =\
-          _parse_data(test_data, device)
-      num_test_examples = len(test_data)
-      losses_test=[]
+  # setup valid_crit
+  if isinstance(valid_crit, bool) and valid_crit:
+    if isinstance(train_data[-1], torch.FloatTensor):
+      valid_crit = lambda x,y: r_squared(x,y,gpu=gpu)
+    if isinstance(train_data[-1], (torch.LongTensor, torch.cuda.LongTensor)):
+      valid_crit = lambda x,y: confusion_matrix(x,y,gpu=gpu)
 
   if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
 
   if graph:
     # don't import this until now in case someone no haz matplotlib
     import matplotlib.pyplot as plt
+    import numpy as np
+    losses = []
     plt.ion()
     fig, ax1 = plt.subplots()
     ax1.set_xlabel('epoch', size='larger')
@@ -675,6 +679,22 @@ def train(model, crit, train_data, **kwargs):
     ax2 = ax1.twinx()
     ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
+
+    v_dations = []
+
+    # only bother with test_data
+    if test_data:
+      #assert len(test_data) < bs, dedent("""\
+      #    batchsize ({}) is greater than no. of examples ({}) in test data
+      #""".format(bs, len(test_data)))
+      if len(test_data[0]) == 0: test_data = None
+      else:
+        test_feats, test_feats_lengths, test_targs =\
+            _parse_data(test_data, device)
+        num_test_examples = len(test_data)
+        losses_test=[]
+
+      v_dations_test = []
 
   for epoch in range(epochs):
     accum_loss = 0
@@ -727,46 +747,65 @@ def train(model, crit, train_data, **kwargs):
       #else:
       #  loss = crit(model(train_feats), train_targs).item()
       losses.append(accum_loss*bs/num_examples)
-      if test_data:
-        accum_loss = 0
-        indices = torch.randperm(num_test_examples).to(device)
-        for idx in range(0, num_test_examples, bs):
-          current_indices = indices[idx: idx + bs]
-          if has_lengths:
-            accum_loss+=crit(
-                model(test_feats.index_select(0,current_indices),
-                test_feats_lengths.index_select(0,current_indices)),
-                test_targs.index_select(0,current_indices)).item()
-          else:
-            accum_loss += crit(
-                model(test_feats.index_select(0,current_indices)),
-                test_targs.index_select(0,current_indices)).item()
-        losses_test.append(accum_loss*bs/num_test_examples)
-      #if has_lengths:
-      #  loss=crit(model(test_feats,test_feats_lengths),test_targs).item()
-      #else:
-      #  loss = crit(model(test_feats), test_targs).item()
-      #losses_test.append(loss)
+      v_dations.append(valid_crit((model,train_feats),train_targs))
+      if test_data is not None:
+        if has_lengths:
+          loss = crit(model(test_feats,test_feats_lengths),test_targs).item()
+        else:
+          loss = crit(model(test_feats), test_targs).item()
+        losses_test.append(loss)
+        v_dations_test.append(valid_crit((model,test_feats),test_targs))
       if epoch > epochs - graph:
-        ax1.clear()
-        #ax1.set_xlabel('epoch', size='larger')
-        #ax1.set_ylabel('average loss',size='larger')
-        #ax2.set_ylabel('validation',size='larger')
         xlim_start += 1
-      xlim = range(xlim_start, len(losses)+1)
-      #if xlim_start > 1: ax1.set_xlim(xlim_start, len(losses)-xlim_start)
-      ax1.plot(xlim,losses[xlim_start-1:],c='black',lw=.8);
+      ax1.clear()
+      ax2.clear()
+      ax1.set_xlabel('epoch', size='larger')
+      ax1.set_ylabel('average loss',size='larger')
+      ax2.set_ylabel('validation',size='larger')
+      xlim = range(xlim_start,len(losses)+1)
+      loss_ys = np.array(losses[xlim_start-1:])
+      v_dation_ys = np.array(v_dations[xlim_start-1:])
       if test_data:
-        ax1.plot(xlim,losses_test[xlim_start-1:],c='red',lw=.8);
-      fig.canvas.flush_events()
+        losstest_ys = np.array(losses_test[xlim_start-1:])
+        v_dationtest_ys = np.array(v_dations_test[xlim_start-1:])
+        ax1.plot(xlim,losstest_ys,xlim,loss_ys,color='black',lw=.5)
+        ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys >=loss_ys,
+            facecolor='tab:red',interpolate=True, alpha=.8)
+        ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys <=loss_ys,
+            facecolor='tab:blue',interpolate=True, alpha=.8)
+        ax2.plot(xlim,v_dationtest_ys,xlim,v_dation_ys,color='black',lw=.5)
+        ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
+            where = v_dationtest_ys >=v_dation_ys, facecolor='tab:red',
+            interpolate=True, alpha=.8,label='test > train')
+        ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
+            where = v_dationtest_ys <=v_dation_ys,
+            facecolor='tab:blue',interpolate=True, alpha=.8,label='train > test')
+        ax2.legend(fancybox=True, loc=2, framealpha=0.8, prop={'size': 9})
+      else:
+        ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
+        ax2.plot(xlim,v_dations,color='tab:blue',lw=1.2,label='validation')
+        ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
+        ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
+      len_test_data = len(test_data[0]) if test_data is not None else 0
+      plt.title('training on {} ({:.1f}%) of {} examples'.format(
+          len(train_data[0]),
+          100*(len(train_data[0])/(len(train_data[0])+len_test_data)),
+          len(train_data[0])+len_test_data))
+      try:
+        fig.canvas.flush_events()
+      except tkinter.TclError:
+        plt.ioff()
+        exit()
+      fig.tight_layout()
 
   if graph:
-    ax1.clear()
-    curve1 = ax1.plot(xlim,losses[xlim_start-1:],c='black',lw=.8,label='training')
-    if test_data:
-      curve2 = ax1.plot(xlim,losses_test[xlim_start-1:],
-          c='red',lw=.8,label='testing')
-    ax1.legend(curve1+curve2,['train','test'], loc=0); plt.ioff(); plt.show()
+    plt.ioff()
+    plt.title('trained on {} ({:.1f}%) of {} examples'.format(
+        len(train_data[0]),
+        100*(len(train_data[0])/(len(train_data[0])+len_test_data)),
+        len(train_data[0])+len_test_data))
+    fig.tight_layout()
+    plt.show()
 
   model = model.to('cpu')
   return model
@@ -1136,7 +1175,7 @@ def optimize_ols(feats, **kwargs):
 
   return return_dict
 
-def confusion_matrix(prob_dists, yss, classes, **kwargs):
+def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
   """Compute the confusion matrix.
 
   Compute the confusion matrix with respect to given `prob_dists`
@@ -1168,6 +1207,10 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
         rix. Default: `False`.
     $class2name$ (`Dict[int, str]`): A dictionary mapping each num-
         erical class to its classname. Default: `None`.
+    $gpu$ (`int`): The gpu to use if there are any available. Set
+        to -1 to use the last gpu found when gpus are present;
+        set to -2 to override using a found gpu and use the
+        cpu. Default -1.
 
   Returns:
     `float`. The total proportion (a number between 0 and 1) of
@@ -1175,17 +1218,42 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
         io (i.e., the error rate).
   """
   #_this is confusion_matrix
-  du.utils._check_kwargs(kwargs,['return_error','show','class2name'])
+  du.utils._check_kwargs(kwargs,['return_error','show','class2name','gpu'])
+  gpu = kwargs.get('gpu', -1)
+  device = du.utils.get_device(gpu)
+  if classes is not None:
+    assert classes.dim() == 1,\
+        'The classes argument should be a 1-dim tensor not a {}-dim one.'\
+            .format(classes.dim())
+  assert isinstance(yss,(torch.LongTensor,torch.cuda.LongTensor)),\
+      'Argument yss must be a LongTensor.'
+  if not isinstance(prob_dists, torch.Tensor):
+    assert (isinstance(prob_dists, tuple) or isinstance(yhatss, list)),\
+        'Argument prob_dists must be a tuple or a list'
+    assert (isinstance(prob_dists[0], nn.Module) and\
+        isinstance(prob_dists[1], torch.Tensor)), dedent("""\
+            If agrument prob_dists is an interable,
+            then the first item should be the model, and the second
+            should be the tensor xss.
+        """)
+    model = prob_dists[0].to(device)
+    with torch.no_grad():
+      if classes is None:
+        classes = torch.arange(model(prob_dists[1].to(device)).size()[1])
+      prob_dists = model(prob_dists[1].to(device))
+  else:
+    assert classes is not None, du.utils._markup(dedent("""\
+      Unless you are passing in via `prob_dists`
+      the model tupled with the xss, then you must provide the `classes`.
+    """))
+
   assert len(prob_dists) == len(yss),\
       'Number of features ({}) must equal number of targets ({}).'\
           .format(len(prob_dists), len(yss))
   assert prob_dists.dim() == 2,\
       'The prob_dists argument should be a 2-dim tensor not a {}-dim one.'\
           .format(prob_dists.dim())
-  assert classes.dim() == 1,\
-      'The classes argument should be a 1-dim tensor not a {}-dim one.'\
-          .format(classes.dim())
-  assert isinstance(yss,torch.LongTensor), 'Argument yss must be a LongTensor.'
+
   return_error = kwargs.get('return_error', False)
   show = kwargs.get('show', False)
   class2name = kwargs.get('class2name', None)
@@ -1197,6 +1265,7 @@ def confusion_matrix(prob_dists, yss, classes, **kwargs):
   cm_pcts = cm_counts/len(yss)
   counts = torch.bincount(yss, minlength=len(classes))
 
+  # build and display the confusion matrix
   if show:
     cell_length = 5
     print(((cell_length*len(classes))//2+1)*' '+"Actual")
@@ -1241,8 +1310,8 @@ def r_squared(yhatss, yss, **kwargs):
 
   Args:
     $yhatss$ (torch.Tensor): Either the predicted outputs (assum-
-        ed to be of shape `(len(yhatss), 1)` (which is often sim-
-        ply `model(xss)` or a tuple of the form `(model, xss)` (use
+        ed to be of shape `(len(yhatss), 1)` (which is often just
+        `model(xss)`) or a tuple of the form `(model, xss)` (use
         this second option if you want the `xss` pushed through
         `model` on the fastest available device).
     $yss$ (`torch.Tensor`): The actual outputs.
@@ -1271,7 +1340,7 @@ def r_squared(yhatss, yss, **kwargs):
   gpu = kwargs.get('gpu', -1)
   device = du.utils.get_device(gpu)
   if not isinstance(yhatss, torch.Tensor):
-    assert (isinstance(yhatss, tuple) or isinstance(yhatss, list)),\
+    assert isinstance(yhatss, (tuple,list)),\
         'Argument yhatss must be a tuple or a list'
     assert (isinstance(yhatss[0], nn.Module) and\
         isinstance(yhatss[1], torch.Tensor)), dedent("""\
@@ -1279,7 +1348,8 @@ def r_squared(yhatss, yss, **kwargs):
             should be the model, and the second should be the xss
         """)
     model = yhatss[0].to(device)
-    yhatss = model(yhatss[1].to(device))
+    with torch.no_grad():
+      yhatss = model(yhatss[1].to(device))
   assert yhatss.dim() == yss.dim(), dedent("""\
       The arguments yhatss (dim = {}) and yss (dim = {}) must have
       the same dimension.

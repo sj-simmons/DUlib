@@ -226,6 +226,17 @@ with: `pip show DUlib` (or `pip3 show DUlib`, if necessary)
       <img height="400" src="images/polyreg.svg">
     </p>
 
+  * (Optional) graphing during training now looks like:
+
+    <p align="center">
+      <img height="400" src="images/graph2.svg">
+    </p>
+
+    Note: this is training on MNIST data with batch-size 20 using
+    `du.conv.models.ConvFFNet` (type `pd du.conv.examples` at your command-line
+    for details).
+
+
 ---
 
 #### Modifying DUlib

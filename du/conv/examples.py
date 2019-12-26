@@ -44,6 +44,11 @@ Let us convert `features` to a `float` tensor.
 >>> `features.type()`
 'torch.FloatTensor'
 
+How many examples are there in the MNIST data?
+
+>>> len(features)
+60000
+
 We can get the 150th image and print out its middle 20x20 part.
 
 >>> `xs = features[149]`
@@ -100,7 +105,7 @@ We can use `DUlib` to quickly build a model.
 ...     `in_size = (28, 28)`,
 ...     `n_out = 10`,
 ...     `channels = (1, 16)`,
-...     `widths = (100,))`
+...     `widths = (10,))`
 >>> `model`
 ConvFFNet(
   (conv): Sequential(
@@ -111,9 +116,9 @@ ConvFFNet(
     )
   )
   (dense): Sequential(
-    (0): Linear(in_features=3136, out_features=100, bias=True)
+    (0): Linear(in_features=3136, out_features=10, bias=True)
     (act0): ReLU()
-    (lin1): Linear(in_features=100, out_features=10, bias=True)
+    (lin1): Linear(in_features=10, out_features=10, bias=True)
   )
 )
 
@@ -141,31 +146,56 @@ Train the model
 ...     `crit =  nn.NLLLoss()`,
 ...     `train_data = (train_feats, train_targs)`,
 ...     `test_data = (test_feats, test_targs)`,
-...     `learn_params = {'lr' : 0.01, 'mo': 0.93}`,
+...     `learn_params = {'lr' : 0.001, 'mo': 0.92}`,
 ...     `bs = 20`,
-...     `epochs = 10`,
-...     `verb = 0)`
+...     `epochs = 15`,
+...     `verb = 0)`# doctest:+SKIP
 
 Let us check accuracy on the test data.
 
 >>> `0.94 < dulib.confusion_matrix(`
 ...     `model(test_feats)`,
 ...     `test_targs`,
-...     `torch.arange(10))`
+...     `torch.arange(10))`# doctest:+SKIP
 True
 
 !Demo 2: 60,000 digits!
 
-We now work with the entire MNIST digit in such a way that gen-
-eralizes to even larger dataset (even ones so large that a gpu
-might run out of memory just loading the dataset).
+We will now work with the entire MNIST dataset. For large data-
+sets, a practical problem arises: what if we have more examples
+in our data than will fit in our GPU? (Here, we are assuming
+access to a machine with a GPU, though the functionality we im-
+plement will of course run on a CPU.)
 
-We assume here that that the MNIST data has been downloaded and
-that an instance `DataLoader` named `dl` holds all of the data.
-(See the beginning of the first demo.)
+Executing the code above (in Demo 1) on all 60,000 MNIST digits
+causes an 8GB GPU to run out memory. On the other had, we typi-
+cally use a small batch-size when training. The size of the mo-
+del (i.e, the number of weights) is determined by the architec-
+ture.
 
->>> features = dl.dataset.data.to(dtype=torch.float32)
->>> targets = dl.dataset.data.to(dtype=torch.long)
+The one-metalayer model in Demo 1 has 31896 weights (`float`s) in
+total. If we use 32 bit floats, then this is about 128K bytes.
+Of course, more RAM (or VRAM, on a GPU) is required in order to
+carryout the calculus of back-propagation.  Still, at issue is
+not the size of the model; it is the size of the data.
+
+How can we carve out chunks of data, move those to the GPU, and
+foward/backpropagate them through the model during training. We
+could, for instance, chunk out `N` mini-batches at a time, Let `bs`
+denote the mini-batch size.
+
+The features of such a chunk of MNIST data constitute `N`*`bs`*28*
+28*4 = 3136*`N`*`bs` bytes of data, and the targets, `N`*`bs`*8 bytes;
+so 3144*`N`*`bs` bytes. If `N`*`bs` = 60K, then this just computes the
+size of the MNIST data, which, in MB, is 3144*60000/1024**2,
+about 180 MB.
+
+Let us assume that the MNIST data has been downloaded and that
+an instance of `DataLoader` named `dl` holds all of the data. See
+the beginning of the Demo 1 for details.
+
+>>> `features = dl.dataset.data.to(dtype=torch.float32)`
+>>> `targets = dl.dataset.targets.to(dtype=torch.long)`
 
 Let us now treat `features` and `targets` as we would any fairly
 large dataset, and see how we can use `torch.utils.data` to our
@@ -173,13 +203,92 @@ advantage (forgetting, in other words, that we got the data in
 `features` and `targets` in the first place by employing `torch.uti`
 `ls.data.DataLoader`).
 
+The data `features` and `targets` are just tensors.
+
+>>> `features.shape; targets.shape`
+torch.Size([60000, 28, 28])
+torch.Size([60000])
+
+Below, we construct a new `dataloader` instance, having the prop-
+erties described above. First, we need an appropriate instance
+of `torch.utils.data.Dataset`.
+
+Minimally, one implements  `__len__` and `__getitem__` methods when
+extending `Dataset`.
+
+>>> from torch.utils import data
+>>> class TrainingDataset(data.Dataset):
+...   '''A class for training data.'''
+...   def __init__(self, feats, targs):
+...     '''Constructor'''
+...     assert len(feats) == len(targs)
+...     self.feats = feats
+...     self.targs = targs
+...   def __len__(self):
+...     '''Return total number of training examples'''
+...     return len(feats)
+...   def __getitem__(self, item):
+...     '''Return a single training example.'''
+...     return self.feats[item], self.targs[item]
+
+Let us now split out 5/6 of 60K examples for training.
+
+>>> `splits = dulib.coh_split(5/6, features, targets)`
+>>> `train_feats, test_feats, train_targs, test_targs = splits`
+
+As before, we center and normalize the features.
+
+>>> `train_feats, train_means = dulib.center(train_feats)`
+>>> `train_feats, train_stdevs = dulib.normalize(train_feats)`
+
+And center and normalize the test data w/r to the training data
+means and standard deviations.
+
+>>> `test_feats, _ = dulib.center(test_feats, train_means)`
+>>> `test_feats, _ = dulib.normalize(test_feats, train_stdevs)`
+
+Next, we instance the class we defined above.
+
+>>> `train_data = TrainingDataset(train_feats, train_targs)`
+
+We can now take slices; e.g.,
+
+>>> minibatch = train_data[:100]
+>>> minibatch[0].shape, minibatch[1].shape,
+(torch.Size([100, 28, 28]), torch.Size([100]))
+
+Using PyTorch's DataLoader class, we define
+
+>>> dataLoader
+
+Train the model
+
+>>> `model = dulib.train(`
+...     `model = model`,
+...     `crit =  nn.NLLLoss()`,
+...     `train_data = (train_feats, train_targs)`,
+...     `test_data = (test_feats, test_targs)`,
+...     `learn_params = {'lr' : 0.001, 'mo': 0.92}`,
+...     `bs = 20`,
+...     `epochs = 15`,
+...     `verb = 0)` # doctest:+SKIP
+
+Let us check accuracy on the test data.
+
+>>> `0.94 < dulib.confusion_matrix(`
+...     `model(test_feats)`,
+...     `test_targs`,
+...     `torch.arange(10))` # doctest:+SKIP
+True
+
+
 """
 import du.utils
 
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/23/19'
+__date__ = '12/29/19'
 __copyright__ = """
   Copyright 2019 Scott Simmons
 
