@@ -327,7 +327,7 @@ def normalize(xss, new_widths = None, unbiased = True):
     new_xss = xss.div_(xss_stdevs)
   return new_xss, xss_stdevs
 
-def coh_split(prop, *args):
+def coh_split(prop, *args, **kwargs):
   """Coherently randomize and split tensors.
 
   This splits each tensor in `*args` with respect to the first
@@ -344,6 +344,10 @@ def coh_split(prop, *args):
     $*args$ (`torch.tensor`): The tensors to be randomized and
         split; each must have the same length in the first dim-
         ension.
+
+  Kwargs:
+    $randomize$ (`bool`): Whether to randomize before splitting.
+        Default: `True`
 
   Returns:
     `Tuple[torch.tensor]`. A tuple of length twice that of `args`
@@ -362,16 +366,19 @@ def coh_split(prop, *args):
   >>> `xss_train.size()`
   torch.Size([3, 2])
   """
+  du.utils._check_kwargs(kwargs,['randomize'])
+  randomize = kwargs.get('randomize',True)
   assert 0 <= prop <= 1, dedent("""\
       Arg prop ({}) must be between 0 and 1, inclusive.
   """.format(prop))
   len_ = list(map(len, args))
   assert all(len_[0] == x for x in len_), "all tensors must have same size "+\
       "in first dim"
-  indices = torch.randperm(len_[0])
-  rand_args = [tensor.index_select(0, indices) for tensor in args]
+  if randomize:
+    indices = torch.randperm(len_[0])
+    args = [tensor.index_select(0, indices) for tensor in args]
   cutoff = int(prop * len_[0])
-  split_args = [[tensor[:cutoff], tensor[cutoff:]] for tensor in rand_args]
+  split_args = [[tensor[:cutoff], tensor[cutoff:]] for tensor in args]
   return_args =[item for sublist in split_args for item in sublist]
   return tuple(return_args)
 
