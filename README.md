@@ -264,3 +264,20 @@ pip install -U DUlib
 
 Please let Simmons know of any new functionality that you implement and wish
 to add to DUlib. Or just fork, create/fix/modify, and issue a pull request.
+
+---
+
+#### Todo
+* In the `optimize_ols` function in [lib.py](du/lib.py), improve robustness the
+  largest/smallest eigenvalue computation. Currently, larger datasets can cause numerical problems.
+  The smallest eigenvalue can be negative, for example.
+
+  See e.g. Applied Numerical Linear Algebra by Demmel &mdash; the most relevant chapters of which
+  are [Chapter 3](../papers/demmelsvd.pdf), [Chapter 4](../papers/eigenvalues.pdf),
+  [Chapter 5](../papers/eigenvalues2.pdf), and, particularly,
+  [Chapter 6](../papers/eigenvalues3.pdf).
+
+* Try to extend the functionality of `optimize_ols` to include mini-batch. As a
+  starting point see the end of this
+  [distill article on momentum](https://distill.pub/2017/momentum/).
+
