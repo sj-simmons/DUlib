@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""that demonstrate the functionality of `du.conv`.
+"""demonstrate the functionality of `du.conv`.
 
 \n!Classifying MNIST Digits!
 
@@ -92,8 +92,8 @@ tensor(3)
 
 !Building a classifier!
 
-So as to run, possibly, on a cpu, we work with randomly select-
-ed 1/10 of of the data.
+In order to run a CPU, we work with a randomly selected 1/10 of
+the data.
 
 >>> `import du.lib as dulib`
 >>> `feats, _, targs, _ = dulib.coh_split(0.1,features,targets)`
@@ -290,7 +290,7 @@ __version__ = '0.9'
 __status__ = 'Development'
 __date__ = '12/29/19'
 __copyright__ = """
-  Copyright 2019 Scott Simmons
+  Copyright 2019-2020 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.

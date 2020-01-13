@@ -50,8 +50,10 @@ ing something like:
   ...
   `import du.lib as dulib`
   `from du.models import DenseFFNet`
+
   ...
   `xss, _ = dulib.center(xss)`
+
   ...
   `model = DenseFFNet(`
       ...
@@ -62,6 +64,7 @@ ing something like:
       `train_data = (xss, yss)`,
       ...
   `)`
+
   ...
 
 !Overview!
@@ -78,8 +81,8 @@ they unearth the secrets held by data.
 
 The true power of Deep Learning -- which, since it is formulat-
 ed in terms of neural nets, was once thought to be rather pros-
-aic -- lies in giving machines nearly absolute freedom to dis-
-cover patterns in data.
+aic -- lies in giving machines nearly absolute freedom in their
+efforts to discover patterns in data.
 
 This freedom combined with the enormity of data available in
 the modern information era, has fueled the resurgence in viabi-
@@ -91,11 +94,11 @@ convergence of deep networks. Those algorithms comprise the me-
 thod called ~gradient descent~, the ~stochastic~ version of which
 is the workhorse of machine learning.
 
-As late as the 90s, some doubted the computational infeasibil-
-ity of deep networks. Yet, not only do multilayered of networks
-(and even ~recurrent~ networks) converge (when tuned appropri-
-ately), they in some cases produce windows into dimensions of
-big data previously unobserved.
+As late as the 90s, some doubted the computational feasibility
+of deep neural networks. Yet, not only do multilayered of net-
+works (and even ~recurrent~ networks) converge (when tuned appro-
+priately), they, in some cases, reveal windows into dimensions
+of big data that were previously unobserved.
 
 Cutting-edge techniques in Deep Learning even put machines at
 liberty to conceptualize parts of their own architectures.
@@ -142,7 +145,7 @@ the discussion above) is enclosed in boxes or other weird char-
 acters, then you are in so-called charset encoding hell. There
 are a number of ways around such rendering issues.
 
-There is a good chance that the problems your are experiencing
+There is a good chance that the problems you are experiencing
 are due to your being in IDLE (which is the IDE that ships with
 Python) or some other IDE that doesn't play nice with `ansi` es-
 cape sequences.
@@ -176,7 +179,7 @@ __status__ = 'Development'
 __date__ = '12/29/19'
 __version__ = '0.9'
 __copyright__ = """
-  Copyright 2019 Scott Simmons
+  Copyright 2019-2020 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.

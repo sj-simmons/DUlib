@@ -14,6 +14,8 @@
 #     serial, before setting up that option.
 #   - you have to implement strip because none of the doctest-
 #     ing will work unless you strip off the markdown first.
+#   - Consider changing more of the bools in stand_args to some
+#     thing similar to the setup for cm.
 
 import torch
 import argparse
@@ -26,7 +28,7 @@ __version__ = '0.9'
 __status__ = 'Development'
 __date__ = '12/29/19'
 __copyright__ = """
-  Copyright 2019 Scott Simmons
+  Copyright 2019-2020 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -81,19 +83,31 @@ def stand_args(desc = '', **kwargs):
   or some other user of your program with default values for
   the learning rate, and momentum, but that you want to require
   the user to specify the number of epochs on the command line.
-  Additionally suppose that you want to add a less common com-
-  mandline switch called 'foo'. Then, in your program, put:
+  Additionally suppose that you want to add less commonly occu-
+  ring commandline switch called 'foo', 'bar', and 'baz'. Then,
+  in your program, put, for example:
 
-    `import du.utils`
+      `import du.utils`
 
-    `parser = du.utils.stand_args(`
-        `'a short description of your program'`,
-        `lr = 0.1`, `mo = 0.9`, `epochs = True`)
-    `parser.add_argument('-foo', help='the new thing', ...)`
-    `args = parser.parse_args()`
-    ...
-    `print('the learning rate is', args.lr)`
-    ...
+      `parser = du.utils.stand_args(`
+          `'a short description of your program'`,
+          `lr = 0.1`, `mo = 0.9`, `epochs = True`)
+      `parser.add_argument('-foo'`,
+          `help = 'a new thing that's an int with default 17'`,
+          `type = int`, `default = 17`)
+      `parser.add_argument('-bar'`,
+          `help = 'a float that's required'`,
+          `type = float`, `required = True`)
+      `parser.add_argument('-baz'`,
+          `help = 'a bool that's False by default'`,
+          `action = store_true`)
+      `args = parser.parse_args()`
+      ...
+      `print('the learning rate is', args.lr)`
+      `if args.baz: print('foo is', args.foo)`
+
+                    _____________________
+
 
   Args:
     $desc$ (`str`): A short description of what the calling program
@@ -151,12 +165,12 @@ def stand_args(desc = '', **kwargs):
         set up so that the switch `-ser` stores `True`. The help
         string returned is: ~toggle serializing the trained mo~
         ~del~. Default: `False`.
-    $cm$ (`bool`): Whether to have a commandline switch to deter-
-        mine whether to show the confusion matrix. If this is
-        `True` then the returned `parser` object will be set up
-        so that the switch `-cm` stores `True`. The help string
-        returned is: ~toggle showing confustion matrix~. Default:
-        `False`.
+    $cm$ (`Union[None,bool]`): Whether to have a command-line switch
+        to determine whether to show the confusion matrix. If
+        this is `True`(resp. `False`), then the returned parser ob-
+        ject will be set up so that the switch `-cm` stores `False`
+        (`True`). The help string returned is: ~toggle showing con~
+        ~fusion matrix~. Default: `None`.
     $seed$ (`bool`): Same as `ser` but for `seed` which refers to the
         random seed. Default: `False`.
     $small$ (`Union[bool,float]`): Read in only this proportion of
@@ -173,7 +187,7 @@ def stand_args(desc = '', **kwargs):
   bs = kwargs.get('bs', False)
   epochs = kwargs.get('epochs', False)
   seed = kwargs.get('seed', False)
-  cm = kwargs.get('cm', False)
+  cm = kwargs.get('cm', None)
   prop = kwargs.get('prop', False)
   gpu = kwargs.get('gpu', False)
   graph = kwargs.get('graph', False)
@@ -265,9 +279,12 @@ def stand_args(desc = '', **kwargs):
     hstr='toggle serializing the trained model'
     parser.add_argument('-ser', help=hstr, action='store_true')
 
-  if cm:
+  if isinstance(cm, bool):
     hstr='toggle showing the confusion matrix'
-    parser.add_argument('-cm', help=hstr, action='store_true')
+    if cm:
+      parser.add_argument('-cm', help=hstr, action='store_false')
+    else:
+      parser.add_argument('-cm', help=hstr, action='store_true')
 
   hstr='read in only this proportion of the data'
   if isinstance(small, float):
@@ -286,11 +303,12 @@ def get_device(gpu = -1):
         ing a found gpu and instead use the cpu. Default: `-1`.
 
   Returns:
-    `str`. A string that can be passed using the `to` method of
-        `Torch` tensors and modules.
+    `Union[torch.device, str]`. An instance of `torch.device` or a
+        string that can be passed to torch tensors and modules
+        using the `to` method.
   """
   if gpu > -2:
-    return torch.device( "cuda:{0}".format(
+    return torch.device("cuda:{0}".format(
                (torch.cuda.device_count() + gpu) % torch.cuda.device_count()
            )) if torch.cuda.is_available() else "cpu"
   else:

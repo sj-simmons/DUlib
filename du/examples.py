@@ -27,21 +27,21 @@ derived from the `PyTorch` class `torch.nn.Module`. Such a derived
 class must implement a `forward` method; that is, the `forward` me-
 thod of the `nn.Module` class is a virtual method.
 
-(See the definition of `LinRegModel` below for a simple but in-
-structive example that sub-classes `nn.Module` and then creates
-an instance of that subclass and uses it to train a model to
-solve a simple linear regression problem.)
+(See the definition of `LinRegModel` below for a simple but inst-
+ructive example that sub-classes `nn.Module` and then creates an
+instance of that subclass and uses it to train a model to solve
+a simple linear regression problem.)
 
-Throughout `DUlib`, we denote by `xss` the tensor that holds the
-~features~ (or ~inputs~) of our data; i.e., `xss` is the tensor that
-is to be forwarded by the `forward` method of our model. We as-
-sume that `xss` is at least 2-dimensional, and that its first di-
-mension indexes the examples of our data.
+We often denote by `xss` the tensor that holds the ~features~ (or
+~inputs~) of our data; i.e., `xss` is the tensor that is to be for-
+warded by the `forward` method of our model. We assume that `xss`
+is of dimension at least 2, and that its first dimension index-
+es the examples of our data.
 
 For instance, suppose that we want to model a 2-dimensional re-
 gression plane that captures a point cloud which lives in R^3.
 In this case, `xss` is assumed to have size `torch.Size([n, 2])`,
-where `n` is the number of examples.
+where `n` is the number of examples (points).
 
 As is the convention in PyTorch's documentation, let us agree
 to write `(n,2)` instead of `torch.Size([n, 2])`, for example, and
@@ -56,12 +56,11 @@ there could be any number of additional dimensions beyond the
 first.
 
 As stated above, we assume that our features `xss` are always at
-least 2-dimensional; said differently, we assume that `xss` has
-shape `(n,*)`; and, furthermore, that  `n` is the number of exam-
-ples in our data. This is true even in the simplest case: that
-in which the features of an example in our data consists of a
-single number. In that case, `xss` should be a tensor of shape
-`(n,1)`, not `(n)`.
+least 2-dimensional; stated differently, we assume that `xss` has
+shape `(n,*)`; and, moreover, that `n` is the number of examples in
+our data. This is true even in the simplest case: that in which
+the features of an example in our data consists of a single nu-
+mber. In that case, `xss` should of shape `(n,1)`, not `(n)`.
 
 (Therefore, you may wish, in your code, to deploy the `PyTorch`
 utility `unsqueeze` when writing a program that calls, say, the
@@ -74,9 +73,9 @@ vention surrounding the shape of the targets `yss`?
 
 Suppose the scenario mentioned above: that of modeling a point
 cloud living in R^3 with a 2-dimensional plane. Then, our `xss`
-tensor would naturally have shape `(n,2)` where, yet again, `n`
-denotes the number of examples (i.e., the number of points in
-our point cloud). What shape should `yss` be in this scenario?
+tensor would naturally have shape `(n,2)` where, yet again, `n` de-
+notes the number of examples (i.e., the number of points in our
+point cloud). What shape should `yss` be in this scenario?
 
 In this case, the machinery of `DUlib` would assume that the cor-
 responding `yss` has shape `(n,1)`. This may seem unnatural. Should
@@ -90,10 +89,10 @@ we want to model a function with `k` inputs and `m` outputs. Then
 `xss` would be of shape `(n,k)` while `yss` would have shape `(n,m)`
 (and there would be `n` examples in our data set).
 
-As we stated above, `xss` should always be of shape `(n,*)` (meaning
-it should be at least 2 dimensional).  It may seem reasonable to
-impose the same convention for targets `yss`.  And, for, say, re-
-gression problems, yes, `DUlib` assumes that the `yss` have shape
+As we stated above, `xss` should always be of shape `(n,*)` (mean-
+ing it should be at least 2 dimensional). It may seem reasonab-
+le to impose the same convention for targets `yss`. And for, say,
+regression problems, yes, `DUlib` assumes that the `yss` have shape
 `(n,*)`. But there is an exception that occurs often.
 
 In classification problems (in which, for instance, we want to
@@ -101,8 +100,8 @@ classify images as say landscapes, city-scapes, or see-scapes),
 the target for each image would naturally and simply be an `int`:
 either `0`, `1`, or `2`.
 
-Furthermore, it makes no sense, in commonly held practice, to
-try to map an image to say both a sea-scape or a land-scape.
+Furthermore, it makes little sense, in commonly held practice,
+to try to map an image to say both a sea-scape or a land-scape.
 Rather, if we wanted something like that we would, after train-
 ing, easily use the model to get, for a given set of features,
 our hands on the entire ~discrete probability distribution~ of
@@ -111,24 +110,25 @@ the trained model's best guesses over all target classes.
 In summary, the `xss` are always assumed to be at least 2 dimen-
 sional, and so are the `yss`, unless we are working on a classif-
 ication problem, in which case the `yss` are assumed to be one
-dimensional. So that, in the case of a classification problem,
+dimensional; so that, in the case of a classification problem,
 if `xss` has shape `(n,*)`, then `yss` would have shape simply `(n)`.
+In any case, the first dimension of a data tensor indexes the
+examples in (a mini-batch of) our data.
 
 Lastly, for a classification problem, each entry in `yss` should
 be an `int` in the range `0` to `C-1` where `C` is the number of class-
 es. Importantly, `yss` must be a `torch.LongTensor` in the case of
 a classification problem.
 
-A final note on notation: we use `yhatss` throughout to denote
-the predictions made by a trained model on features unseen dur-
-ing training.
+A final note on notation: we often use `yhatss` to denote pre-
+dictions made using a model on features unseen during training.
 
                     _____________________
 
 
 The following demonstrations illustrate the core functionality
-of `DUlib` using the case of the simplest neural net, the so
-called ~linear perceptron~.
+of `DUlib` using the case of the simplest neural net, the so cal-
+led ~linear perceptron~.
 
 !Simple linear regression!
 
@@ -138,11 +138,11 @@ First, we generate some data.
 >>> `xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)`
 
 The `x`-values, `xs`, above are selected uniformly from the inter-
-val `[0, 100]`. The `y`-values were obtained by adding normally
-distributed error to `y=2x+9` when `x` runs through the `xs`.
+val `[0, 100]`. The `y`-values were obtained by adding normally di-
+stributed error to `y=2x+9` when `x` runs through the `xs`.
 
-Let us next cast the data as tensors of size appropriate for
-training a neural net with the `train` function in `DUlib`. (The
+Let us next cast the data as tensors of a size appropriate for
+training a neural net using the `train` function in `DUlib`. (The
 `train` function is in the core library `du.lib`; so you can per-
 use the documentation for the `train` function by typing, for ex-
 ample, `pd du.lib.train` at the command line.)
@@ -159,8 +159,8 @@ For best performance, we ~center~ and ~normalize~ the data.
 >>> `xss,xss_stds=normalize(xss); yss,yss_stds=normalize(yss)`
 
 Next, let us create an instance of a model that, upon training,
-computes the ~least-squares regression~ line for the given data
-(which should be close to the line `y=2x+9`).
+computes the ~least-squares regression~ line for the given data.
+(The regression line should be close to the line `y=2x+9`).
 
 >>> `import torch.nn as nn`
 >>> `class LinRegModel(nn.Module):`
@@ -503,7 +503,7 @@ __version__ = '0.9'
 __status__ = 'Development'
 __date__ = '12/29/19'
 __copyright__ = """
-  Copyright 2019 Scott Simmons
+  Copyright 2019-2020 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
