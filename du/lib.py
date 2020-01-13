@@ -26,7 +26,9 @@ trained models.
   |coh_split|    randomize and coherently split each tensor in
                  `*args`; returns `Tuple[tensor]`
     ($prop$,       -split like `prop`, 1 - `prop`
-     $*args$)      -each of these tensors are split into two
+     $*args$,      -each of these tensors are split into two
+     $randomize$ = `True`)
+                 -whether to randomize before splitting.
 
   |train|        return `model` trained using SGD;
     ($model$,      -the instance of `nn.Module` to be trained
@@ -46,14 +48,20 @@ trained models.
      $bs$ = `-1`,    -the mini-batch size; -1 is (full) batch
      $epochs$ = `10`,-train for this many epochs
      $graph$ = `0`,  -put 1 (or more) to show graph when training
-     $print_lines$ = `(17,7)`,
+     $print_lines$ = `(7,8)`,
                  -print 17 beginning lines and 7 ending lines
      $verb$ = `2`,   -verbosity; 3 for more, 1 for less, 0 silent
-     $gpu$ = `-1`)   -the gpu to run on, if any are available; if
+     $gpu$ = `-1`,   -the gpu to run on, if any are available; if
                   none available, use the cpu; put -1 to use
                   the last gpu if multiple ones found; put -2
                   to override found gpu(s) and use the cpu.
                   Consider just accepting the default here.
+     $valid_crit$ = `True`)
+                 -function determining how the model is valida-
+                  ted w/r to test data. The default results in
+                  using `r_squared` for regression and `confusion_`
+                  `matrix` for classification.
+
 
   |cross_validate_train|
     ($model$, $crit$, $train_data$, $k$, $**kwargs$)
@@ -111,6 +119,7 @@ trained models.
                 -return error instead of proportion correct
      $show$ = `False`,
                 -display the confusion matrix       -
+     $gpu$ = `-1`,  -run on the fastest device, by default
      $class2name$ = `None`)
                 -a dict mapping `int`s representing the classes
                  to the corresponing descriptive name (`str`)
@@ -149,6 +158,8 @@ trained models.
                     _____________________
 """
 #Todo:
+#  - in the ducktyping, the Tensor types could be cleaned up, and
+#    in docstrings it just says e.g. LongTensor
 #  - Add to docs of confusion_matrix about passing in model too
 #    for speed and about then no need to set classes.
 #  - try to speed up evaluation by using model.eval() but be care
@@ -226,7 +237,7 @@ __version__ = '0.9'
 __status__ = 'Development'
 __date__ = '12/29/19'
 __copyright__ = """
-  Copyright 2019 Scott Simmons
+  Copyright 2019-2020 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -242,6 +253,12 @@ __copyright__ = """
 """
 __license__= 'Apache 2.0'
 
+# glom together some types
+IntTensor = (torch.ShortTensor, torch.IntTensor, torch.LongTensor,
+    torch.cuda.ShortTensor, torch.cuda.IntTensor, torch.cuda.LongTensor)
+FloatTensor = (torch.HalfTensor, torch.FloatTensor, torch.DoubleTensor,
+    torch.cuda.HalfTensor, torch.cuda.FloatTensor, torch.cuda.DoubleTensor)
+
 def center(xss, new_centers = None):
   """Center a tensor.
 
@@ -255,7 +272,7 @@ def center(xss, new_centers = None):
   simply mean-center a tensor you would call this function like
                `xss_centered, _ = center(xss)`
   That is, you can use an underscore (or whatever) if you don't
-  need the second element of the tuple being returned.
+  need the means.
 
   Args:
     $xss$ (`torch.Tensor`) The tensor to center.
@@ -271,19 +288,32 @@ def center(xss, new_centers = None):
         ension; the second is a tensor the size of the remain-
         ing dimensions and that holds the means.
 
-  >>> `xss = torch.arange(12.).view(3,4)`
-  >>> `center(xss)`
+  >>> `xss = torch.arange(12.).view(3,4); xss`
+  tensor([[ 0.,  1.,  2.,  3.],
+          [ 4.,  5.,  6.,  7.],
+          [ 8.,  9., 10., 11.]])
+  >>> `xss, xss_means = center(xss)`
+  >>> `xss, xss_means`
   (tensor([[-4., -4., -4., -4.],
           [ 0.,  0.,  0.,  0.],
           [ 4.,  4.,  4.,  4.]]), tensor([4., 5., 6., 7.]))
-  >>> `xss_, xss_means =  center(xss)`
-  >>> `xss__, _ = center(xss_, -xss_means)`
-  >>> `int(torch.all(torch.eq(xss, xss__)).item())`
+  >>> `xss_, _ = center(xss, -xss_means)`
+  >>> `int(torch.all(torch.eq(xss, xss_)).item())`
+  1
+
+  >>> `xss = torch.arange(12.).view(3,2,2)`
+  >>> `xss, xss_means = center(xss)`
+  >>> `xss_means.shape`
+  torch.Size([2, 2])
+  >>> `xss_, _ = center(xss, -xss_means)`
+  >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
   """
-  # add an assert checkin that new_center is right size.
   xss_means = xss.mean(0)
   if isinstance(new_centers, torch.Tensor):
+    assert new_centers.size() == xss_means.size(),\
+        'new_centers must have size {}, not {}'.\
+            format(xss_means.size(),new_centers.size())
     new_xss = xss.sub_(new_centers)
   else:
     new_xss = xss.sub_(xss_means)
@@ -517,124 +547,186 @@ def _parse_data(data_tuple, device = 'cpu'):
 def train(model, crit, train_data, **kwargs):
   """Train a model.
 
-  Assuming that the number of training examples is divisible by
-  the batchsize, the loss printed is the average loss per sam-
-  ple over each epoch training. (Under the same assumption,
-  one epoch of training corresponds to the model seeing each
-  example in the training data exactly once.
+  The loss printed to the console is the average loss per samp-
+  le over an epoch as that average is accumulated during train-
+  ing. If the number of training examples is divisible by the
+  batchsize then, during training, the model sees each example
+  in the training data exactly once.
 
-  If graphing is enabled, the black graph is the (average)
-  loss for the training data. If testing data is present,
-  then the red graph is the average loss per example for the
-  test data.
+  !Notes on specifying training hyper-parameters!
 
-  Notes on specifying training hyper-parameters:
+  The argument `learn_params` specifies the training hyper-para-
+  meters. It can be constructed in one of three ways. To train
+  with constant learning rate and momentum, one passes a simple
+  dictionary; either, for example,
 
-  The argument `learn_params` specifies the training hyper-
-  parameters.  It can be used in one of two ways. To train with
-  a constant learning rate and/or momentum, one passes a sim-
-  ple dictionary of the form either
+       train( ..., `learn_params = {'lr': 0.01}`, ...)
 
-       `train( ..., learn_params = {'lr': 0.01}, ...)`
+  or, e.g.,
 
-  or
-
-    `train( ..., learn_params = {'lr': 0.01, 'mo': 0.9}, ...).`
+    train( ..., `learn_params = {'lr': 0.01, 'mo': 0.9}`, ...).
 
   Alternatively, `learn_params` can be an instance of (a subclass
   of) the `LearnParams_` class or an instance of `torch.optim.Opti`
-  `mizer`.
+  `mizer`. (Type `pd du.examples` and scroll down to the !simple lin!
+  !ear regression with learning rate decay! section to see an ex-
+  ple that uses the `LearnParams_` class.)
+
+  !Notes on training with a GPU!
+
+  In the presence of a GPU, The `gpu` argument determines the de-
+  vice on which the model is trained. By default (which is `gpu=`
+  `-1`) training takes place on the last GPU found.
+
+  Minibatches are moved from device 'cpu' to the device set via
+  `gpu` just before they are forward-passed through the model du-
+  ring training. With that exception, training data is kept on
+  the 'cpu' device; meanwhile, the model has always been moved
+  to the training device (set via `gpu`) at the beginning of tra-
+  ining.
+
+  !Note on validation!
+
+  By default, any provided `test_data` resides on the device on
+  which training occurs. In a bind (such as running out of vram
+  when training on a GPU) one might try the following (result-
+  ing in significant slowdown, typically):
+
+  `import copy`
+  ...
+  `model = du.lib.train(`
+    ...
+    `valid_crit = lambda model, xss, yss:`
+      `du.lib.confusion_matrix(`
+        `(copy.deepcopy(model).to('cpu',non_blocking=True),xss)`,
+        `yss`,
+        `gpu = -2`))
+
+  On a machine with more than one GPU, one can also try (likely
+  with much less, if any, slowdown):
+
+  `model = du.lib.train(`
+      ...
+      `gpu = -1`,
+      `valid_crit = lambda model, xss, yss:`
+          `du.lib.confusion_matrix(`
+              `(copy.deepcopy(model).to(`
+                  `'cuda:0',non_blocking=True), xss)`,
+              `yss`,
+              `gpu = 0`))
+
+                    _____________________
+
 
   Args:
     $model$ (`nn.Module`): The instance of Module to be trained.
     $crit$ (`nn.modules.loss`): The loss function when training.
     $train_data$ (`Tuple[torch.Tensor]`): A tuple consisting of
-        either 2 or 3 tensors. Passing a length 3 tensor is
-        only necessary when training a recurrent net on var-
-        iable length inputs. In that case, the triple of ten-
-        sors must be of the form
-          `(train_features, train_lengths, train_targets)`.
-        That is, the first tensor holds the inputs of the
-        training data, the second holds the corresponding
-        lengths, and the third holds the training data out-
-        puts.
-        If the data are not of variable length, then there
-        is no need to pass the middle tensor in the triple
-        above. So one passes
+        either 2 or 3 tensors. Passing a length 3 tensor is on-
+        ly necessary when training a recurrent net on variable
+        length inputs. In that case, the triple of tensors must
+        be of the form
+           `(train_features, train_lengths, train_targets)`;
+        i.e., the first tensor holds the inputs of the training
+        data, the second holds the corresponding lengths, and
+        the third holds the training data outputs.
+
+        If the data are not of variable length, then there is
+        no need to pass the middle tensor in the triple above;
+        so one passes just
                  `(train_features, train_targets)`.
-        In any case, each of the tensors in the tuple must
-        be of dimension at least two, with the first dimen-
-        sion indexing the training examples.
+        In any case, `train_features` must have dimension greater
+        than or equal to 2, while `train_targets` should be 2-dim
+        in the case of a regression problem (i.e., if it holds
+        floating point numbers) and 1-dim for a classification
+        problem (in which case it hold integers). `train_lengths`
+        should always be 1-dim. (Type `pd du.examples` to read a-
+        bout conventions and assumptions surrounding training/
+        testing data.)
 
   Kwargs:
-    $test_data$ (`Tuple[torch.Tensor]`): Data to test on in the
-        form of a tuple of length 2 or 3 (that is, matching the
-        `train_data` (see above).  The loss on test data is com-
-        puted each epoch.  However, The test data is not shown
-        to the model as part of backpropagation. Default: `None`.
+    $test_data$ (`Tuple[torch.Tensor]`): (Optional) data on which
+        to test, in the form of a tuple of length 2 or 3; i.e.,
+        that matches the length of `train_data`. The loss on test
+        data is computed each epoch. However, The test data is
+        not shown to the model as part of backpropagation. Def-
+        ault: `None`.
     $learn_params$
-        (`Union[dict,LearnParam_,torch.optim.Optimizer]`):
-        The training (or 'learning') hyperparameters in the form
-        of an instance of a subclass of `LearnParams_`; or, for
-        basic functionality, a `dict` that maps the string 'lr',
-        and optionally 'mo', to `float`s; or an instance of `torch`
-        `.optim.Optimizer`. Default: `{'lr':0.1}`.
-    $bs$ (`int`): The mini-batch size where -1 forces batch grad-
-        ient descent (i.e. feed-forwarding all training exam-
-        ples before each backpropagation). Default: -1.
-    $epochs$ (`int`): The number of epochs to train over, where
-        an epoch is duration required to see each training ex-
-        ample exactly once. Default: 10.
-    $graph$ (`int`): If positive then, during training, display
-        a real-time graph. If greater than 1, then the be-
-        gining `graph` losses are thrown away when training
-        gets to epoch `graph` (this functionality is made
-        available for a better viewing experience for some
-        models). Requires matplotlib (and a running X server).
-        If 0, do not display a graph. Default: 0.
-    $print_lines$ (`Tuple[int, int]`): A tuple, the first compon-
-        ent of which is the number of lines to print initial-
-        ly when printing the current loss for each epoch dur-
-        ing training, and the second of which is the number
-        of lines to print lastly when training. If at least
-        one element of the tuple is 0 (resp., -1), then no
-        (resp., all) lines are printed. Default: (17, 7).
-    $verb$ (`int`): The verbosity. 0: silent, ... , 3: all.
-        Default: 2.
-    $gpu$ (`int`): The gpu to use if there are any available. Set
-        to -1 to use the last gpu found when gpus are present;
-        set to -2 to override using a found gpu and use the
-        cpu. Default -1.
-    $valid_crit$ (`function`): If `graph` is positive and this is
-        not `None` then, when graphing, ...
+        (`Union[dict,LearnParam_, torch.optim.Optimizer]`): The
+        training, or 'learning', hyperparameters in the form of
+        an instance of `LearnParams_`; or, for basic functionali-
+        ty, a `dict` that maps the string 'lr', and optionally
+        'mo', to `float`s; or an instance of `torch.optim.Optimizer`
+        Default: `{'lr': 0.1}`.
+    $bs$ (`int`): The mini-batch size where -1 forces batch gradi-
+        ent descent (i.e. feed-forwarding all training examples
+        before each back-propagation). Default: -1.
+    $epochs$ (`int`): The number of epochs to train over, where an
+        epoch is the 'time' required to see each training exam-
+        ple exactly once. Default: 10.
+    $graph$ (`int`): If positive then, during training, display a
+        real-time graph. If greater than 1, then the beginning
+        `graph` number of losses are thrown away when displaying
+        the graph at the completion of training. Displaying a
+        graph at all requires `matplotlib`, and a running X serv-
+        er). If 0, do not display a graph. Default: 0.
+    $print_lines$ (`Tuple[int, int]`): A tuple, the first component
+        of which is the number of epochs to normally print the
+        loss per epoch during training, and the second of which
+        is the number of lines to print lastly. If at least one
+        element of the tuple is 0 (resp., -1), then no (resp.,
+        all) lines are printed. Default: (7, 8).
+    $verb$ (`int`): Verbosity; 0 = silent, ... , 3 = all. Def.: 2.
+    $gpu$ (`int`): The GPU to use for training (if any are availab-
+        le. Set this to -1 to use the last GPU found when GPUs
+        are present (and use the CPU if no GPU found); set to
+        -2 to override using a found GPU and use the CPU. Def-
+        ault: -1.
+    $valid_crit$ (`function`): If `graph` is positive, and `test_data`
+        is present then, while graphing, `valid_crit` is applied
+        to test data after every epoch, and the output is disp-
+        layed on the graph. The default (`True`) results in auto-
+        matically using `r-squared` if the target data are float-
+        ing point tensors, and to using `confusion_matrix` if the
+        targets are tensors of integers. Any function that maps
+        `model`, the test features, and the test targets to a fl-
+        oat can be provided (see above for an example).
 
   Returns:
-    `nn.Module`. The trained model sent to device 'cpu'.
+    `nn.Module`. The trained model (still on the device determin-
+        ed by `gpu`).
   """
   #_this is train
 
+  # check and process kwargs
   du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
       'graph','print_lines','verb','gpu','valid_crit'])
-  du.utils._catch_sigint()
-
   test_data = kwargs.get('test_data', None)
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
   bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 10)
   print_init, print_last = kwargs.get('print_lines',(7, 8))
   verb = kwargs.get('verb', 2); graph = kwargs.get('graph', 0)
   gpu = kwargs.get('gpu', -1)
-  valid_crit = kwargs.get('valid_crit',True)
+  valid_crit = kwargs.get('valid_crit', True)
+
+  du.utils._catch_sigint() # try to catch crtl-C
 
   graph = 1 if graph == True else graph
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
+  # get device determined by the arg gpu, for now use that memory only for model
   device = du.utils.get_device(gpu)
-  train_feats, train_feats_lengths, train_targs=_parse_data(train_data, device)
+  model_device = device
+  data_device = 'cpu'
+
+  # parse the training data and leave it in 'cpu' (or data_device) memory
+  train_feats,train_feats_lengths,train_targs=_parse_data(train_data,data_device)
   has_lengths = True if train_feats_lengths is not None else False
   num_examples = len(train_feats)
   if bs <= 0: bs = num_examples
-  if verb > 0: print('training on', device)
-  model = model.to(device)
+  if verb > 0:
+    print('training on {} (data on {})'.format(model_device, data_device))
+  model = model.to(model_device)
   if verb > 2: print(model)
 
   #process learn_params
@@ -652,7 +744,7 @@ def train(model, crit, train_data, **kwargs):
       mo = learn_params['mo']
       if verb > 1: print('momentum:', du.utils.format_num(mo), end=', ')
       learn_params = Momentum(model, lr = lr, mo = mo)
-      learn_params.set_device(device)
+      learn_params.set_device(model_device)
     if verb > 1: print('batchsize:', bs)
   elif isinstance(learn_params, torch.optim.Optimizer):
     has_optim = True
@@ -661,17 +753,11 @@ def train(model, crit, train_data, **kwargs):
         learn_params must be a dict or an instance of a subclass of
         LearnParams_, not a {}.
     """.format(type(learn_params)))
-    learn_params.set_device(device)
+    learn_params.set_device(model_device)
     if verb > 1: print(learn_params, end=', ')
     if verb > 1: print('batchsize:', bs)
 
-  # setup valid_crit
-  if isinstance(valid_crit, bool) and valid_crit:
-    if isinstance(train_data[-1], torch.FloatTensor):
-      valid_crit = lambda x,y: r_squared(x,y,gpu=gpu)
-    if isinstance(train_data[-1], (torch.LongTensor, torch.cuda.LongTensor)):
-      valid_crit = lambda x,y: confusion_matrix(x,y,gpu=gpu)
-
+  # set up console printing
   if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
 
   if graph:
@@ -689,23 +775,40 @@ def train(model, crit, train_data, **kwargs):
 
     v_dations = []
 
-    # only bother with test_data
+    # only bother with the following if there are test_data
     if test_data:
-      #assert len(test_data) < bs, dedent("""\
-      #    batchsize ({}) is greater than no. of examples ({}) in test data
-      #""".format(bs, len(test_data)))
       if len(test_data[0]) == 0: test_data = None
       else:
-        test_feats, test_feats_lengths, test_targs =\
-            _parse_data(test_data, device)
+        if isinstance(valid_crit, bool) and valid_crit:
+          print('here',type(valid_crit))
+          test_feats, test_feats_lengths, test_targs =\
+              _parse_data(test_data, model_device)
+        else:
+          print('here2',type(valid_crit))
+          test_feats, test_feats_lengths, test_targs =\
+              _parse_data(test_data, data_device)
         num_test_examples = len(test_data)
         losses_test=[]
 
       v_dations_test = []
 
+      # setup valid_crit
+      if isinstance(valid_crit, bool):
+        if valid_crit:
+          if isinstance(train_data[-1], FloatTensor):
+            valid_crit = lambda yhatss,yss: r_squared(yhatss, yss, gpu=gpu)
+          elif isinstance(train_data[-1], IntTensor):
+            valid_crit = lambda model, xss, yss: \
+                confusion_matrix((model,xss), yss, gpu=gpu)
+          else:
+            raise RuntimeError('please specify a function to use for validataion')
+      else:
+        assert isinstance(valid_crit, FunctionType)
+
+  # training loop
   for epoch in range(epochs):
     accum_loss = 0
-    indices = torch.randperm(len(train_feats)).to(device)
+    indices = torch.randperm(len(train_feats), device = data_device)
 
     for idx in range(0, num_examples, bs):
       current_indices = indices[idx: idx + bs]
@@ -713,13 +816,15 @@ def train(model, crit, train_data, **kwargs):
       if has_lengths:
         loss = crit(
             model(
-                train_feats.index_select(0, current_indices),
-                train_feats_lengths.index_select(0, current_indices)),
-            train_targs.index_select(0, current_indices))
+                train_feats.index_select(
+                    0, current_indices).to(model_device),
+                train_feats_lengths.index_select(
+                    0, current_indices).to(model_device)),
+            train_targs.index_select(0, current_indices).to(model_device))
       else:
         loss = crit(
-            model(train_feats.index_select(0, current_indices)),
-            train_targs.index_select(0, current_indices))
+            model(train_feats.index_select(0,current_indices).to(model_device)),
+            train_targs.index_select(0, current_indices).to(model_device))
 
       accum_loss += loss.item()
       if has_optim: learn_params.zero_grad()
@@ -748,20 +853,15 @@ def train(model, crit, train_data, **kwargs):
         print(base_str+loss_str, end='\b'*loss_len, flush=True)
 
     if graph:
-      #This is too expensive for large datasets and/or models
-      #if has_lengths:
-      #  loss = crit(model(train_feats, train_feats_lengths), train_targs).item()
-      #else:
-      #  loss = crit(model(train_feats), train_targs).item()
       losses.append(accum_loss*bs/num_examples)
-      v_dations.append(valid_crit((model,train_feats),train_targs))
+      v_dations.append(valid_crit(model, train_feats, train_targs))
       if test_data is not None:
         if has_lengths:
           loss = crit(model(test_feats,test_feats_lengths),test_targs).item()
         else:
           loss = crit(model(test_feats), test_targs).item()
         losses_test.append(loss)
-        v_dations_test.append(valid_crit((model,test_feats),test_targs))
+        v_dations_test.append(valid_crit(model, test_feats, test_targs))
       if epoch > epochs - graph:
         xlim_start += 1
       ax1.clear()
@@ -814,7 +914,7 @@ def train(model, crit, train_data, **kwargs):
     fig.tight_layout()
     plt.show()
 
-  model = model.to('cpu')
+  #model = model.to('cpu')
   return model
 
 def cross_validate_train(model, crit, train_data, k, **kwargs):
@@ -1215,9 +1315,9 @@ def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
     $class2name$ (`Dict[int, str]`): A dictionary mapping each num-
         erical class to its classname. Default: `None`.
     $gpu$ (`int`): The gpu to use if there are any available. Set
-        to -1 to use the last gpu found when gpus are present;
-        set to -2 to override using a found gpu and use the
-        cpu. Default -1.
+        to -1 to use the last GPU found when gpus are present;
+        set to -2 to override using a found gpu and instead use
+        the cpu. Default: -1.
 
   Returns:
     `float`. The total proportion (a number between 0 and 1) of
@@ -1225,15 +1325,24 @@ def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
         io (i.e., the error rate).
   """
   #_this is confusion_matrix
+
+  #check and get kwargs
   du.utils._check_kwargs(kwargs,['return_error','show','class2name','gpu'])
+  return_error = kwargs.get('return_error', False)
+  show = kwargs.get('show', False)
+  class2name = kwargs.get('class2name', None)
   gpu = kwargs.get('gpu', -1)
+
   device = du.utils.get_device(gpu)
+
+  # check things and if necessary push the inputs through the model
   if classes is not None:
     assert classes.dim() == 1,\
         'The classes argument should be a 1-dim tensor not a {}-dim one.'\
             .format(classes.dim())
-  assert isinstance(yss,(torch.LongTensor,torch.cuda.LongTensor)),\
-      'Argument yss must be a LongTensor.'
+  assert isinstance(yss, IntTensor),\
+      'Argument yss must be a Long-, Int-, or ShortTensor, not {}.'.\
+          format(yss.type() if isinstance(yss,torch.Tensor) else type(yss))
   if not isinstance(prob_dists, torch.Tensor):
     assert (isinstance(prob_dists, tuple) or isinstance(yhatss, list)),\
         'Argument prob_dists must be a tuple or a list'
@@ -1253,7 +1362,6 @@ def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
       Unless you are passing in via `prob_dists`
       the model tupled with the xss, then you must provide the `classes`.
     """))
-
   assert len(prob_dists) == len(yss),\
       'Number of features ({}) must equal number of targets ({}).'\
           .format(len(prob_dists), len(yss))
@@ -1261,18 +1369,14 @@ def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
       'The prob_dists argument should be a 2-dim tensor not a {}-dim one.'\
           .format(prob_dists.dim())
 
-  return_error = kwargs.get('return_error', False)
-  show = kwargs.get('show', False)
-  class2name = kwargs.get('class2name', None)
-
+  # compute the entries in the confusion matrix
   cm_counts = torch.zeros(len(classes), len(classes))
   for prob, ys in zip(prob_dists, yss):
     cm_counts[torch.argmax(prob).item(), ys] += 1
-
   cm_pcts = cm_counts/len(yss)
   counts = torch.bincount(yss, minlength=len(classes))
 
-  # build and display the confusion matrix
+  # display the confusion matrix
   if show:
     cell_length = 5
     print(((cell_length*len(classes))//2+1)*' '+"Actual")
@@ -1311,16 +1415,16 @@ def r_squared(yhatss, yss, **kwargs):
   """Compute r_squared.
 
   Returns the coefficient of determination of two 2-d tensors
-  (where the first dimension in each indexes the examples),
-  one holding the yhatss (the predicted outputs) and the other
-  holding the actual outputs, yss.
+  (where the first dimension in each indexes the examples), one
+  holding the `yhatss` (the predicted outputs) and the other hol-
+  ding the actual outputs, `yss`.
 
   Args:
-    $yhatss$ (torch.Tensor): Either the predicted outputs (assum-
+    $yhatss$ (`torch.Tensor`): Either the predicted outputs (assum-
         ed to be of shape `(len(yhatss), 1)` (which is often just
-        `model(xss)`) or a tuple of the form `(model, xss)` (use
-        this second option if you want the `xss` pushed through
-        `model` on the fastest available device).
+        `model(xss)`) or a tuple of the form `(model, xss)`; use
+        the second option to move both `model` and `xss` to the de-
+        vice determined by `gpu` before computing `model`(`xss`).
     $yss$ (`torch.Tensor`): The actual outputs.
 
   Kwargs:
