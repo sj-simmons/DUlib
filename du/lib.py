@@ -237,7 +237,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '12/29/19'
+__date__ = '01/19/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -960,7 +960,7 @@ def train(model, crit, train_data, **kwargs):
         100*(len(train_data[0])/(len(train_data[0])+len_test_data)),
         len(train_data[0])+len_test_data))
     fig.tight_layout()
-    plt.show()
+    plt.show(block = True)
 
   #model = model.to('cpu')
   return model
