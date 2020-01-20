@@ -131,10 +131,10 @@ def stand_args(desc = '', **kwargs):
         over which train. Default: `False`.
     $prop$ (`Union[bool,float]`): As above, but for the proportion
         on which train. Default: `False`.
-    $gpu$ (`Union[bool,int]`): Add a `gpu` switch. with a note in the
-        help string to the effect: ~which gpu, if more than one~
-        ~is found; -1 for last gpu found; -2 for cpu~. Default:
-        `False`.
+    $gpu$ (`Union[bool,Tuple[int]]`): Add a `gpu` switch. with a note
+        in the help string to the effect:   ~which gpu (int or~
+        ~ints separated by whitespace) for training/validating;~
+        ~-1 for last gpu found; -2 for cpu~. Default: `False`.
     $graph$ (`Union[bool,int]`): Whether to add a switch for show-
         ing a graph during training, with a note in help to the
         effect: ~graph losses during training; redraw after this~
@@ -230,11 +230,14 @@ def stand_args(desc = '', **kwargs):
   elif prop:
     parser.add_argument('-prop', type=float, help=hstr, required = True)
 
-  hstr='which gpu, if more than one is found; -1 for last gpu found; -2 for cpu'
-  if not isinstance(gpu, bool) and isinstance(gpu, int):
-    parser.add_argument('-gpu', type=int, help=hstr, default=gpu)
+  hstr='which gpu (int or ints separated by whitespace) for\
+      training/validating; -1 for last gpu found; -2 for cpu'
+  if not isinstance(gpu, bool) and isinstance(gpu, tuple):
+    parser.add_argument('-gpu', type=int, help=hstr, metavar='gpu',
+        nargs='*', default=gpu)
   elif isinstance(gpu, bool) and gpu:
-    parser.add_argument('-gpu', type=int, help=hstr, required=True)
+    parser.add_argument('-gpu', type=int, help=hstr, metavar='gpu',
+        nargs='*', required=True)
 
   if not isinstance(graph, bool) and isinstance(graph, int):
     hstr='1 to graph losses while training; > 1 to redraw after that many epochs'
@@ -295,24 +298,25 @@ def stand_args(desc = '', **kwargs):
   return  parser
 
 def get_device(gpu = -1):
-  """Get the best device to run on.
+  """Get a device, among those available, on which to compute.
 
   Args:
-    $gpu$ (`int`): The gpu to use. Set to -1 to use the last gpu
-        found when gpus are present; set to -2 to override us-
-        ing a found gpu and instead use the cpu. Default: `-1`.
+    $gpu$ (`int`): The gpu to use. Set to -1 to use the last GPU
+        found when GPUs are present; set this to -2 to override
+        using a found GPU and instead use the (first) CPU. Defa-
+        ult: `-1`.
 
   Returns:
-    `Union[torch.device, str]`. An instance of `torch.device` or a
-        string that can be passed to torch tensors and modules
-        using the `to` method.
+    `torch.device`. An instance of `torch.device` which can then
+        be passed to `torch` tensors and modules (using their `to`
+        method).
   """
   if gpu > -2:
     return torch.device("cuda:{0}".format(
                (torch.cuda.device_count() + gpu) % torch.cuda.device_count()
-           )) if torch.cuda.is_available() else "cpu"
+           )) if torch.cuda.is_available() else torch.device('cpu:0')
   else:
-    return 'cpu'
+    return torch.device('cpu:0')
 
 def format_num(number):
   """Format a small number nicely.

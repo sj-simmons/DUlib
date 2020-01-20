@@ -224,7 +224,9 @@ trained models.
 #    testing data. DON"T DO THIS so that training without graph
 #    will be fast.
 
+import time
 import tkinter
+import copy
 import torch
 import torch.nn as nn
 from types import FunctionType
@@ -574,18 +576,30 @@ def train(model, crit, train_data, **kwargs):
 
   !Notes on training with a GPU!
 
-  In the presence of a GPU, The `gpu` argument determines the de-
-  vice on which the model is trained. By default (which is `gpu=`
-  `-1`) training takes place on the last GPU found.
+  In the presence of at least one GPU, the `gpu` argument can be
+  used to move some or all computations to the GPU(s). Generic-
+  ally one can accept the default (`gpu` = `(-1,)`) which sends all
+  computations to the (last of any) found GPU(s) and, if there
+  are no GPU(s), to the (first) CPU.
 
-  Minibatches are moved from device 'cpu' to the device set via
-  `gpu` just before they are forward-passed through the model du-
-  ring training. With that exception, training data is kept on
-  the 'cpu' device; meanwhile, the model has always been moved
-  to the training device (set via `gpu`) at the beginning of tra-
-  ining.
+  Just before mini-batches are forward-passed through the model
+  during training, they are moved from the CPU to the training
+  device determined by the first entry in the tuple `gpu`. Mean-
+  while, the model has always been moved to the training device
+  at the beginning of training.
 
-  !Note on validation!
+  !Note on validation and efficiency!
+
+  In order to provide an option that trains as efficiently as
+  possible, unless `graph` is positive, any test data is ignored;
+  that is, the model is simply trained on the provided training
+  data, and the loss per epoch is displayed to the console. Use
+  the default `gpu = -1` to train on the fastest device.
+
+  You can set `graph` to be positive (and forego testing data) in
+  order to real-time graph the losses per epoch at cost in time
+  but at no cost in VRAM (assuming you have GPU(s)) if you set
+  `gpu = (-1, -2)`.
 
   By default, any provided `test_data` resides on the device on
   which training occurs. In a bind (such as running out of vram
@@ -634,7 +648,7 @@ def train(model, crit, train_data, **kwargs):
         If the data are not of variable length, then there is
         no need to pass the middle tensor in the triple above;
         so one passes just
-                 `(train_features, train_targets)`.
+                  `(train_features, train_targets)`.
         In any case, `train_features` must have dimension greater
         than or equal to 2, while `train_targets` should be 2-dim
         in the case of a regression problem (i.e., if it holds
@@ -663,73 +677,93 @@ def train(model, crit, train_data, **kwargs):
         before each back-propagation). Default: -1.
     $epochs$ (`int`): The number of epochs to train over, where an
         epoch is the 'time' required to see each training exam-
-        ple exactly once. Default: 10.
+        ple exactly once. Default: `10`.
     $graph$ (`int`): If positive then, during training, display a
         real-time graph. If greater than 1, then the beginning
         `graph` number of losses are thrown away when displaying
         the graph at the completion of training. Displaying a
         graph at all requires `matplotlib`, and a running X serv-
-        er). If 0, do not display a graph. Default: 0.
+        er). If 0, do not display a graph. Default: `0`.
     $print_lines$ (`Tuple[int, int]`): A tuple, the first component
         of which is the number of epochs to normally print the
         loss per epoch during training, and the second of which
         is the number of lines to print lastly. If at least one
         element of the tuple is 0 (resp., -1), then no (resp.,
-        all) lines are printed. Default: (7, 8).
-    $verb$ (`int`): Verbosity; 0 = silent, ... , 3 = all. Def.: 2.
-    $gpu$ (`int`): The GPU to use for training (if any are availab-
-        le. Set this to -1 to use the last GPU found when GPUs
-        are present (and use the CPU if no GPU found); set to
-        -2 to override using a found GPU and use the CPU. Def-
-        ault: -1.
-    $valid_crit$ (`function`): If `graph` is positive, and `test_data`
-        is present then, while graphing, `valid_crit` is applied
-        to test data after every epoch, and the output is disp-
-        layed on the graph. The default (`True`) results in auto-
-        matically using `r-squared` if the target data are float-
-        ing point tensors, and to using `confusion_matrix` if the
-        targets are tensors of integers. Any function that maps
-        `model`, the test features, and the test targets to a fl-
+        all) lines are printed. Default: `(7, 8)`.
+    $verb$ (`int`): Verbosity; 0 = silent, ... , 3 = all. Def.: `2`.
+    $gpu$ (`Tuple[int]`): Tuple of `int`s of length 1 or 2 where the
+        first entry determines the device to which the model is
+        moved and, in fact, on which the forwarding and back-
+        propagation through the model takes place. The second
+        entry determines the device to which the model is deep
+        copied (if necessary) for the purpose of validation ag-
+        aisnt any test data present. If this is a length 1 tup-
+        le, then that number is used to determine both devices.
+
+        If no GPUs are present, then accept the default. Other-
+        wise an `int` determines the GPU to use for training/val-
+        dating. Set this to -1 to use the last GPU found when
+        GPU(s) are present (and to use the CPU if no GPU is fo-
+        und); set to -2 to override using a found GPU and inst-
+        ead use the CPU. Default: ``(-1,)`.
+    $valid_crit$ (`Union(bool, function)`): If `graph` is positive,
+        and `test_data` is present then, while graphing, `valid_`
+        `crit` is applied to test data after every epoch, and the
+        output is displayed on the graph. The default (which is
+        `True`) results in automatically using `r-squared` if the
+        target data are floating point tensors, and to using `co`
+        `nfusion_matrix` if the targets are tensors of integers.
+
+        FIX THIS
+        Any function that maps `model`, the test features, and the test targets to a fl-
         oat can be provided (see above for an example).
 
   Returns:
     `nn.Module`. The trained model (still on the device determin-
         ed by `gpu`).
   """
-  #_this is train
+  # this is train
 
   # check and process kwargs
   du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
       'graph','print_lines','verb','gpu','valid_crit'])
   test_data = kwargs.get('test_data', None)
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
-  bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 10)
+  bs = kwargs.get('bs', -1)
+  epochs = kwargs.get('epochs', 10)
   print_init, print_last = kwargs.get('print_lines',(7, 8))
-  verb = kwargs.get('verb', 2); graph = kwargs.get('graph', 0)
-  gpu = kwargs.get('gpu', -1)
+  verb = kwargs.get('verb', 2)
+  graph = kwargs.get('graph', 0)
+  gpu = kwargs.get('gpu', (-1,))
   valid_crit = kwargs.get('valid_crit', True)
 
-  du.utils._catch_sigint() # try to catch crtl-C
+  start = time.time()
 
   graph = 1 if graph == True else graph
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
 
-  # get device determined by the arg gpu, for now use that memory only for model
-  device = du.utils.get_device(gpu)
-  model_device = device
-  data_device = 'cpu'
+  # get devices determined by the arg gpu
+  if isinstance(gpu, (tuple,list)) and len(gpu) == 1: gpu = (gpu[0], gpu[0])
+  else: assert isinstance(gpu, (tuple,list)) and len(gpu) > 1
+  model_device = du.utils.get_device(gpu[0])
+  valid_device = du.utils.get_device(gpu[1])
+  data_device = torch.device('cpu',0)
 
-  # parse the training data and leave it in 'cpu' (or data_device) memory
+  # parse the training data and leave it in data_device memory
   train_feats,train_feats_lengths,train_targs=_parse_data(train_data,data_device)
   has_lengths = True if train_feats_lengths is not None else False
   num_examples = len(train_feats)
   if bs <= 0: bs = num_examples
   if verb > 0:
-    print('training on {} (data on {})'.format(model_device, data_device))
+    print('training on {} (data on {})'.format(model_device, data_device),end='')
+    if valid_crit and graph>0: print('; validating on {}'.format(valid_device))
+    else: print()
+
+  # move the model to the right device
   model = model.to(model_device)
   if verb > 2: print(model)
 
-  #process learn_params
+  # process learn_params
   has_optim = False
   if isinstance(learn_params, Dict):
     for key in learn_params.keys(): assert key in ['lr','mo'],\
@@ -751,20 +785,29 @@ def train(model, crit, train_data, **kwargs):
   else:
     assert isinstance(learn_params, LearnParams_), dedent("""\
         learn_params must be a dict or an instance of a subclass of
-        LearnParams_, not a {}.
-    """.format(type(learn_params)))
+        LearnParams_, not a {}.""".format(type(learn_params)))
+    # set the device for learn params
     learn_params.set_device(model_device)
     if verb > 1: print(learn_params, end=', ')
     if verb > 1: print('batchsize:', bs)
 
-  # set up console printing
-  if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
+  # setup valid_crit
+  if isinstance(valid_crit, bool):
+    if valid_crit:
+      if isinstance(train_data[-1], FloatTensor):
+        valid_crit = lambda yhatss, yss: r_squared(yhatss,yss,gpu=valid_device)
+      elif isinstance(train_data[-1], IntTensor):
+        valid_crit = lambda prob_dists, yss:\
+            confusion_matrix(prob_dists, yss, gpu=valid_device)
+      else:
+        raise RuntimeError('please specify a function to use for validation')
+  else:
+    assert isinstance(valid_crit, FunctionType)
 
   if graph:
     # don't import this until now in case someone no haz matplotlib
     import matplotlib.pyplot as plt
     import numpy as np
-    losses = []
     plt.ion()
     fig, ax1 = plt.subplots()
     ax1.set_xlabel('epoch', size='larger')
@@ -773,37 +816,36 @@ def train(model, crit, train_data, **kwargs):
     ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
 
-    v_dations = []
+    # once and for all clone and move train data for validation purposes if nec.
+    train_feats_copy, train_targs_copy = (train_feats, train_targs) if\
+        valid_device == data_device else\
+            (train_feats.detach().clone().to(valid_device),\
+                train_targs.detach().clone().to(valid_device))
 
-    # only bother with the following if there are test_data
-    if test_data:
+    # these will hold the losses and validations for train data
+    losses = []
+    if valid_crit: v_dations = []
+
+    # only bother with the following if there are test_data and valid_crit
+    if test_data and valid_crit:
       if len(test_data[0]) == 0: test_data = None
       else:
-        if isinstance(valid_crit, bool) and valid_crit:
-          print('here',type(valid_crit))
-          test_feats, test_feats_lengths, test_targs =\
-              _parse_data(test_data, model_device)
-        else:
-          print('here2',type(valid_crit))
-          test_feats, test_feats_lengths, test_targs =\
-              _parse_data(test_data, data_device)
+        # once and for all put the test data on valid_device
+        test_feats, test_feats_lengths, test_targs =\
+            _parse_data(test_data, valid_device)
         num_test_examples = len(test_data)
+
+        # this will hold the losses for test data
         losses_test=[]
 
+      # this will hold the validations for test data
       v_dations_test = []
 
-      # setup valid_crit
-      if isinstance(valid_crit, bool):
-        if valid_crit:
-          if isinstance(train_data[-1], FloatTensor):
-            valid_crit = lambda yhatss,yss: r_squared(yhatss, yss, gpu=gpu)
-          elif isinstance(train_data[-1], IntTensor):
-            valid_crit = lambda model, xss, yss: \
-                confusion_matrix((model,xss), yss, gpu=gpu)
-          else:
-            raise RuntimeError('please specify a function to use for validataion')
-      else:
-        assert isinstance(valid_crit, FunctionType)
+  # set up console printing
+  if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
+
+  # try to catch crtl-C
+  du.utils._catch_sigint()
 
   # training loop
   for epoch in range(epochs):
@@ -839,7 +881,7 @@ def train(model, crit, train_data, **kwargs):
       loss_len = 20
       base_str = "epoch {0}/{1}; loss ".format(epoch+1, epochs)
       loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
-      if epochs < 20 or epoch < print_init:
+      if epochs < print_init+print_last+2 or epoch < print_init:
         print(base_str + loss_str)
       elif epoch > epochs - print_last:
         print(end='\b'*len(base_str))
@@ -854,14 +896,17 @@ def train(model, crit, train_data, **kwargs):
 
     if graph:
       losses.append(accum_loss*bs/num_examples)
-      v_dations.append(valid_crit(model, train_feats, train_targs))
+      # copy the model to the valid_device, if necessary
+      model_copy = model if valid_device == model_device else\
+          copy.deepcopy(model).to(valid_device)
+      v_dations.append(valid_crit(model_copy(train_feats_copy),train_targs_copy))
       if test_data is not None:
         if has_lengths:
-          loss = crit(model(test_feats,test_feats_lengths),test_targs).item()
+          loss=crit(model_copy(test_feats,test_feats_lengths),test_targs).item()
         else:
-          loss = crit(model(test_feats), test_targs).item()
+          loss = crit(model_copy(test_feats), test_targs).item()
         losses_test.append(loss)
-        v_dations_test.append(valid_crit(model, test_feats, test_targs))
+        v_dations_test.append(valid_crit(model_copy(test_feats), test_targs))
       if epoch > epochs - graph:
         xlim_start += 1
       ax1.clear()
@@ -905,6 +950,9 @@ def train(model, crit, train_data, **kwargs):
         exit()
       fig.tight_layout()
 
+  end = time.time()
+  if verb > 0: print ('trained in {:.2f} secs'.format(end-start))
+
   if graph:
     plt.ioff()
     plt.title('trained on {} ({:.1f}%) of {} examples'.format(
@@ -946,7 +994,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         ension at least 2, with the first dimension indexing
         the training examples.
     $k$ (`int`): The number of folds on which to cross-validate.
-        Default: 10.
+        Default: `10`.
 
   Kwargs:
     $valid_crit$ (`nn.Module`): The validation criterion to use
@@ -1073,10 +1121,10 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         ension at least 2, with the first dimension indexing
         the training examples.
     $k$ (`int`): The number of folds on which to cross-validate.
-        Default: 10.
+        Default: `10`.
     $bail_after$ (`int`): The number of steps of cross_validation
         training after which to bail if no improvement is seen.
-        Default: 10.
+        Default: `10`.
 
   Kwargs:
     $valid_crit$ (`nn.Module`): The validation criterion to use
@@ -1116,7 +1164,6 @@ def cross_validate(model, crit, train_data, k, **kwargs):
   du.utils._check_kwargs(kwargs,['k','bail_after','valid_crit',\
       'cent_norm_feats','cent_norm_targs','learn_params','bs',\
       'epochs','verb','gpu'])
-  import copy
   valid_crit = kwargs.get('valid_crit', None)
   k = kwargs.get('k', 10)
   bail_after = kwargs.get('bail_after', 5)
@@ -1283,12 +1330,17 @@ def optimize_ols(feats, **kwargs):
   return return_dict
 
 def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
-  """Compute the confusion matrix.
+  """Compute and optionally display the confusion matrix.
 
   Compute the confusion matrix with respect to given `prob_dists`
   and targets, `yss`. The columns in the displayed table corres-
-  pond to the actual (correct) target class; the rows are the
-  class predicted by model.
+  pond to the actual (i.e,, correct) target class; the rows are
+  the class predicted by model.
+
+  Note: the `gpu` argument is ignored unless `prob_dists` has the
+  form of the model tupled with the inputs (see below). In that
+  case, the model as well as the inputs are moved in place to
+  the device determined by `gpu`.
 
   Args:
     $prob_dists$ (`torch.Tensor`): A tensor of dimension 2 holding,
@@ -1298,42 +1350,45 @@ def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
         in the form of probability distributions, made by a mo-
         del when fed the features of some set of examples. This
         should often be just `model(xss)`, for example.
-    $yss$ (`torch.LongTensor`): A 1-dimensional tensor holding the
-        correct class for each example.
-    $classes$ (`torch.LongTensor`): A 1-dimensional tensor holding
-        the numerical classes. This should be `torch.arange(10)`
-        for digit classification, for instance.
-
+        Alternatively, `prob_dists` can be a tuple consisting of,
+        first, `model` and, second, the inputs `xss` of some data;
+        in this case, the model will be applied to the data on
+        the devie determined by `gpu`.
+    $yss$ (`IntTensor`): A 1-dimensional tensor holding the cor-
+        rect class (as some flavor of an `int`) for each example.
   Kwargs:
-    $return_error$ (`bool`): If `True` return the error in the form
-        of a `float` between 0 and 1, inclusive, representing
-        the error; if `False`, return a float representing the
-        proportion of examples correctly classified. Default:
-        `False`.
-    $show$ (`bool`): If `True` display the (ascii) confusion mat-
-        rix. Default: `False`.
+    $classes$ (`IntTensor`): A 1-dimensional tensor holding the nu-
+        merical classes. This is naturally `torch.arange(10)` for
+        digit classification, for instance.
+        Default: `torch.arange(len(prob_dists[0]))`.
+    $return_error$ (`bool`): If `True`, return the error in the form
+        of a `float` between 0 and 1, inclusive; if `False`, return
+        a `float` representing the proportion of examples correc-
+        tly classified. Default: `False`.
+    $show$ (`bool`): If `True`, display the (ascii) confusion matrix.
+        Default: `False`.
     $class2name$ (`Dict[int, str]`): A dictionary mapping each num-
         erical class to its classname. Default: `None`.
-    $gpu$ (`int`): The gpu to use if there are any available. Set
-        to -1 to use the last GPU found when gpus are present;
-        set to -2 to override using a found gpu and instead use
-        the cpu. Default: -1.
+    $gpu$ (`Union[torch.device, int]`): The GPU to use if there are
+        any available. Set this to -1 to use the last GPU found
+        or, if none GPUs are found, use the (first) CPU; set to
+        -2 to override using any found GPU and instead use the
+        CPU. Alternatively, one can set this to an instance of
+        `torch.device`. Default: `-1`.
 
   Returns:
-    `float`. The total proportion (a number between 0 and 1) of
-        correct predictions or (optionally) one minus that rat-
-        io (i.e., the error rate).
+    `float`. The total proportion of correct predictions or, opt-
+        ionally, one minus that ratio (i.e., the error).
   """
-  #_this is confusion_matrix
-
   #check and get kwargs
-  du.utils._check_kwargs(kwargs,['return_error','show','class2name','gpu'])
+  du.utils._check_kwargs(kwargs,['classes','return_error','show','class2name',
+      'gpu'])
+  classes = kwargs.get('classes', None)
   return_error = kwargs.get('return_error', False)
   show = kwargs.get('show', False)
   class2name = kwargs.get('class2name', None)
   gpu = kwargs.get('gpu', -1)
-
-  device = du.utils.get_device(gpu)
+  device = gpu if isinstance(gpu,torch.device) else du.utils.get_device(gpu)
 
   # check things and if necessary push the inputs through the model
   if classes is not None:
@@ -1345,23 +1400,16 @@ def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
           format(yss.type() if isinstance(yss,torch.Tensor) else type(yss))
   if not isinstance(prob_dists, torch.Tensor):
     assert (isinstance(prob_dists, tuple) or isinstance(yhatss, list)),\
-        'Argument prob_dists must be a tuple or a list'
+        'Argument prob_dists must be a tuple like (model, xss) or a list'
     assert (isinstance(prob_dists[0], nn.Module) and\
         isinstance(prob_dists[1], torch.Tensor)), dedent("""\
-            If agrument prob_dists is an interable,
-            then the first item should be the model, and the second
-            should be the tensor xss.
-        """)
+            If agrument prob_dists is an interable, then the first item
+            should be the model, and the second should be the tensor xss.""")
     model = prob_dists[0].to(device)
     with torch.no_grad():
-      if classes is None:
-        classes = torch.arange(model(prob_dists[1].to(device)).size()[1])
       prob_dists = model(prob_dists[1].to(device))
-  else:
-    assert classes is not None, du.utils._markup(dedent("""\
-      Unless you are passing in via `prob_dists`
-      the model tupled with the xss, then you must provide the `classes`.
-    """))
+  if classes is None:
+    classes = torch.arange(len(prob_dists[0]))
   assert len(prob_dists) == len(yss),\
       'Number of features ({}) must equal number of targets ({}).'\
           .format(len(prob_dists), len(yss))
@@ -1419,6 +1467,10 @@ def r_squared(yhatss, yss, **kwargs):
   holding the `yhatss` (the predicted outputs) and the other hol-
   ding the actual outputs, `yss`.
 
+  Note: `yhatss` and `yss` - or `model`, `xss`, and `yss` if the second
+  option (see below) is used - are each moved in place to the
+  to the device determined by `gpu`.
+
   Args:
     $yhatss$ (`torch.Tensor`): Either the predicted outputs (assum-
         ed to be of shape `(len(yhatss), 1)` (which is often just
@@ -1428,63 +1480,59 @@ def r_squared(yhatss, yss, **kwargs):
     $yss$ (`torch.Tensor`): The actual outputs.
 
   Kwargs:
-    $return_error$ (`bool`): If False return the proportion of the
-        variation explained by the regression line. If True,
-        return 1 minus that proportion. Default: False.
-    $gpu$ (`int`): The gpu to use if there are any available. Set
-        to -1 to use the last gpu found when gpus are present;
-        set to -2 to override using a found gpu and use the
-        cpu. Default -1.
+    $return_error$ (`bool`): If `False`, return the proportion of the
+        variation explained by the regression line. If `True`,
+        return 1 minus that proportion. Default: `False`.
+    $gpu$ (`Union[torch.device, int]`): The GPU to use if there are
+        any available. Set this to -1 to use the last GPU found
+        or, if none GPUs are found, use the (first) CPU; set to
+        -2 to override using any found GPU and instead use the
+        CPU. Alternatively, one can set this to an instance of
+        `torch.device`. Default: `-1`.
 
   Returns:
     `float`. The proportion of variation explained by the model
         (as compared to a constant model) or (optionally) 1 mi-
-        that, i.e., the proportion unexplained.
+        nus that proportion (i.e., the proportion unexplained).
 
-  >>> yhatss = torch.arange(4.).unsqueeze(1)
-  >>> yss = torch.tensor([-1., 5., 2., 3.]).unsqueeze(1)
-  >>> r_squared(yhatss, yss)
+  >>> `yhatss = torch.arange(4.).unsqueeze(1)`
+  >>> `yss = torch.tensor([-1., 5., 2., 3.]).unsqueeze(1)`
+  >>> `r_squared(yhatss, yss)`
   0.09333...
   """
   du.utils._check_kwargs(kwargs,['return_error','gpu'])
   return_error = kwargs.get('return_error', False)
   gpu = kwargs.get('gpu', -1)
-  device = du.utils.get_device(gpu)
+  device = gpu if isinstance(gpu, torch.device) else du.utils.get_device(gpu)
+
   if not isinstance(yhatss, torch.Tensor):
     assert isinstance(yhatss, (tuple,list)),\
-        'Argument yhatss must be a tuple or a list'
+        'Argument yhatss must be a tuple of the form (model, tensor), or a list'
     assert (isinstance(yhatss[0], nn.Module) and\
         isinstance(yhatss[1], torch.Tensor)), dedent("""\
-            If agrument yhatss is an interable, then the first item
-            should be the model, and the second should be the xss
-        """)
+            If agrument yhatss is an iterable, then the first item should be
+            the model, and the second should be the xss.""")
     model = yhatss[0].to(device)
     with torch.no_grad():
       yhatss = model(yhatss[1].to(device))
   assert yhatss.dim() == yss.dim(), dedent("""\
-      The arguments yhatss (dim = {}) and yss (dim = {}) must have
-      the same dimension.
-  """.format(yhatss.dim(), yss.dim()))
+      The arguments yhatss (dim = {}) and yss (dim = {}) must have the
+      same dimension.""".format(yhatss.dim(), yss.dim()))
   assert yhatss.dim() == 2, dedent("""\
-      Multiple outputs not implemented yet; yhatss should have dim-
-      ension 2, not {}.
-  """.format(yhatss.dim()))
+      Multiple outputs not implemented yet; yhatss should have dimen-
+      sion 2, not {}.""".format(yhatss.dim()))
   assert len(yhatss) == len(yss), dedent("""\
       len(yhatss) is {} which is not equal to len(yss) which is {}
   """.format(len(yhatss),len(yss)))
   assert yhatss.size()[1] ==  yss.size()[1] == 1, dedent("""\
-      The first dimension of yhatss and yss should index the examples.
-  """)
+      The first dimension of yhatss and yss should index the examples.""")
   ave_sum_squares = nn.MSELoss()
   yhatss = yhatss.squeeze(1).to(device)
   yss = yss.squeeze(1).to(device)
   SS_E = len(yss) * ave_sum_squares(yhatss, yss)
-  SS_T = len(yss) * ave_sum_squares(yss, yss.mean(0) *\
-      torch.ones(len(yss)).to(device))
-  if return_error:
-    return (SS_E/SS_T).item()
-  else:
-    return 1.0-(SS_E/SS_T).item()
+  SS_T=len(yss)*ave_sum_squares(yss,yss.mean(0)*torch.ones(len(yss)).to(device))
+  if return_error: return (SS_E/SS_T).item()
+  else: return 1.0-(SS_E/SS_T).item()
 
 if __name__ == '__main__':
   import inspect
