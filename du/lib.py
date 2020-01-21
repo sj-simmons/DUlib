@@ -49,7 +49,7 @@ trained models.
      $epochs$ = `10`,-train for this many epochs
      $graph$ = `0`,  -put 1 (or more) to show graph when training
      $print_lines$ = `(7,8)`,
-                 -print 17 beginning lines and 7 ending lines
+                 -print 7 beginning lines and 8 ending lines
      $verb$ = `2`,   -verbosity; 3 for more, 1 for less, 0 silent
      $gpu$ = `-1`,   -the gpu to run on, if any are available; if
                   none available, use the cpu; put -1 to use
@@ -158,6 +158,10 @@ trained models.
                     _____________________
 """
 #Todo:
+#  - consider allowing train to just accept args.
+#  - consider adding functionality to train where gpu can be a neg
+#    int, and saves image equivalent to that positive int instead
+#    of displaying it.
 #  - in the ducktyping, the Tensor types could be cleaned up, and
 #    in docstrings it just says e.g. LongTensor
 #  - Add to docs of confusion_matrix about passing in model too
@@ -237,7 +241,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/19/20'
+__date__ = '01/20/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -684,12 +688,11 @@ def train(model, crit, train_data, **kwargs):
         the graph at the completion of training. Displaying a
         graph at all requires `matplotlib`, and a running X serv-
         er). If 0, do not display a graph. Default: `0`.
-    $print_lines$ (`Tuple[int, int]`): A tuple, the first component
-        of which is the number of epochs to normally print the
-        loss per epoch during training, and the second of which
-        is the number of lines to print lastly. If at least one
-        element of the tuple is 0 (resp., -1), then no (resp.,
-        all) lines are printed. Default: `(7, 8)`.
+    $print_lines$ (`Tuple[int]`): A tuple, the first component of
+        which is the number of losses to print before/after the
+        ellipses during compressed printing to the console. A
+        length one tuple is duplicated into a length two one.
+        Put (-1,) to print all losses. Default: `(7, 8)`.
     $verb$ (`int`): Verbosity; 0 = silent, ... , 3 = all. Def.: `2`.
     $gpu$ (`Tuple[int]`): Tuple of `int`s of length 1 or 2 where the
         first entry determines the device to which the model is
@@ -731,7 +734,11 @@ def train(model, crit, train_data, **kwargs):
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
   bs = kwargs.get('bs', -1)
   epochs = kwargs.get('epochs', 10)
-  print_init, print_last = kwargs.get('print_lines',(7, 8))
+  print_lines = kwargs.get('print_lines',(7, 8))
+  if len(print_lines) > 1:
+    print_init, print_last = print_lines
+  else:
+    print_init, print_last = print_lines[0], print_lines[0]
   verb = kwargs.get('verb', 2)
   graph = kwargs.get('graph', 0)
   gpu = kwargs.get('gpu', (-1,))

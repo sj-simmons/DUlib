@@ -26,7 +26,7 @@ import inspect
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/19/20'
+__date__ = '01/20/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -175,13 +175,19 @@ def stand_args(desc = '', **kwargs):
         random seed. Default: `False`.
     $small$ (`Union[bool,float]`): Read in only this proportion of
         the data. Default: `False`.
+    $print_lines$ (`Union[bool,tuple[int]]`): Whether to add switch
+        controlling compressed printing to the console, with
+        help string: ~ints separated by whitespace controlling~
+        ~no. lines to print before/after the ellipsis; put -1 to~
+        ~disable compressed printing~. Default: (7, 8).
 
   Returns:
     (`argparse.ArgumentParser`). The parser object to which the
         calling program can add more names.
   """
   _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','prop', 'gpu',\
-      'graph','ser','pred','widths','channels','verb','small','cm'])
+      'graph','ser','pred','widths','channels','verb','small','cm',\
+      'print_lines'])
   lr = kwargs.get('lr', False)
   mo = kwargs.get('mo', False)
   bs = kwargs.get('bs', False)
@@ -197,6 +203,7 @@ def stand_args(desc = '', **kwargs):
   channels = kwargs.get('channels',False)
   verb = kwargs.get('verb',False)
   small = kwargs.get('small',False)
+  print_lines = kwargs.get('print_lines',False)
 
   parser = argparse.ArgumentParser( description = desc, formatter_class =\
       argparse.ArgumentDefaultsHelpFormatter)
@@ -295,6 +302,15 @@ def stand_args(desc = '', **kwargs):
   elif small:
     parser.add_argument('-small', type=float, help=hstr, required = True)
 
+  hstr='ints separated by whitespace controlling no. lines to print\
+    before/after the ellipsis; put -1 to disable compressed printing'
+  if not isinstance(print_lines, bool) and isinstance(print_lines, tuple):
+    parser.add_argument('-print_lines', type=int, help=hstr,
+        metavar='print_lines', nargs='*', default=print_lines)
+  elif isinstance(epochs,bool) and epochs:
+    parser.add_argument('-print_lines', type=int, help=hstr,
+        metavar='print_lines', nargs='*', required=True)
+
   return  parser
 
 def get_device(gpu = -1):
@@ -317,6 +333,52 @@ def get_device(gpu = -1):
            )) if torch.cuda.is_available() else torch.device('cpu:0')
   else:
     return torch.device('cpu:0')
+
+def print_devices():
+  """print available devices"""
+
+  print('number of available (CPU) threads:',torch.get_num_threads())
+  if torch.cuda.is_available():
+    import pycuda.driver as cuda
+    cuda.init()
+    print("CUDA is available:")
+    print("  ID of default device is:", torch.cuda.current_device())
+    print("  Name of default device is:", cuda.Device(0).name())
+    import pycuda.autoinit
+    class aboutCudaDevices():
+      def __init__(self):
+        pass
+
+      def num_devices(self):
+        """Return number of devices connected."""
+        return cuda.Device.count()
+
+      def devices(self):
+        """Get info on all devices connected."""
+        num = cuda.Device.count()
+        print("%d device(s) found:"%num)
+        for i in range(num):
+          print(cuda.Device(i).name(), "(Id: %d)"%i)
+
+      def mem_info(self):
+        """Get available and total memory of all devices."""
+        available, total = cuda.mem_get_info()
+        print("Available: %.2f GB\nTotal:     %.2f GB"%(available/1e9, total/1e9))
+
+      def attributes(self, device_id=0):
+        """Get attributes of device with device Id = device_id"""
+        return cuda.Device(device_id).get_attributes()
+
+      def __repr__(self):
+        """Class representation as number of devices connected and about them."""
+        num = cuda.Device.count()
+        string = ""
+        string += ("%d device(s) found:\n"%num)
+        for i in range(num):
+          string += ("  %d) %s (Id: %d)\n"%((i+1),cuda.Device(i).name(),i))
+          string += ("    Memory: %.2f GB\n"%(cuda.Device(i).total_memory()/1e9))
+        return string
+    print(aboutCudaDevices())
 
 def format_num(number):
   """Format a small number nicely.
