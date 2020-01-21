@@ -26,7 +26,7 @@ import inspect
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/20/20'
+__date__ = '01/21/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -176,10 +176,10 @@ def stand_args(desc = '', **kwargs):
     $small$ (`Union[bool,float]`): Read in only this proportion of
         the data. Default: `False`.
     $print_lines$ (`Union[bool,tuple[int]]`): Whether to add switch
-        controlling compressed printing to the console, with
-        help string: ~ints separated by whitespace controlling~
-        ~no. lines to print before/after the ellipsis; put -1 to~
-        ~disable compressed printing~. Default: (7, 8).
+        controlling compressed printing to the console, where
+        the help string: ~ints separated by whitespace controll-~
+        ~ing the no. of lines to print before/after the ellips-~
+        ~is; put -1 todisable compressed printing~. Default: (7,8).
 
   Returns:
     (`argparse.ArgumentParser`). The parser object to which the
@@ -363,7 +363,7 @@ def print_devices():
       def mem_info(self):
         """Get available and total memory of all devices."""
         available, total = cuda.mem_get_info()
-        print("Available: %.2f GB\nTotal:     %.2f GB"%(available/1e9, total/1e9))
+        print("Available: %.2f GB\nTotal:     %.2f GB"%(available/1e9,total/1e9))
 
       def attributes(self, device_id=0):
         """Get attributes of device with device Id = device_id"""
@@ -373,10 +373,11 @@ def print_devices():
         """Class representation as number of devices connected and about them."""
         num = cuda.Device.count()
         string = ""
-        string += ("%d device(s) found:\n"%num)
+        string += ("%d CUDA device(s) found:\n"%num)
         for i in range(num):
           string += ("  %d) %s (Id: %d)\n"%((i+1),cuda.Device(i).name(),i))
-          string += ("    Memory: %.2f GB\n"%(cuda.Device(i).total_memory()/1e9))
+          string +=\
+              ("     Memory: %.2f GB\n"%(cuda.Device(i).total_memory()/1e9))
         return string
     print(aboutCudaDevices())
 

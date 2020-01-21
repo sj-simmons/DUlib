@@ -49,7 +49,8 @@ trained models.
      $epochs$ = `10`,-train for this many epochs
      $graph$ = `0`,  -put 1 (or more) to show graph when training
      $print_lines$ = `(7,8)`,
-                 -print 7 beginning lines and 8 ending lines
+                 -print 7 beginning lines and 8 ending lines;
+                  put -1 to disable compressed printing.
      $verb$ = `2`,   -verbosity; 3 for more, 1 for less, 0 silent
      $gpu$ = `-1`,   -the gpu to run on, if any are available; if
                   none available, use the cpu; put -1 to use
@@ -241,7 +242,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/20/20'
+__date__ = '01/21/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -584,7 +585,7 @@ def train(model, crit, train_data, **kwargs):
   used to move some or all computations to the GPU(s). Generic-
   ally one can accept the default (`gpu` = `(-1,)`) which sends all
   computations to the (last of any) found GPU(s) and, if there
-  are no GPU(s), to the (first) CPU.
+  are no GPU(s), to the (first) CPU (thread).
 
   Just before mini-batches are forward-passed through the model
   during training, they are moved from the CPU to the training
@@ -598,16 +599,23 @@ def train(model, crit, train_data, **kwargs):
   possible, unless `graph` is positive, any test data is ignored;
   that is, the model is simply trained on the provided training
   data, and the loss per epoch is displayed to the console. Use
-  the default `gpu = -1` to train on the fastest device.
+  the default `gpu = (-1,)` to train on the fastest available de-
+  vice.
 
   You can set `graph` to be positive (and forego testing data) in
   order to real-time graph the losses per epoch at cost in time
   but at no cost in VRAM (assuming you have GPU(s)) if you set
-  `gpu = (-1, -2)`.
+  `gpu = (-1, -2)`. Here the -1 leads to training on the GPU and
+  the -2 causes validation during training to take place on the
+  CPU. Moreover, the training data is immediately copied to the
+  CPU, thus freeing VRAM for training (at the expense of time
+  efficiency since the validation is slower on a CPU).
 
   By default, any provided `test_data` resides on the device on
   which training occurs. In a bind (such as running out of vram
-  when training on a GPU) one might try the following (result-
+  when training on a GPU) one can again set `gpu = (-1, -2)`
+  
+  might try the following (result-
   ing in significant slowdown, typically):
 
   `import copy`
@@ -717,9 +725,9 @@ def train(model, crit, train_data, **kwargs):
         target data are floating point tensors, and to using `co`
         `nfusion_matrix` if the targets are tensors of integers.
 
-        FIX THIS
-        Any function that maps `model`, the test features, and the test targets to a fl-
-        oat can be provided (see above for an example).
+        Any function that maps the outputs of `model` (e.g., `yhat`
+        `ss` or `prob_dists`) along with `yss` to a float can be
+        provided for `valid_crit`.
 
   Returns:
     `nn.Module`. The trained model (still on the device determin-

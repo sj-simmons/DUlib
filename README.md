@@ -6,11 +6,16 @@
 
 #### Quickstart
 
-* At the command line, install the latest release:
+* At the command line, install the latest stable release (from [pypi.org](https://pypi.org/project/DUlib/)):
   ``` bash
   pip3 install DUlib --user
   ```
-  (or `pip3 install -U DUlib --user` in the presence of a previously installed version).
+  (In the presence of a previously installed version, try `pip3 install -U DUlib --user`.)
+
+  Or, install the latest development release with, e.g.:
+  ``` bash
+  pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9  --user
+  ```
 
 You can now:
 * have a look at the module structure of DUlib: `pd du`
