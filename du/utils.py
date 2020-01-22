@@ -26,7 +26,7 @@ import inspect
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/21/20'
+__date__ = '01/23/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -176,10 +176,11 @@ def stand_args(desc = '', **kwargs):
     $small$ (`Union[bool,float]`): Read in only this proportion of
         the data. Default: `False`.
     $print_lines$ (`Union[bool,tuple[int]]`): Whether to add switch
-        controlling compressed printing to the console, where
-        the help string: ~ints separated by whitespace controll-~
-        ~ing the no. of lines to print before/after the ellips-~
-        ~is; put -1 todisable compressed printing~. Default: (7,8).
+        controlling compressed printing to console; help string
+        is: ~ints separated by whitespace controlling the no. of~
+        ~lines to print before/after the ellipsis; put -1 to di-~
+        ~sable compressed printing~. A length one tuple is dupli-
+        cated to a length two tuple. Default: `False`.
 
   Returns:
     (`argparse.ArgumentParser`). The parser object to which the
@@ -297,9 +298,9 @@ def stand_args(desc = '', **kwargs):
       parser.add_argument('-cm', help=hstr, action='store_true')
 
   hstr='read in only this proportion of the data'
-  if isinstance(small, float):
+  if isinstance(small, (float, int)):
     parser.add_argument('-small', type=float, help=hstr, default=small)
-  elif small:
+  elif small is True:
     parser.add_argument('-small', type=float, help=hstr, required = True)
 
   hstr='ints separated by whitespace controlling no. lines to print\
@@ -307,7 +308,7 @@ def stand_args(desc = '', **kwargs):
   if not isinstance(print_lines, bool) and isinstance(print_lines, tuple):
     parser.add_argument('-print_lines', type=int, help=hstr,
         metavar='print_lines', nargs='*', default=print_lines)
-  elif isinstance(epochs,bool) and epochs:
+  elif isinstance(print_lines,bool) and print_lines:
     parser.add_argument('-print_lines', type=int, help=hstr,
         metavar='print_lines', nargs='*', required=True)
 

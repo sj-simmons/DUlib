@@ -242,7 +242,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/21/20'
+__date__ = '01/23/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -612,37 +612,17 @@ def train(model, crit, train_data, **kwargs):
   efficiency since the validation is slower on a CPU).
 
   By default, any provided `test_data` resides on the device on
-  which training occurs. In a bind (such as running out of vram
-  when training on a GPU) one can again set `gpu = (-1, -2)`
-  
-  might try the following (result-
-  ing in significant slowdown, typically):
+  which training occurs. In a bind (such as running out of VRAM
+  when training on a GPU) one can again set `gpu = (-1,-2)` which
+  causes `model` to, after each training loop, be deep copied to
+  the CPU and evaluated on test_data (which resides in CPU mem-
+  ory). Of course, there is added cost and hence slow down when
+  deep copying and evaluating on the CPU.
 
-  `import copy`
-  ...
-  `model = du.lib.train(`
-    ...
-    `valid_crit = lambda model, xss, yss:`
-      `du.lib.confusion_matrix(`
-        `(copy.deepcopy(model).to('cpu',non_blocking=True),xss)`,
-        `yss`,
-        `gpu = -2`))
-
-  On a machine with more than one GPU, one can also try (likely
-  with much less, if any, slowdown):
-
-  `model = du.lib.train(`
-      ...
-      `gpu = -1`,
-      `valid_crit = lambda model, xss, yss:`
-          `du.lib.confusion_matrix(`
-              `(copy.deepcopy(model).to(`
-                  `'cuda:0',non_blocking=True), xss)`,
-              `yss`,
-              `gpu = 0`))
+  On a machine with more than one GPU, one can also try setting
+  `gpu = (0, 1)` with potentailly less slowdown.
 
                     _____________________
-
 
   Args:
     $model$ (`nn.Module`): The instance of Module to be trained.
@@ -700,7 +680,7 @@ def train(model, crit, train_data, **kwargs):
         which is the number of losses to print before/after the
         ellipses during compressed printing to the console. A
         length one tuple is duplicated into a length two one.
-        Put (-1,) to print all losses. Default: `(7, 8)`.
+        Put (-1,) to print all losses. Default: `(7,)`.
     $verb$ (`int`): Verbosity; 0 = silent, ... , 3 = all. Def.: `2`.
     $gpu$ (`Tuple[int]`): Tuple of `int`s of length 1 or 2 where the
         first entry determines the device to which the model is
@@ -713,10 +693,11 @@ def train(model, crit, train_data, **kwargs):
 
         If no GPUs are present, then accept the default. Other-
         wise an `int` determines the GPU to use for training/val-
-        dating. Set this to -1 to use the last GPU found when
-        GPU(s) are present (and to use the CPU if no GPU is fo-
-        und); set to -2 to override using a found GPU and inst-
-        ead use the CPU. Default: ``(-1,)`.
+        idating. When GPU(s) are present, set an entry of the
+        tuple to an `int` to select the corresponding GPU, or
+        to -1 to use the last GPU found (and to use the CPU if
+        no GPU is found), or to -2 to override using a found
+        GPU and instead use the CPU. Default: `(-1, -1)`.
     $valid_crit$ (`Union(bool, function)`): If `graph` is positive,
         and `test_data` is present then, while graphing, `valid_`
         `crit` is applied to test data after every epoch, and the
@@ -728,6 +709,10 @@ def train(model, crit, train_data, **kwargs):
         Any function that maps the outputs of `model` (e.g., `yhat`
         `ss` or `prob_dists`) along with `yss` to a float can be
         provided for `valid_crit`.
+    $args$ (`argparse.Namespace`): With the exception of `test_data`
+        `valid_crit`, and this argument, all `kwargs` can be passed
+        in via attributes (of the same name) of an instance of
+        `argparse.Namespace`. Default: None.
 
   Returns:
     `nn.Module`. The trained model (still on the device determin-
@@ -737,19 +722,27 @@ def train(model, crit, train_data, **kwargs):
 
   # check and process kwargs
   du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
-      'graph','print_lines','verb','gpu','valid_crit'])
+      'graph','print_lines','verb','gpu','valid_crit','args'])
   test_data = kwargs.get('test_data', None)
-  learn_params = kwargs.get('learn_params', {'lr': 0.1})
-  bs = kwargs.get('bs', -1)
-  epochs = kwargs.get('epochs', 10)
-  print_lines = kwargs.get('print_lines',(7, 8))
+  args = kwargs.get('args', None)
+  if 'args' == None:
+    class args: pass # a little finesse if args wasn't passed
+
+  learn_params = kwargs.get('learn_params',
+      {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
+       'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
+       not hasattr(args,'learn_params') else args.learn_params)
+  bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
+  epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
+  print_lines = kwargs.get('print_lines',
+      (7,) if not hasattr(args,'print_lines') else args.print_lines)
   if len(print_lines) > 1:
     print_init, print_last = print_lines
   else:
     print_init, print_last = print_lines[0], print_lines[0]
-  verb = kwargs.get('verb', 2)
-  graph = kwargs.get('graph', 0)
-  gpu = kwargs.get('gpu', (-1,))
+  verb = kwargs.get('verb', 2 if not hasattr(args,'verb') else args.verb)
+  graph = kwargs.get('graph', 0 if not hasattr(args,'graph') else args.graph)
+  gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
   valid_crit = kwargs.get('valid_crit', True)
 
   start = time.time()
@@ -760,7 +753,7 @@ def train(model, crit, train_data, **kwargs):
   # get devices determined by the arg gpu
   if isinstance(gpu, (tuple,list)) and len(gpu) == 1: gpu = (gpu[0], gpu[0])
   else: assert isinstance(gpu, (tuple,list)) and len(gpu) > 1
-  model_device = du.utils.get_device(gpu[0])
+  model_device = du.utils.get_device(gpu[0])  # where the training take place
   valid_device = du.utils.get_device(gpu[1])
   data_device = torch.device('cpu',0)
 
@@ -783,7 +776,7 @@ def train(model, crit, train_data, **kwargs):
   if isinstance(learn_params, Dict):
     for key in learn_params.keys(): assert key in ['lr','mo'],\
         "keys of learn_params dict should be 'lr' or 'mo', not {}.".format(key)
-    assert 'lr' in learn_params.keys(), "input dict must map 'lr' to float"
+    assert 'lr' in learn_params.keys(), "input dict must map 'lr' to  a float"
     lr = learn_params['lr']
     if verb > 1: print('learning rate:', du.utils.format_num(lr), end=', ')
     if 'mo' not in learn_params.keys():
@@ -898,7 +891,7 @@ def train(model, crit, train_data, **kwargs):
       loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
       if epochs < print_init+print_last+2 or epoch < print_init:
         print(base_str + loss_str)
-      elif epoch > epochs - print_last:
+      elif epoch > epochs - print_last - 1:
         print(end='\b'*len(base_str))
         print(base_str + loss_str)
       elif epoch == print_init:
