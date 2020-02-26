@@ -730,8 +730,8 @@ def train(model, crit, train_data, **kwargs):
 
   learn_params = kwargs.get('learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
-       'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
-       not hasattr(args,'learn_params') else args.learn_params)
+          'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
+           not hasattr(args,'learn_params') else args.learn_params)
   bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
   epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
   print_lines = kwargs.get('print_lines',
