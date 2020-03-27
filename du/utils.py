@@ -134,7 +134,8 @@ def stand_args(desc = '', **kwargs):
     $gpu$ (`Union[bool,Tuple[int]]`): Add a `gpu` switch. with a note
         in the help string to the effect:   ~which gpu (int or~
         ~ints separated by whitespace) for training/validating;~
-        ~-1 for last gpu found; -2 for cpu~. Default: `False`.
+        ~-1 for last gpu found (or to use cpu if no gpu found);~
+        ~-2 for cpu~. Default: `False`.
     $graph$ (`Union[bool,int]`): Whether to add a switch for show-
         ing a graph during training, with a note in help to the
         effect: ~graph losses during training; redraw after this~
@@ -239,7 +240,8 @@ def stand_args(desc = '', **kwargs):
     parser.add_argument('-prop', type=float, help=hstr, required = True)
 
   hstr='which gpu (int or ints separated by whitespace) for\
-      training/validating; -1 for last gpu found; -2 for cpu'
+      training/validating; -1 for last gpu found (or to use cpu\
+      if no gpu found); -2 for cpu'
   if not isinstance(gpu, bool) and isinstance(gpu, tuple):
     parser.add_argument('-gpu', type=int, help=hstr, metavar='gpu',
         nargs='*', default=gpu)
@@ -298,7 +300,7 @@ def stand_args(desc = '', **kwargs):
       parser.add_argument('-cm', help=hstr, action='store_true')
 
   hstr='read in only this proportion of the data'
-  if isinstance(small, (float, int)):
+  if not isinstance(small, bool) and  isinstance(small, (float, int)):
     parser.add_argument('-small', type=float, help=hstr, default=small)
   elif small is True:
     parser.add_argument('-small', type=float, help=hstr, required = True)

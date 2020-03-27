@@ -63,7 +63,6 @@ trained models.
                   using `r_squared` for regression and `confusion_`
                   `matrix` for classification.
 
-
   |cross_validate_train|
     ($model$, $crit$, $train_data$, $k$, $**kwargs$)
      This is a helper function for `cross_validate`; each epoch
@@ -230,6 +229,7 @@ trained models.
 #    will be fast.
 
 import time
+import functools
 import tkinter
 import copy
 import torch
@@ -269,11 +269,11 @@ FloatTensor = (torch.HalfTensor, torch.FloatTensor, torch.DoubleTensor,
 def center(xss, new_centers = None):
   """Center a tensor.
 
-  With this you can translate data to anywhere. If the second
-  argument is `None`, then this simply mean-centers the data al-
-  ong the first dimension; in other words, it rigidly translat-
-  es `xss` so that its mean along the first dimension is the zero
-  tensor.
+  With this you can translate (with respect to the first dimen-
+  sion) data to anywhere. If the `new_centers` is `None`, then
+  this simply mean-centers the data along the first dimension;
+  in other words, it rigidly translates `xss` so that its mean
+  along the first dimension is the zero tensor.
 
   Notice that the returned object is a tuple. So if you want to
   simply mean-center a tensor you would call this function like
@@ -528,7 +528,7 @@ class Momentum(LearnParams_):
       param.data.sub_(self.z_params[i] * self.lr)
 
 def _parse_data(data_tuple, device = 'cpu'):
-  """Helper function for the train function.
+  """Simple helper function for the train function.
 
   Args:
     $data_tuple$ (`Tuple[tensor]`): Length either 2 or 3.
@@ -550,6 +550,30 @@ def _parse_data(data_tuple, device = 'cpu'):
           format(len(feats), len(targs))
   return feats, feats_lengths, targs
 
+def _batcher(data_tuple, bs, data_device, model_device):
+  """Helper function for the train function that returns a gen-
+  erator which, after the data are coherently randomized, kicks
+  out batches of the specified size.
+
+  Args:
+    $data_tuple$ (`Tuple[tensor]`): The tensors to be coherent-
+        ly batched.
+    $bs$ (`int`): The batchsize.
+    $data_device$ (`Union[str, torch.device]`): The device on which
+        to batch the tensors from.
+    $model_device$ (`Union[str, torch.device]`): The device to move
+        the batches to just before yielding them.
+
+  Returns:
+    `generator`. A generator that yields batches in the form of
+        tuples of the same length as `data_tuple`.
+  """
+  num_examples = len(data_tuple[0])
+  tuple([t.to(data_device) for t in data_tuple])
+  indices = torch.randperm(num_examples, device = data_device)
+  for idx in range(0, num_examples, bs):
+    yield tuple([t.index_select(0,indices[idx: idx + bs]).to(model_device)\
+        for t in data_tuple])
 
 def train(model, crit, train_data, **kwargs):
   """Train a model.
@@ -719,7 +743,6 @@ def train(model, crit, train_data, **kwargs):
         ed by `gpu`).
   """
   # this is train
-
   # check and process kwargs
   du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
       'graph','print_lines','verb','gpu','valid_crit','args'])
@@ -731,7 +754,7 @@ def train(model, crit, train_data, **kwargs):
   learn_params = kwargs.get('learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
           'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
-           not hasattr(args,'learn_params') else args.learn_params)
+          not hasattr(args,'learn_params') else args.learn_params)
   bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
   epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
   print_lines = kwargs.get('print_lines',
@@ -745,7 +768,7 @@ def train(model, crit, train_data, **kwargs):
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
   valid_crit = kwargs.get('valid_crit', True)
 
-  start = time.time()
+  start = time.time() # start (naive) timing here
 
   graph = 1 if graph == True else graph
   assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
@@ -756,19 +779,23 @@ def train(model, crit, train_data, **kwargs):
   model_device = du.utils.get_device(gpu[0])  # where the training take place
   valid_device = du.utils.get_device(gpu[1])
   data_device = torch.device('cpu',0)
-
-  # parse the training data and leave it in data_device memory
-  train_feats,train_feats_lengths,train_targs=_parse_data(train_data,data_device)
-  has_lengths = True if train_feats_lengths is not None else False
-  num_examples = len(train_feats)
-  if bs <= 0: bs = num_examples
   if verb > 0:
     print('training on {} (data on {})'.format(model_device, data_device),end='')
     if valid_crit and graph>0: print('; validating on {}'.format(valid_device))
     else: print()
 
-  # move the model to the right device
-  model = model.to(model_device)
+  # parse the training data and leave it in data_device memory
+  if not isinstance(train_data, torch.utils.data.DataLoader):
+    assert 2 <= len(train_data) <= 3
+    num_examples = len(train_data[0])
+    has_lengths = True if len(train_data) > 2  else False
+  else:
+    num_examples = len(train_data)
+    has_lengths = True if len(train_data[0]) > 2 else False
+
+  if bs <= 0: bs = num_examples
+
+  model = model.to(model_device) # move the model to the right device
   if verb > 2: print(model)
 
   # process learn_params
@@ -825,10 +852,17 @@ def train(model, crit, train_data, **kwargs):
     xlim_start = 1
 
     # once and for all clone and move train data for validation purposes if nec.
-    train_feats_copy, train_targs_copy = (train_feats, train_targs) if\
-        valid_device == data_device else\
-            (train_feats.detach().clone().to(valid_device),\
-                train_targs.detach().clone().to(valid_device))
+    # is will break if not Dataloader
+    if valid_device == data_device:
+      train_feats_copy, train_targs_copy = train_data
+    else:
+      train_feats_copy, train_targs_copy = \
+          (train_data[0].detach().clone().to(valid_device),\
+              train_data[-1].detach().clone().to(valid_device))
+    #train_feats_copy, train_targs_copy = (train_feats, train_targs) if\
+    #    valid_device == data_device else\
+    #        (train_feats.detach().clone().to(valid_device),\
+    #            train_targs.detach().clone().to(valid_device))
 
     # these will hold the losses and validations for train data
     losses = []
@@ -858,24 +892,9 @@ def train(model, crit, train_data, **kwargs):
   # training loop
   for epoch in range(epochs):
     accum_loss = 0
-    indices = torch.randperm(len(train_feats), device = data_device)
-
-    for idx in range(0, num_examples, bs):
-      current_indices = indices[idx: idx + bs]
-
-      if has_lengths:
-        loss = crit(
-            model(
-                train_feats.index_select(
-                    0, current_indices).to(model_device),
-                train_feats_lengths.index_select(
-                    0, current_indices).to(model_device)),
-            train_targs.index_select(0, current_indices).to(model_device))
-      else:
-        loss = crit(
-            model(train_feats.index_select(0,current_indices).to(model_device)),
-            train_targs.index_select(0, current_indices).to(model_device))
-
+    #this breaks if not Dataloader
+    for batch in _batcher(train_data, bs, data_device, model_device):
+      loss = crit(model(*batch[:-1]), batch[-1])
       accum_loss += loss.item()
       if has_optim: learn_params.zero_grad()
       else: model.zero_grad()
