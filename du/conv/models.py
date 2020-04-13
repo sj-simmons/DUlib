@@ -21,10 +21,12 @@ metalayer model with two dense layers and a two metalayer model
 with three dense layers. The class `ConvFFNet` generalizes those
 two classes. All three classes extend `du.models.FFNet_`.
 
-The functions `metalayer` and `convFFhidden` are helper funct-
-ions for `ConvFFNet`.
+The functions `metalayer` and `convFFhidden` are helper functions
+for `ConvFFNet`.
 """
 # Todo:
+#   - ConvFFNet and others(?) only works with 1 channel input
+#     to the first conv layer (so only b&w images??).
 #   - ConvFFNet likely breaks(?) with strides and paddings other
 #     than the default
 #   - add options to change for example the nonlinearities.
@@ -236,7 +238,7 @@ class ConvFFNet(FFNet_):
       $n_out$ (`int`): Number of outputs from the model in its
           entirety. This would be 10 to say classify digits,
           or 1 for a regression problem.
-      $channels$ (`Tuple[int]`): The first entry set `in_channe`
+      $channels$ (`Tuple[int]`): The first entry sets `in_channe`
           `ls` for the first metalayer's convolutional part;
           the rest of the entries are the successive `out_cha`
           `nnels` for the convolutional part of the first met-
@@ -254,6 +256,12 @@ class ConvFFNet(FFNet_):
           means of the training data.
       $stdevs$ (`torch.Tensor`): A tensor typically holding the
           standard deviations of the training data.
+
+    >>> model = ConvFFNet((28,28), 10, (1,16,8), (100,50))
+    >>> xss = torch.rand(100,28,28) # e.g., b&w images
+    >>> yhatss = model(xss)
+    >>> yhatss.size()
+    torch.Size([100, 10])
     """
     du.utils._check_kwargs(kwargs, ['conv_kernels','pool_kernels','means',
         'stdevs','outfn'])
