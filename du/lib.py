@@ -158,7 +158,11 @@ trained models.
                     _____________________
 """
 #Todo:
-#  - consider allowing train to just accept args.
+#  - consider removing datadevice from train.  Don't need it?
+#  - look closely at 'center' for center and similar for normalize
+#  - consider allowing train to just accept args. DONE?
+#  - rewrite _Batcher to pull minibatches from dataset, and see if
+#    that is as fast as pulling them from a tuple.
 #  - consider adding functionality to train where gpu can be a neg
 #    int, and saves image equivalent to that positive int instead
 #    of displaying it.
@@ -234,6 +238,7 @@ import tkinter
 import copy
 import torch
 import torch.nn as nn
+import torch.utils.data
 from types import FunctionType
 from typing import Dict
 from textwrap import dedent
@@ -321,10 +326,9 @@ def center(xss, new_centers = None):
     assert new_centers.size() == xss_means.size(),\
         'new_centers must have size {}, not {}'.\
             format(xss_means.size(),new_centers.size())
-    new_xss = xss.sub_(new_centers)
   else:
-    new_xss = xss.sub_(xss_means)
-  return new_xss, xss_means
+    new_centers = xss_means
+  return xss - new_centers, xss_means
 
 def normalize(xss, new_widths = None, unbiased = True):
   """Normalize without dividing by zero.
@@ -336,7 +340,8 @@ def normalize(xss, new_widths = None, unbiased = True):
     $xss$ (`torch.Tensor`)
     $new_widths$ (`torch.Tensor`)
     $unbiased$ (`bool`): If unbiased is `False`, divide by `n` instead
-        of `n-1` when computing the standard deviation.
+        of `n-1` when computing the standard deviation. Default:
+        True.
 
   Returns:
     `(torch.Tensor, torch.Tensor)`. A tuple of tensors the first
@@ -550,30 +555,83 @@ def _parse_data(data_tuple, device = 'cpu'):
           format(len(feats), len(targs))
   return feats, feats_lengths, targs
 
-def _batcher(data_tuple, bs, data_device, model_device):
-  """Helper function for the train function that returns a gen-
-  erator which, after the data are coherently randomized, kicks
-  out batches of the specified size.
+#def _batcher(data_tuple, bs, data_device, model_device):
+#  """Helper function for the train function that returns a gen-
+#  erator which, after the data are coherently randomized, kicks
+#  out batches of the specified size.
+#
+#  Args:
+#    $data_tuple$ (`Tuple[tensor]`): The tensors to be coherent-
+#        ly batched.
+#    $bs$ (`int`): The batchsize.
+#    $data_device$ (`Union[str, torch.device]`): The device on which
+#        to batch the tensors from.
+#    $model_device$ (`Union[str, torch.device]`): The device to move
+#        the batches to just before yielding them.
+#
+#  Returns:
+#    `generator`. A generator that yields batches in the form of
+#        tuples of the same length as `data_tuple`.
+#  """
+#  num_examples = len(data_tuple[0])
+#  tuple([t.to(data_device) for t in data_tuple])
+#  indices = torch.randperm(num_examples, device = data_device)
+#  for idx in range(0, num_examples, bs):
+#    yield tuple([t.index_select(0,indices[idx: idx + bs]).to(model_device)\
+#        for t in data_tuple])
 
-  Args:
-    $data_tuple$ (`Tuple[tensor]`): The tensors to be coherent-
-        ly batched.
-    $bs$ (`int`): The batchsize.
-    $data_device$ (`Union[str, torch.device]`): The device on which
-        to batch the tensors from.
-    $model_device$ (`Union[str, torch.device]`): The device to move
-        the batches to just before yielding them.
+class _MiniBatcher:
+  """Helper class for the train function.
 
-  Returns:
-    `generator`. A generator that yields batches in the form of
-        tuples of the same length as `data_tuple`.
+  An instance of this can be used in the same way that one uses
+  an instance of `DataLoader`.
   """
-  num_examples = len(data_tuple[0])
-  tuple([t.to(data_device) for t in data_tuple])
-  indices = torch.randperm(num_examples, device = data_device)
-  for idx in range(0, num_examples, bs):
-    yield tuple([t.index_select(0,indices[idx: idx + bs]).to(model_device)\
-        for t in data_tuple])
+  class _Dataset(torch.utils.data.Dataset):
+    def __init__(self, tup):
+      self.tuple = tup
+      self.features = tup[0]
+      self.targets = tup[-1]
+    def __len__(self):
+      return len(self.tuple[0])
+    def __getitem__(self, idx):
+      return tuple(t[idx] for t in self.tuple)
+
+  #def __init__(self, data_tuple, bs, data_device, model_device):
+  def __init__(self, data_tuple, bs, data_device):
+    """
+    Args:
+      $data_tuple$ (`Tuple[tensor]`): The tensors to be coher-
+          ently batched.
+      $bs$ (`int`): The batchsize.
+      $data_device$ (`Union[str, torch.device]`): The device on
+          which to batch the tensors from.
+      $model_device$ (`Union[str, torch.device]`): The device
+          to move the minibatches to just before returning
+          them.
+    """
+    self.tuple = tuple([t.to(data_device) for t in data_tuple])
+    self.dataset = self._Dataset(self.tuple)
+    self.bs = bs
+    self.data_device = data_device
+    #self.model_device = model_device
+    self.indices = torch.randperm(len(self.dataset), device = data_device)
+
+  def __iter__(self):
+    self.idx = 0
+    return self
+
+  def __next__(self):
+    if self.idx >= len(self.dataset) - 1:
+      self.idx = 0
+      self.indices = torch.randperm(len(self.dataset), device=self.data_device)
+      raise StopIteration
+    #minibatch = tuple([t.index_select(0,
+    #    self.indices[self.idx: self.idx + self.bs]).to(self.model_device)\
+    #        for t in self.tuple])
+    minibatch = tuple([t.index_select(0,
+        self.indices[self.idx: self.idx + self.bs]) for t in self.tuple])
+    self.idx += self.bs
+    return minibatch
 
 def train(model, crit, train_data, **kwargs):
   """Train a model.
@@ -776,8 +834,8 @@ def train(model, crit, train_data, **kwargs):
   # get devices determined by the arg gpu
   if isinstance(gpu, (tuple,list)) and len(gpu) == 1: gpu = (gpu[0], gpu[0])
   else: assert isinstance(gpu, (tuple,list)) and len(gpu) > 1
-  model_device = du.utils.get_device(gpu[0])  # where the training take place
-  valid_device = du.utils.get_device(gpu[1])
+  model_device = du.utils.get_device(gpu[0])  # where the training takes place
+  valid_device = du.utils.get_device(gpu[1])  # where validation happens
   data_device = torch.device('cpu',0)
   if verb > 0:
     print('training on {} (data on {})'.format(model_device, data_device),end='')
@@ -785,13 +843,18 @@ def train(model, crit, train_data, **kwargs):
     else: print()
 
   # parse the training data and leave it in data_device memory
-  if not isinstance(train_data, torch.utils.data.DataLoader):
-    assert 2 <= len(train_data) <= 3
-    num_examples = len(train_data[0])
-    has_lengths = True if len(train_data) > 2  else False
+  if isinstance(train_data, torch.utils.data.DataLoader):
+    has_lengths = True if len(train_data.dataset[0]) > 2 else False
+    num_examples = len(train_data.dataset)
   else:
-    num_examples = len(train_data)
-    has_lengths = True if len(train_data[0]) > 2 else False
+    assert 2 <= len(train_data) <= 3
+    assert all([isinstance(x, torch.Tensor) for x in train_data])
+    has_lengths = True if len(train_data) > 2  else False
+    num_examples = len(train_data[0])
+    train_data = _MiniBatcher(train_data, bs, data_device)
+  assert hasattr(train_data.dataset, 'features') and \
+      hasattr(train_data.dataset, 'targets')
+
 
   if bs <= 0: bs = num_examples
 
@@ -829,9 +892,9 @@ def train(model, crit, train_data, **kwargs):
   # setup valid_crit
   if isinstance(valid_crit, bool):
     if valid_crit:
-      if isinstance(train_data[-1], FloatTensor):
+      if isinstance(train_data.dataset[0][-1], FloatTensor):
         valid_crit = lambda yhatss, yss: r_squared(yhatss,yss,gpu=valid_device)
-      elif isinstance(train_data[-1], IntTensor):
+      elif isinstance(train_data.dataset[0][-1], IntTensor):
         valid_crit = lambda prob_dists, yss:\
             confusion_matrix(prob_dists, yss, gpu=valid_device)
       else:
@@ -854,11 +917,12 @@ def train(model, crit, train_data, **kwargs):
     # once and for all clone and move train data for validation purposes if nec.
     # is will break if not Dataloader
     if valid_device == data_device:
-      train_feats_copy, train_targs_copy = train_data
+      train_feats_copy = train_data.dataset.features
+      train_targs_copy = train_data.dataset.targets
     else:
       train_feats_copy, train_targs_copy = \
-          (train_data[0].detach().clone().to(valid_device),\
-              train_data[-1].detach().clone().to(valid_device))
+          (train_data.dataset.features.detach().clone().to(valid_device),\
+              train_data.dataset.targets.detach().clone().to(valid_device))
     #train_feats_copy, train_targs_copy = (train_feats, train_targs) if\
     #    valid_device == data_device else\
     #        (train_feats.detach().clone().to(valid_device),\
@@ -893,8 +957,11 @@ def train(model, crit, train_data, **kwargs):
   for epoch in range(epochs):
     accum_loss = 0
     #this breaks if not Dataloader
-    for batch in _batcher(train_data, bs, data_device, model_device):
-      loss = crit(model(*batch[:-1]), batch[-1])
+    #for batch in _batcher(train_data, bs, data_device, model_device):
+    for batch in train_data:
+      loss = crit(model(
+          *map(lambda x: x.to(model_device), batch[:-1])),
+          batch[-1].to(model_device))
       accum_loss += loss.item()
       if has_optim: learn_params.zero_grad()
       else: model.zero_grad()
@@ -966,10 +1033,9 @@ def train(model, crit, train_data, **kwargs):
         ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
         ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
       len_test_data = len(test_data[0]) if test_data is not None else 0
-      plt.title('training on {} ({:.1f}%) of {} examples'.format(
-          len(train_data[0]),
-          100*(len(train_data[0])/(len(train_data[0])+len_test_data)),
-          len(train_data[0])+len_test_data))
+      plt.title('training on {} ({:.1f}%) of {} examples'.format( num_examples,
+          100*(num_examples/(num_examples+len_test_data)),
+          num_examples+len_test_data))
       try:
         fig.canvas.flush_events()
       except tkinter.TclError:
@@ -982,10 +1048,9 @@ def train(model, crit, train_data, **kwargs):
 
   if graph:
     plt.ioff()
-    plt.title('trained on {} ({:.1f}%) of {} examples'.format(
-        len(train_data[0]),
-        100*(len(train_data[0])/(len(train_data[0])+len_test_data)),
-        len(train_data[0])+len_test_data))
+    plt.title('trained on {} ({:.1f}%) of {} examples'.format(num_examples,
+        100*(num_examples/(num_examples+len_test_data)),
+        num_examples+len_test_data))
     fig.tight_layout()
     plt.show(block = True)
 
