@@ -236,6 +236,7 @@ import time
 import functools
 import tkinter
 import copy
+import functools
 import torch
 import torch.nn as nn
 import torch.utils.data
@@ -247,7 +248,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/23/20'
+__date__ = '04/21/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -272,19 +273,32 @@ FloatTensor = (torch.HalfTensor, torch.FloatTensor, torch.DoubleTensor,
     torch.cuda.HalfTensor, torch.cuda.FloatTensor, torch.cuda.DoubleTensor)
 
 def center(xss, new_centers = None):
-  """Center a tensor.
+  """Re-center data.
 
-  With this you can translate (with respect to the first dimen-
-  sion) data to anywhere. If the `new_centers` is `None`, then
-  this simply mean-centers the data along the first dimension;
-  in other words, it rigidly translates `xss` so that its mean
-  along the first dimension is the zero tensor.
+  With this you can rigidly translate data. The first dimen-
+  sion of `xss` should be the index parameterizing the examples
+  in the data. Suppose, for example, that we wish to translate
+  a random point cloud in the plane so that it is centered at
+  the origin:
+
+  >>> `xss = torch.rand(100,2)`  # point cloud indexed by dim 0
+  >>> `xss, _ = center(xss)`
+  >>> `torch.all(torch.lt(torch.abs(xss.mean(0)),1e-5)).item()`
+  1
+
+  If the `new_centers` is `None`, then `center` simply mean-centers
+  the data:
+
+  >>> `xss = torch.arange(2400.).view(100, 2, 3, 4)`
+  >>> `means = center(xss)[0].mean(0)`
+  >>> `zeros = torch.zeros(means.shape)`
+  >>> `torch.all(torch.eq(means, zeros)).item()`
+  1
 
   Notice that the returned object is a tuple. So if you want to
   simply mean-center a tensor you would call this function like
-               `xss_centered, _ = center(xss)`
-  That is, you can use an underscore (or whatever) if you don't
-  need the means.
+                 `xss_centered, _ = center(xss)`
+              or `xss_centered = center(xss)[0]`
 
   Args:
     $xss$ (`torch.Tensor`) The tensor to center.
@@ -297,27 +311,28 @@ def center(xss, new_centers = None):
   Returns:
     `(torch.Tensor, torch.Tensor)`. A tuple of tensors the first
         of which is `xss` centered with respect to the first dim-
-        ension; the second is a tensor the size of the remain-
-        ing dimensions and that holds the means.
+        ension according to `new_centers`; the second is a tensor
+        the size of the remaining dimensions holding the means
+        of the original data `xss`.
 
   >>> `xss = torch.arange(12.).view(3,4); xss`
   tensor([[ 0.,  1.,  2.,  3.],
           [ 4.,  5.,  6.,  7.],
           [ 8.,  9., 10., 11.]])
-  >>> `xss, xss_means = center(xss)`
-  >>> `xss, xss_means`
+  >>> `xss_, xss_means = center(xss)`
+  >>> `xss_, xss_means`
   (tensor([[-4., -4., -4., -4.],
           [ 0.,  0.,  0.,  0.],
           [ 4.,  4.,  4.,  4.]]), tensor([4., 5., 6., 7.]))
-  >>> `xss_, _ = center(xss, -xss_means)`
+  >>> `xss_, _ = center(xss, xss_means)`
   >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
 
   >>> `xss = torch.arange(12.).view(3,2,2)`
-  >>> `xss, xss_means = center(xss)`
+  >>> `xss_, xss_means = center(xss)`
   >>> `xss_means.shape`
   torch.Size([2, 2])
-  >>> `xss_, _ = center(xss, -xss_means)`
+  >>> `xss_, _ = center(xss, xss_means)`
   >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
   """
@@ -327,14 +342,17 @@ def center(xss, new_centers = None):
         'new_centers must have size {}, not {}'.\
             format(xss_means.size(),new_centers.size())
   else:
-    new_centers = xss_means
-  return xss - new_centers, xss_means
+    new_centers = torch.zeros(xss_means.shape)
+  return xss - xss_means + new_centers, xss_means
 
 def normalize(xss, new_widths = None, unbiased = True):
-  """Normalize without dividing by zero.
+  """Normalize data without dividing by zero.
 
-  See the documentation for the function `center`. This is com-
-  pletely analagous.
+  See the documentation for the function `center`. This function
+  is entirely analagous. The data are assumed to be indexed by
+  the first dimenion. The data will be scaled so that, in each
+  of its remaining dimensions, the standard deviation will be
+  the corresponding entry of `new widths`.
 
   Args:
     $xss$ (`torch.Tensor`)
@@ -359,15 +377,46 @@ def normalize(xss, new_widths = None, unbiased = True):
   >>> `xss, _ = normalize(xss, unbiased = False)`
   >>> `xss.tolist()`
   [[1.0...
+  >>> `xss = torch.tensor([[1,2,3], [6,7,8]]).float()`
+  >>> `new_widths = 2.0*torch.ones(xss.shape[1:])
+  >>> `xss, _ = normalize(xss, new_widths, unbiased = False)`
+  >>> `xss.tolist()`
+  [[0.8...
   """
   # add and assert checking that new_width is right dim.
   xss_stdevs = xss.std(0, unbiased)
   xss_stdevs[xss_stdevs < 1e-7] = 1.0
   if isinstance(new_widths, torch.Tensor):
-    new_xss = xss.div_(new_widths)
+    new_xss = xss.div(xss_stdevs).mul(new_widths)
   else:
-    new_xss = xss.div_(xss_stdevs)
+    new_xss = xss.div(xss_stdevs)
   return new_xss, xss_stdevs
+
+def standardize(xss, means = None, stdevs = None):
+  """ Standardize data w/r to means and stdevs.
+
+  Args:
+    `xss` (tensor): Denote the shape of `xss` by `(d0, d1,...,dn)`,
+        which we think of as `d0` examples of data where each da-
+        tum has shape `(d1, d2, ...,dn)`.
+    `means` (tensor): Tensor with of shape `(d1, d2, ..., dn)`. De-
+        fault: `None`, which is equivalent to `means=xss.mean(0)`.
+    `stdevs` (tensor): Tensor with of shape `(d1, d2,..., dn)`. The
+        default, `None` is equivalent to `stdevs = xss.stdev(0)`.
+
+  Returns:
+    `torch.tensor`. A tensor of the same shape as `xss`.
+  replace entries with their
+  standardization (which is (x - mean)/stdev) with respect to
+  the mean and standard deviation of that entries.
+
+  >>> `xss = standardize(torch.rand(10000, 2, 3))`
+  >>> `xss.shape`
+  torch.Size([10000, 2, 3])
+  >>> `torch.allclose(xss.mean(0), torch.zeros(2, 3), atol=1e-4)`
+  True
+  """
+  return normalize(center(xss, means)[0], stdevs)[0]
 
 def coh_split(prop, *args, **kwargs):
   """Coherently randomize and split tensors.
@@ -580,7 +629,7 @@ def _parse_data(data_tuple, device = 'cpu'):
 #    yield tuple([t.index_select(0,indices[idx: idx + bs]).to(model_device)\
 #        for t in data_tuple])
 
-class _MiniBatcher:
+class _DataLoader:
   """Helper class for the train function.
 
   An instance of this can be used in the same way that one uses
@@ -596,13 +645,13 @@ class _MiniBatcher:
     def __getitem__(self, idx):
       return tuple(t[idx] for t in self.tuple)
 
-  #def __init__(self, data_tuple, bs, data_device, model_device):
-  def __init__(self, data_tuple, bs, data_device):
+  #def __init__(self, data_tuple, batch_size, data_device, model_device):
+  def __init__(self, data_tuple, batch_size, data_device):
     """
     Args:
       $data_tuple$ (`Tuple[tensor]`): The tensors to be coher-
           ently batched.
-      $bs$ (`int`): The batchsize.
+      $batch_size$ (`int`): The batchsize.
       $data_device$ (`Union[str, torch.device]`): The device on
           which to batch the tensors from.
       $model_device$ (`Union[str, torch.device]`): The device
@@ -611,7 +660,7 @@ class _MiniBatcher:
     """
     self.tuple = tuple([t.to(data_device) for t in data_tuple])
     self.dataset = self._Dataset(self.tuple)
-    self.bs = bs
+    self.batch_size = batch_size
     self.data_device = data_device
     #self.model_device = model_device
     self.indices = torch.randperm(len(self.dataset), device = data_device)
@@ -629,9 +678,20 @@ class _MiniBatcher:
     #    self.indices[self.idx: self.idx + self.bs]).to(self.model_device)\
     #        for t in self.tuple])
     minibatch = tuple([t.index_select(0,
-        self.indices[self.idx: self.idx + self.bs]) for t in self.tuple])
-    self.idx += self.bs
+        self.indices[self.idx: self.idx + self.batch_size]) for t in self.tuple])
+    self.idx += self.batch_size
     return minibatch
+
+def _getLoss(model, dataloader, crit, device):
+  """Return loss.
+
+  `dataloader` can be an instance of DataLoader or _DataLoader.
+  """
+  accum_loss = 0.0
+  for minibatch in dataloader:
+    accum_loss += crit(model(
+        *map(lambda x: x.to(device), minibatch[:-1])), minibatch[-1].to(device))
+  return accum_loss/len(dataloader)                           # to device here??
 
 def train(model, crit, train_data, **kwargs):
   """Train a model.
@@ -851,10 +911,7 @@ def train(model, crit, train_data, **kwargs):
     assert all([isinstance(x, torch.Tensor) for x in train_data])
     has_lengths = True if len(train_data) > 2  else False
     num_examples = len(train_data[0])
-    train_data = _MiniBatcher(train_data, bs, data_device)
-  assert hasattr(train_data.dataset, 'features') and \
-      hasattr(train_data.dataset, 'targets')
-
+    train_data = _DataLoader(train_data, bs, data_device)
 
   if bs <= 0: bs = num_examples
 
@@ -914,19 +971,56 @@ def train(model, crit, train_data, **kwargs):
     ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
 
-    # once and for all clone and move train data for validation purposes if nec.
-    # is will break if not Dataloader
+    # Once and for all clone and move train data for validation purposes if nec.
+    # By now, training data is an instance of either DataLoader or _DataLoader.
+    # But if dataset has attributes features and targets we repackage into a new
+    # _DataLoader instance and with batchsize = len(features) = len(targets)
+    if hasattr(train_data.dataset, 'features') and \
+        hasattr(train_data.dataset, 'targets'):
+      features = train_data.dataset.features
+      targets = train_data.dataset.targets
+    else:
+      print('need sampling here')
     if valid_device == data_device:
-      train_feats_copy = train_data.dataset.features
-      train_targs_copy = train_data.dataset.targets
+      train_feats_copy = features
+      train_targs_copy = targets
     else:
       train_feats_copy, train_targs_copy = \
-          (train_data.dataset.features.detach().clone().to(valid_device),\
-              train_data.dataset.targets.detach().clone().to(valid_device))
+          (features.detach().clone().to(valid_device), \
+              targets.detach().clone().to(valid_device))
     #train_feats_copy, train_targs_copy = (train_feats, train_targs) if\
     #    valid_device == data_device else\
     #        (train_feats.detach().clone().to(valid_device),\
     #            train_targs.detach().clone().to(valid_device))
+
+    # Once and for all clone and move train data for validation purposes if nec.
+    # By now, training data is an instance of either DataLoader or _DataLoader.
+    # But if dataset does not have has the attribute transform (or it is None),
+    # we repackage into a new  _DataLoader instance and with batchsize =
+    # len(features) = len(targets)
+    if not hasattr(train_data.dataset, 'transform') or \
+        train_data.dataset.transform == None:
+      validLoss = functools.partial(_getLoss, dataloader=torch.utils.data.\
+          DataLoader(train_data.dataset, batch_size = len(train_data.dataset)),
+          crit = valid_crit, device = valid_device)
+    else:
+      validLoss = functools.partial(_getLoss, dataloader=train_data,
+          crit = valid_crit, device = valid_device)
+
+    #if isinstance(train_data, torch.utils.data.DataLoader):
+    #  if not hasattr(train_data.dataset, 'transform') or \
+    #      train_data.dataset.transform == None:
+    #    # perhaps use _DataLaoder here
+    #    validLoss = functools.partial(_getLoss, dataloader=torch.utils.data.\
+    #        DataLoader(train_data.dataset, batch_size = len(train_data.dataset)),
+    #        crit = valid_crit, device = valid_device)
+    #  else:
+    #    validLoss = functools.partial(_getLoss, dataloader=train_data,
+    #        crit = valid_crit, device = valid_device)
+    #    #validLoss = functools.partial(_getLoss, dataloader=train_data.dataset,
+    #    #    crit = valid_crit, device = valid_device)
+    #else: # this is an instance of _DataLoader
+    #  pass
 
     # these will hold the losses and validations for train data
     losses = []
@@ -958,10 +1052,10 @@ def train(model, crit, train_data, **kwargs):
     accum_loss = 0
     #this breaks if not Dataloader
     #for batch in _batcher(train_data, bs, data_device, model_device):
-    for batch in train_data:
+    for minibatch in train_data:
       loss = crit(model(
-          *map(lambda x: x.to(model_device), batch[:-1])),
-          batch[-1].to(model_device))
+          *map(lambda x: x.to(model_device), minibatch[:-1])),
+          minibatch[-1].to(model_device))
       accum_loss += loss.item()
       if has_optim: learn_params.zero_grad()
       else: model.zero_grad()
@@ -989,59 +1083,67 @@ def train(model, crit, train_data, **kwargs):
         print(base_str+loss_str, end='\b'*loss_len, flush=True)
 
     if graph:
-      losses.append(accum_loss*bs/num_examples)
-      # copy the model to the valid_device, if necessary
-      model_copy = model if valid_device == model_device else\
-          copy.deepcopy(model).to(valid_device)
-      v_dations.append(valid_crit(model_copy(train_feats_copy),train_targs_copy))
-      if test_data is not None:
-        if has_lengths:
-          loss=crit(model_copy(test_feats,test_feats_lengths),test_targs).item()
+      with torch.no_grad():  # check that this is what you want
+        losses.append(accum_loss*bs/num_examples)
+
+        # copy the model to the valid_device, if necessary
+        model_copy = model if valid_device == model_device else\
+            copy.deepcopy(model).to(valid_device)
+        model_copy.eval() # and check that this is what you want
+
+        # graph stuff while validating the model
+        # validate on training data
+        #v_dations.append(valid_crit(model_copy(train_feats_copy),train_targs_copy))
+        v_dations.append(validLoss(model_copy))
+        # validate on test data
+        if test_data is not None:
+          if has_lengths:   # remove this if-else using  *map stuff as above?
+            loss=crit(model_copy(test_feats,test_feats_lengths),test_targs).item()
+          else:
+            loss = crit(model_copy(test_feats), test_targs).item()
+          losses_test.append(loss)
+          v_dations_test.append(valid_crit(model_copy(test_feats), test_targs))
+        if epoch > epochs - graph:
+          xlim_start += 1
+        ax1.clear()
+        ax2.clear()
+        ax1.set_xlabel('epoch', size='larger')
+        ax1.set_ylabel('average loss',size='larger')
+        ax2.set_ylabel('validation',size='larger')
+        xlim = range(xlim_start,len(losses)+1)
+        loss_ys = np.array(losses[xlim_start-1:])
+        v_dation_ys = np.array(v_dations[xlim_start-1:])
+        if test_data:
+          losstest_ys = np.array(losses_test[xlim_start-1:])
+          v_dationtest_ys = np.array(v_dations_test[xlim_start-1:])
+          ax1.plot(xlim,losstest_ys,xlim,loss_ys,color='black',lw=.5)
+          ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys >=loss_ys,
+              facecolor='tab:red',interpolate=True, alpha=.8)
+          ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys <=loss_ys,
+              facecolor='tab:blue',interpolate=True, alpha=.8)
+          ax2.plot(xlim,v_dationtest_ys,xlim,v_dation_ys,color='black',lw=.5)
+          ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
+              where = v_dationtest_ys >=v_dation_ys, facecolor='tab:red',
+              interpolate=True, alpha=.8,label='test > train')
+          ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
+              where = v_dationtest_ys <=v_dation_ys,
+              facecolor='tab:blue',interpolate=True, alpha=.8,label='train > test')
+          ax2.legend(fancybox=True, loc=2, framealpha=0.8, prop={'size': 9})
         else:
-          loss = crit(model_copy(test_feats), test_targs).item()
-        losses_test.append(loss)
-        v_dations_test.append(valid_crit(model_copy(test_feats), test_targs))
-      if epoch > epochs - graph:
-        xlim_start += 1
-      ax1.clear()
-      ax2.clear()
-      ax1.set_xlabel('epoch', size='larger')
-      ax1.set_ylabel('average loss',size='larger')
-      ax2.set_ylabel('validation',size='larger')
-      xlim = range(xlim_start,len(losses)+1)
-      loss_ys = np.array(losses[xlim_start-1:])
-      v_dation_ys = np.array(v_dations[xlim_start-1:])
-      if test_data:
-        losstest_ys = np.array(losses_test[xlim_start-1:])
-        v_dationtest_ys = np.array(v_dations_test[xlim_start-1:])
-        ax1.plot(xlim,losstest_ys,xlim,loss_ys,color='black',lw=.5)
-        ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys >=loss_ys,
-            facecolor='tab:red',interpolate=True, alpha=.8)
-        ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys <=loss_ys,
-            facecolor='tab:blue',interpolate=True, alpha=.8)
-        ax2.plot(xlim,v_dationtest_ys,xlim,v_dation_ys,color='black',lw=.5)
-        ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
-            where = v_dationtest_ys >=v_dation_ys, facecolor='tab:red',
-            interpolate=True, alpha=.8,label='test > train')
-        ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
-            where = v_dationtest_ys <=v_dation_ys,
-            facecolor='tab:blue',interpolate=True, alpha=.8,label='train > test')
-        ax2.legend(fancybox=True, loc=2, framealpha=0.8, prop={'size': 9})
-      else:
-        ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
-        ax2.plot(xlim,v_dations,color='tab:blue',lw=1.2,label='validation')
-        ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
-        ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
-      len_test_data = len(test_data[0]) if test_data is not None else 0
-      plt.title('training on {} ({:.1f}%) of {} examples'.format( num_examples,
-          100*(num_examples/(num_examples+len_test_data)),
-          num_examples+len_test_data))
-      try:
-        fig.canvas.flush_events()
-      except tkinter.TclError:
-        plt.ioff()
-        exit()
-      fig.tight_layout()
+          ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
+          ax2.plot(xlim,v_dations,color='tab:blue',lw=1.2,label='validation')
+          ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
+          ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
+        len_test_data = len(test_data[0]) if test_data is not None else 0
+        plt.title('training on {} ({:.1f}%) of {} examples'.format( num_examples,
+            100*(num_examples/(num_examples+len_test_data)),
+            num_examples+len_test_data))
+        try:
+          fig.canvas.flush_events()
+        except tkinter.TclError:
+          plt.ioff()
+          exit()
+        fig.tight_layout()
 
   end = time.time()
   if verb > 0: print ('trained in {:.2f} secs'.format(end-start))
