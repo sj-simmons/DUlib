@@ -9,13 +9,13 @@ trained models.
 
   |center|       mean-center `xss`; returns `(tensor, tensor)`
     ($xss$,        -tensor to center w/r to its 1st dimension
-     $new_centers$ = `None`)
+     $shift_by$ = `None`)
                  -first returned tensor has column means `new_`
                   `centers`; default is `new_centers` being zeros.
 
   |normalize|    normalize `xss`; returns `(tensor, tensor)`
     ($xss$,        -tensor to normalize w/r to its 1st dimension
-     $new_widths$ = `None`,
+     $scale_by$ = `None`,
                  -first tensor returned will now have columns
                   with st. devs `new_widths`; default is `new_`
                   `widths` being all ones.
@@ -240,6 +240,7 @@ import functools
 import torch
 import torch.nn as nn
 import torch.utils.data
+import torchvision
 from types import FunctionType
 from typing import Dict
 from textwrap import dedent
@@ -272,7 +273,7 @@ IntTensor = (torch.ShortTensor, torch.IntTensor, torch.LongTensor,
 FloatTensor = (torch.HalfTensor, torch.FloatTensor, torch.DoubleTensor,
     torch.cuda.HalfTensor, torch.cuda.FloatTensor, torch.cuda.DoubleTensor)
 
-def center(xss, new_centers = None):
+def center(xss, shift_by = None):
   """Re-center data.
 
   With this you can rigidly translate data. The first dimen-
@@ -296,13 +297,14 @@ def center(xss, new_centers = None):
   1
 
   Notice that the returned object is a tuple. So if you want to
-  simply mean-center a tensor you would call this function like
+  simply mean-center a tensor, you would call `center` like:
+
                  `xss_centered, _ = center(xss)`
               or `xss_centered = center(xss)[0]`
 
   Args:
     $xss$ (`torch.Tensor`) The tensor to center.
-    $new_centers$ (`torch.Tensor`) A tensor, the number of dimen-
+    $shift_by$ (`torch.Tensor`) A tensor, the number of dimen-
         sions of which is one less than that of `xss` and whose
         shape is in fact `(d_1,`...`,d_n)` where `xss` has as its
         shape `(d_0, d_1,`...`,d_n)`. The default is `None` which is
@@ -324,7 +326,7 @@ def center(xss, new_centers = None):
   (tensor([[-4., -4., -4., -4.],
           [ 0.,  0.,  0.,  0.],
           [ 4.,  4.,  4.,  4.]]), tensor([4., 5., 6., 7.]))
-  >>> `xss_, _ = center(xss, xss_means)`
+  >>> `xss_, _ = center(xss_, -xss_means)`
   >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
 
@@ -332,68 +334,103 @@ def center(xss, new_centers = None):
   >>> `xss_, xss_means = center(xss)`
   >>> `xss_means.shape`
   torch.Size([2, 2])
-  >>> `xss_, _ = center(xss, xss_means)`
+  >>> `xss_, _ = center(xss_, -xss_means)`
   >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
   """
-  xss_means = xss.mean(0)
-  if isinstance(new_centers, torch.Tensor):
-    assert new_centers.size() == xss_means.size(),\
-        'new_centers must have size {}, not {}'.\
-            format(xss_means.size(),new_centers.size())
-  else:
-    new_centers = torch.zeros(xss_means.shape)
-  return xss - xss_means + new_centers, xss_means
+  #xss_means = xss.mean(0)
+  #if isinstance(shift_by, torch.Tensor):
+  #  assert shift_by.size() == xss_means.size(),\
+  #      'shift_by must have size {}, not {}'.\
+  #          format(xss_means.size(),shift_by.size())
+  #else:
+  #  shift_by = xss_means
+  #return xss - shift_by, xss_means
 
-def normalize(xss, new_widths = None, unbiased = True):
+  if shift_by is None:
+    xss_means = xss.mean(0)
+    return xss - xss_means, xss_means
+  else:
+    return xss - shift_by, None
+
+def normalize(xss, scale_by = None, unbiased = True):
   """Normalize data without dividing by zero.
 
   See the documentation for the function `center`. This function
   is entirely analagous. The data are assumed to be indexed by
-  the first dimenion. The data will be scaled so that, in each
-  of its remaining dimensions, the standard deviation will be
-  the corresponding entry of `new widths`.
+  the first dimenion. The data will be scaled so that, with re-
+  pect to each of its remaining dimensions, the standard devia-
+  tions will have been divided by the corresponding entry of `new`
+  `widths` (or unaltered it that entry is 0).
+
+  More precisely, let `(d0, d1,..., dn)` denote the shape of `xss`.
+  In case `scale_by` is not `None`, then the `(i0, i1, ..., in)` ent-
+  ry of `xss` is divided by the `(i1, i2,..., in)` entry of `scale_`
+  `by` unless that entry `scale_by` is (nearly) 0, in which case
+  the `(i0, i1, ..., in)` of `xss` is left unchanged.
+
+  The default, `scale_by=None` is equivalent to setting `scale_by=`
+  `xss.std(0)`.
 
   Args:
-    $xss$ (`torch.Tensor`)
-    $new_widths$ (`torch.Tensor`)
+    $xss$ (`torch.Tensor`) A tensor whose entries, when thought of
+        as being indexed by its first dimension, is to be norm-
+        alized.
+    $scale_by$ (`torch.Tensor`) A tensor of shape `xss.shape[1:]`.
     $unbiased$ (`bool`): If unbiased is `False`, divide by `n` instead
         of `n-1` when computing the standard deviation. Default:
-        True.
+        `True`.
 
   Returns:
     `(torch.Tensor, torch.Tensor)`. A tuple of tensors the first
         of which is `xss` normalized with respect to the first
         dimension, except that those columns with standard dev
-        less than a threshold are left unchanged. The list of
-        standard devs, with numbers less than the threshold re-
-        placed by 1.0, is the second tensor returned.
+        less than a threshold are left unchanged.
 
   >>> `xss = torch.tensor([[1, 2, 3], [6, 7, 8]]).float()`
-  >>> `xss, _ = normalize(xss, unbiased = False)`
+  >>> `xss, xss_stdevs = normalize(xss, unbiased = False)`
   >>> `xss.tolist()`
   [[0.4...
+  >>> `xss_stdevs.tolist()`
+  [2.5...
+  >>> `_, xss_stdevs = normalize(xss, unbiased = False)`
+  >>> `xss_stdevs.tolist()`
+  [1.0...
   >>> `xss = torch.tensor([[1, 2, 3], [1, 7, 3]]).float()`
   >>> `xss, _ = normalize(xss, unbiased = False)`
   >>> `xss.tolist()`
   [[1.0...
   >>> `xss = torch.tensor([[1,2,3], [6,7,8]]).float()`
   >>> `new_widths = 2.0*torch.ones(xss.shape[1:])
-  >>> `xss, _ = normalize(xss, new_widths, unbiased = False)`
-  >>> `xss.tolist()`
-  [[0.8...
+  >>> `xss, _  = normalize(xss, new_widths, unbiased=False)`
+  >>> `_, stdevs = normalize(xss, unbiased=False)`
+  >>> `stdevs.tolist()`
+  [1.25...
   """
-  # add and assert checking that new_width is right dim.
-  xss_stdevs = xss.std(0, unbiased)
-  xss_stdevs[xss_stdevs < 1e-7] = 1.0
-  if isinstance(new_widths, torch.Tensor):
-    new_xss = xss.div(xss_stdevs).mul(new_widths)
-  else:
-    new_xss = xss.div(xss_stdevs)
-  return new_xss, xss_stdevs
+  # add and assert checking that scale_by is right dim.
+  #xss_stdevs = xss.std(0, unbiased)
+  #xss_stdevs_no_zeros = xss_stdevs.clone()
+  #xss_stdevs_no_zeros[xss_stdevs_no_zeros < 1e-7] = 1.0
+  #if isinstance(scale_by, torch.Tensor):
+  #  scale_by_no_zeros = scale_by.clone()
+  #  scale_by_no_zeros[scale_by_no_zeros < 1e-7] = 1.0
+  #  new_xss = xss.div(scale_by_no_zeros)
+  #else:
+  #  new_xss = xss.div(xss_stdevs_no_zeros)
+  #return new_xss, xss_stdevs
 
-def standardize(xss, means = None, stdevs = None):
-  """ Standardize data w/r to means and stdevs.
+  if scale_by is None:
+    xss_stdevs = xss.std(0, unbiased)
+    xss_stdevs_no_zeros = xss_stdevs.clone()
+    xss_stdevs_no_zeros[xss_stdevs_no_zeros < 1e-7] = 1.0
+    return xss.div(xss_stdevs_no_zeros), xss_stdevs
+  else:
+    scale_by_no_zeros = scale_by.clone()
+    scale_by_no_zeros[scale_by_no_zeros < 1e-7] = 1.0
+    return xss.div(scale_by_no_zeros), None
+
+def standardize(xss, means=None, stdevs=None, unbiased=True):
+  """ Standardize a (minibatch) data w/r to means and stdevs.
 
   Args:
     `xss` (tensor): Denote the shape of `xss` by `(d0, d1,...,dn)`,
@@ -404,8 +441,12 @@ def standardize(xss, means = None, stdevs = None):
     `stdevs` (tensor): Tensor with of shape `(d1, d2,..., dn)`. The
         default, `None` is equivalent to `stdevs = xss.stdev(0)`.
 
+    *******************NOTE: 0s with thresh are replaced with ones
+    in stdevs***
+
   Returns:
     `torch.tensor`. A tensor of the same shape as `xss`.
+
   replace entries with their
   standardization (which is (x - mean)/stdev) with respect to
   the mean and standard deviation of that entries.
@@ -416,7 +457,73 @@ def standardize(xss, means = None, stdevs = None):
   >>> `torch.allclose(xss.mean(0), torch.zeros(2, 3), atol=1e-4)`
   True
   """
-  return normalize(center(xss, means)[0], stdevs)[0]
+  if stdevs is None:
+    assert len(xss) > 1 or unbiased == False,\
+        'len(xss) is '+str(len(xss))+', but unbiased is: '+str(unbiased)
+  return normalize(center(xss, means)[0], stdevs, unbiased)[0]
+
+def online_means_stdevs(data, batchsize=2, *transforms_):
+  """
+  Notes:
+    - This works on one channel data image data
+  Todo:
+    - Write something that works on multichannel and calls this?
+      One say 3 channel images, try passing a transform that flattens
+      those channels to 3 dimensions. Then tack on targets and have...
+    - Work out a numerically stable version of the online variance algo.
+      (possibly a batched version of what's on wikipedia).
+    - The stdevs here are always biased.
+    - a passed loader batchsize override arg batchsize
+
+  >>> data = torch.arange(100.).view(100,1)
+  >>> means, stdevs = online_means_stdevs(data)
+  >>> means.item(), stdevs.item()
+  (49.5, 28.86...
+
+  >>> dataset = torch.utils.data.TensorDataset(data)
+  >>> loader = torch.utils.data.DataLoader(dataset, batch_size=25)
+  >>> means, stdevs = online_means_stdevs(loader)
+  >>> means.item(), stdevs.item()
+  (49.5, 28.86...
+
+  >>> dataset = torch.utils.data.TensorDataset(data)
+  >>> loader = torch.utils.data.DataLoader(dataset, batch_size=1)
+  >>> means, stdevs = online_means_stdevs(loader)
+  >>> means.item(), stdevs.item()
+  (49.5, 28.86...
+  """
+  transforms_ = [torchvision.transforms.Lambda(lambda xs: xs)]+list(transforms_)
+
+  if isinstance(data, torch.Tensor):
+    loader = torch.utils.data.DataLoader(
+        dataset = torch.utils.data.TensorDataset(data),
+        batch_size = batchsize,
+        num_workers = 0)
+  else:
+    assert isinstance(data, torch.utils.data.DataLoader),'data must be a ten'+\
+        'sor or an instance of torch.utils.data.DataLoader yielding (minibat'+\
+        'ches of) tensors'
+    loader = data
+    batchsize = loader.batch_size
+
+  assert len(loader.dataset) % batchsize == 0,\
+      'batchsize must divide len(loader.dataset)'
+
+  # batch update the means and variances
+  means = torch.zeros(loader.dataset[0][0].size()) # BxHxW
+  variances = torch.zeros(loader.dataset[0][0].size()) # BxHxW
+  m = 0
+  for transform in transforms_:
+    for xss in loader: # loader kicks out tuples; so do
+      batch = transform(xss[0])  # <-- this; xs is now a BxHxW tensor
+      prev_means = means
+      batch_means = batch.mean(0)
+      denom = m+batchsize
+      means = (m*means + batchsize*batch_means)/denom
+      variances = m*variances/denom + batchsize*batch.var(0,False)/denom+\
+          m*batchsize/(denom**2)*(prev_means - batch_means)**2
+      m += batchsize
+  return means, variances.pow(0.5)
 
 def coh_split(prop, *args, **kwargs):
   """Coherently randomize and split tensors.
@@ -979,8 +1086,8 @@ def train(model, crit, train_data, **kwargs):
         hasattr(train_data.dataset, 'targets'):
       features = train_data.dataset.features
       targets = train_data.dataset.targets
-    else:
-      print('need sampling here')
+    #else:
+      #print('need sampling here')
     if valid_device == data_device:
       train_feats_copy = features
       train_targs_copy = targets
