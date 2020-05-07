@@ -42,7 +42,7 @@ from du.models import FFNet_, denseFFhidden
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '01/23/20'
+__date__ = '05/06/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -60,7 +60,7 @@ __copyright__ = """
 """
 __license__= 'Apache 2.0'
 
-def metalayer(channels, kernels, **kwargs):
+def metalayer(channels, kernels, nonlin, **kwargs):
   """A metalayer for a convolutional network.
 
   This returns a ~convolutional metalayer~ consisting of a single
@@ -86,7 +86,7 @@ def metalayer(channels, kernels, **kwargs):
                 `W_out = W_in / kernels[1]`, and
                 `H_out = H_in / kernels[1]`.
 
-  >>> `ml, out_size = metalayer(channels=(1,16), kernels=(5,2))`
+  >>> `ml, out_size = metalayer((1,16), (5,2), nn.ReLU())`
   >>> `ml`
   Sequential(
     (0): Conv2d(1, 16, k...=(5, 5), st...=(1, 1), pa...=(2, 2))
@@ -103,7 +103,7 @@ def metalayer(channels, kernels, **kwargs):
               `W_out = floor(W_in/kernels[1])`, and
               `H_out = floor(H_in/kernels[1])`.
 
-  >>> `ml, out_size = metalayer(channels=(1,16), kernels=(5,3))`
+  >>> `ml, out_size = metalayer((1,16), (5,3), nn.ReLU())`
   >>> `ml(torch.rand(1, 1, 48, 64)).size()`
   torch.Size([1, 16, 16, 21])
   >>> `out_size(48, 64)`
@@ -117,7 +117,7 @@ def metalayer(channels, kernels, **kwargs):
             `W_out = floor((W_in + 1)/kernels[1])`, and
             `H_out = floor((H_in + 1)/kernels[1])`.
 
-  >>> `ml, out_size = metalayer(channels=(1,16),kernels=(7,2))`
+  >>> `ml, out_size = metalayer((1,16),(7,2),nn.ReLU())`
   >>> `ml(torch.rand(1, 1, 48, 64)).size()`
   torch.Size([1, 16, 24, 32])
   >>> `out_size(48, 64)`
@@ -139,9 +139,9 @@ def metalayer(channels, kernels, **kwargs):
     $kernels$ (`Tuple[int]`): The first integer determines the
         width and height of the convolutional kernel; the sec-
         ond, the same for the max-pooling kernel.
+    $nonlin$(`nn.Module`): The nonlinearity.
 
   Kwargs:
-    $nonlin$(`nn.Module`): The nonlinearity.
     $strides$ (`Tuple[int]`): The first int is the stride of the
         convolutional layer; the second is that of the pooling
         layer. Default: `(1,kernels[1])`.
@@ -156,7 +156,6 @@ def metalayer(channels, kernels, **kwargs):
   """
   # this is metalayer
   du.utils._check_kwargs(kwargs,['strides','paddings'])
-  nonlin = kwargs.get('nonlin',nn.ReLU())
   strides = kwargs.get('strides',(1,kernels[1]))
   paddings = kwargs.get('paddings',(int(kernels[0]/2),0))
   ml = nn.Sequential(
@@ -175,7 +174,7 @@ def metalayer(channels, kernels, **kwargs):
     return int((width+1)/kernels[1]), int((height+1)/kernels[1])
   return ml, out_size
 
-def convFFhidden(channels, conv_kernels, pool_kernels):
+def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
   """Compose convolutional metalayers.
 
   This composes the specified convolutional metalaters into a
@@ -195,6 +194,10 @@ def convFFhidden(channels, conv_kernels, pool_kernels):
     $pool_kernels$ (`Tuple[int]`): A tuple of length `n` holding
         the kernel size for the pooling layer of successive
         metalayer.
+
+  Kwargs:
+    $nonlins$ (`nn.Module`): The nonlinearities to compose bet-
+        ween meta-layers. Default: `nn.ReLU()`.
 
   Returns:
     `(nn.Sequential, function)`. The block consisting of the com-
@@ -217,9 +220,12 @@ def convFFhidden(channels, conv_kernels, pool_kernels):
     )
   ), ...)
   """
+  du.utils._check_kwargs(kwargs,['nonlins'])
+  nonlins = kwargs.get('nonlin',nn.ReLU())
   assert len(channels)-1 == len(conv_kernels) == len(pool_kernels)
-  layers, funcs = list(zip(*[metalayer(chans, kerns) for chans, kerns in zip(
-      zip(channels[:-1],channels[1:]), zip(conv_kernels, pool_kernels))]))
+  layers, funcs = list(zip(*[metalayer(chans, kerns, nonlins) for\
+      chans, kerns in zip(
+          zip(channels[:-1],channels[1:]), zip(conv_kernels, pool_kernels))]))
   return nn.Sequential(*layers), functools.reduce(
       lambda f,g: lambda x,y:g(*f(x,y)), funcs, lambda x,y:(x,y))
 
@@ -249,7 +255,11 @@ class ConvFFNet(FFNet_):
     Kwargs:
       $conv_kernels$ (`Tuple[int]`): Default: `(len(channels)-1)*[5]`
       $pool_kernels$ (`Tuple[int]`): Default: `(len(channels)-1)*[2]`
-      $outfn$ (`nn.Module`): a function to pipe out though lastly
+      $nonlins$ (`Tuple[nn.Module]`): A length 2 tuple determin-
+          ing the nonlinearities for, resp., the convolution-
+          al and the dense parts of the network. Default: `(nn`
+          `.ReLU(), nn.ReLU())`.
+      $outfn$ (`nn.Module`): A function to pipe out though lastly
           in the `forward` method; The default is `log_softmax`.
           For regression, you likely want to put `None`.
       $means$ (`torch.Tensor`): A tensor typically holding the
@@ -264,7 +274,7 @@ class ConvFFNet(FFNet_):
     torch.Size([100, 10])
     """
     du.utils._check_kwargs(kwargs, ['conv_kernels','pool_kernels','means',
-        'stdevs','outfn'])
+        'stdevs','outfn','nonlins'])
     means = kwargs.get('means', None)
     stdevs = kwargs.get('stdevs', None)
     assert len(in_size) == 2,\
@@ -274,15 +284,15 @@ class ConvFFNet(FFNet_):
         lambda xss: torch.log_softmax(xss,dim=1))
     conv_kernels = kwargs.get('conv_kernels',(len(channels)-1)*[5])
     pool_kernels = kwargs.get('pool_kernels',(len(channels)-1)*[2])
+    nonlins = kwargs.get('nonlins', (nn.ReLU(), nn.ReLU()))
 
     # build the convolutional part:
-    self.conv, out_size = convFFhidden(channels, conv_kernels, pool_kernels)
-
+    self.conv, out_size = convFFhidden(
+        channels, conv_kernels, pool_kernels, nonlins = nonlins[0])
     # build the dense part
     self.dense = denseFFhidden(
         n_inputs = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size)),
-        n_outputs = n_out,
-        widths = widths)
+        n_outputs = n_out, widths = widths, nonlins = (nonlins[1],))
 
   def forward(self, xss):
     """Forward inputs.

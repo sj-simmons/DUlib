@@ -158,6 +158,7 @@ trained models.
                     _____________________
 """
 #Todo:
+#  - get rid of batchsize = -1 stuff
 #  - consider removing datadevice from train.  Don't need it?
 #  - look closely at 'center' for center and similar for normalize
 #  - consider allowing train to just accept args. DONE?
@@ -457,10 +458,18 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   >>> `torch.allclose(xss.mean(0), torch.zeros(2, 3), atol=1e-4)`
   True
   """
-  if stdevs is None:
+  if stdevs is not None:
     assert len(xss) > 1 or unbiased == False,\
-        'len(xss) is '+str(len(xss))+', but unbiased is: '+str(unbiased)
-  return normalize(center(xss, means)[0], stdevs, unbiased)[0]
+        'len(xss) is 1 but unbiased is: '+str(unbiased)
+  if isinstance(means,torch.Tensor):
+    if  isinstance(stdevs,torch.Tensor):
+      return normalize(center(xss, means)[0], stdevs, unbiased)[0]
+    elif stdevs is None:
+      return center(xss, means)[0]
+  elif isinstance(stdevs, torch.Tensor):
+    return normalize(xss, stdevs, unbiased)[0]
+  else:
+    return xss
 
 def online_means_stdevs(data, batchsize=2, *transforms_):
   """
@@ -474,6 +483,7 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
       (possibly a batched version of what's on wikipedia).
     - The stdevs here are always biased.
     - a passed loader batchsize override arg batchsize
+    - adjust so last batch can be smaller ...
 
   >>> data = torch.arange(100.).view(100,1)
   >>> means, stdevs = online_means_stdevs(data)
@@ -507,7 +517,7 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
     batchsize = loader.batch_size
 
   assert len(loader.dataset) % batchsize == 0,\
-      'batchsize must divide len(loader.dataset)'
+      'batchsize must divide ' + str(len(loader.dataset))
 
   # batch update the means and variances
   means = torch.zeros(loader.dataset[0][0].size()) # BxHxW
@@ -1078,23 +1088,19 @@ def train(model, crit, train_data, **kwargs):
     ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
 
+    ## CHANGE THIS DOC:
     # Once and for all clone and move train data for validation purposes if nec.
     # By now, training data is an instance of either DataLoader or _DataLoader.
     # But if dataset has attributes features and targets we repackage into a new
     # _DataLoader instance and with batchsize = len(features) = len(targets)
-    if hasattr(train_data.dataset, 'features') and \
-        hasattr(train_data.dataset, 'targets'):
-      features = train_data.dataset.features
-      targets = train_data.dataset.targets
-    #else:
-      #print('need sampling here')
-    if valid_device == data_device:
-      train_feats_copy = features
-      train_targs_copy = targets
-    else:
-      train_feats_copy, train_targs_copy = \
-          (features.detach().clone().to(valid_device), \
-              targets.detach().clone().to(valid_device))
+    #if isinstance(train_data, du.lib._Dataset):
+    #  if valid_device == data_device:
+    #    train_feats_copy = train_data.dataset.features
+    #    train_targs_copy = train_data.dataset.targets
+    #  else:
+    #    train_feats_copy, train_targs_copy = \
+    #        (features.detach().clone().to(valid_device), \
+    #            targets.detach().clone().to(valid_device))
     #train_feats_copy, train_targs_copy = (train_feats, train_targs) if\
     #    valid_device == data_device else\
     #        (train_feats.detach().clone().to(valid_device),\
