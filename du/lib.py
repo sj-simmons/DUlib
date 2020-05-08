@@ -250,7 +250,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '04/21/20'
+__date__ = '05/06/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -431,36 +431,88 @@ def normalize(xss, scale_by = None, unbiased = True):
     return xss.div(scale_by_no_zeros), None
 
 def standardize(xss, means=None, stdevs=None, unbiased=True):
-  """ Standardize a (minibatch) data w/r to means and stdevs.
+  """Standardize (a minibatch of) data w/r to `means` and `stdevs`.
+
+  Think of the tensor `xss` as holding examples of data where the
+  the first dimension of `xss` indexes the examples. Suppose that
+  both tensors `means` and `stdevs` are provided, each of size `xss`
+  `.shape[1:]`. Then `standardize` returns a tensor of shape `xss.sh`
+  `ape` whose `(i_1, i_2,`...`, i_n)`th entry is
+
+  `(xss_(i_1,`...`,i_n)-means_(i_1,`...`,i_n))/stdevs_(i_1,`...`,i_n).`
+
+  As a simple example, if `xss` is a 100x1 tensor consisting of
+  normal data centered at 7 and of width 3 then `standardize` can
+  be used as follows to compute the z-scores of elements of the
+  'vector' `xss`:
+
+  >>> `xss = 7 + 2 * torch.randn(100).view(100,1)`
+  >>> `zss = standardize(xss, xss.mean(0), xss.std(0))`
+  >>> `zss.shape`
+  torch.Size([100, 1])
+  >>> `torch.allclose(zss.mean(0),torch.zeros(1),atol=1e-4)`
+  True
+  >>> `torch.allclose(zss.std(0),torch.ones(1),atol=1e-4)`
+  True
+
+  More generally, below, entries in all 6 'column vectors' are
+  mapped to their z-scores with respect to the means of the ap-
+  propriate column vector:
+
+  >>> `xss = 50 + torch.randn(1000, 2, 3)`
+  >>> `zss = standardize(xss, means = xss.mean(0))`
+  >>> `torch.allclose(zss.mean(0), torch.zeros(2, 3), atol=1e-4)`
+  True
+
+  In ML, we sometimes wish to standardize testing data with re-
+  spect to the means and stdevs of training data. During model
+  training, `xss` is often a mini-batch (that we simply standard-
+  ize w/r to `xss`'s own means and/or standard deviations.
+
+  For convenience, if one wishes to standardize a single examp-
+  le, `xs`, one can simply call `standardize(xs, ...)` rather than
+  bothering with say `xs.unsqueeze(0)`:
+
+  >>> `xs = torch.tensor([3., 4, 5])`
+  >>> `means = torch.tensor([1., 1, 1])`
+  >>> `stdevs = torch.tensor([2., 2, 1])`
+  >>> `standardize(xs, means, stdevs)`
+  tensor([1.0000, 1.5000, 4.0000])
+
+  Note: division by zero is avoided by replacing any entry in
+  `stdevs` that is close to 0.0 with 1.0:
+
+  >>> `xs = torch.tensor([3., 4, 5])`
+  >>> `stdevs = torch.tensor([2., 2, 0])`
+  >>> `standardize(xs, None, stdevs)`
+  tensor([1.5000, 2.0000, 5.0000])
 
   Args:
-    `xss` (tensor): Denote the shape of `xss` by `(d0, d1,...,dn)`,
-        which we think of as `d0` examples of data where each da-
-        tum has shape `(d1, d2, ...,dn)`.
-    `means` (tensor): Tensor with of shape `(d1, d2, ..., dn)`. De-
-        fault: `None`, which is equivalent to `means=xss.mean(0)`.
-    `stdevs` (tensor): Tensor with of shape `(d1, d2,..., dn)`. The
-        default, `None` is equivalent to `stdevs = xss.stdev(0)`.
-
-    *******************NOTE: 0s with thresh are replaced with ones
-    in stdevs***
+    `xss` (`tensor`): If we denote the size of `xss` by `(d_0, d_1,...`
+        `, d_n)`, then we regard `xss` as `d_0` examples of data. For
+        a single example, `(1, d_1,` ...`, d_n)` and `(d_1,` ...`, d_n)`
+        are treated equivalently.
+    `means` (`tensor`): Tensor of shape `(d_1, d_2,` ...`, d_n)` or `(1,`
+        `d_1, d_2,` ...`, d_n)`. Default: `None`, which is equivalent
+        to `means=torch.zeros(xss.shape[1:])`.
+    `stdevs` (`tensor`): Same shape restriction as that of `means`.
+        Entries within a threshold of 0.0 are effectively repl-
+        aced with 1.0 so as not to divide by zero. The default,
+        `None` is equivalent to `stdevs=torch.ones(xss.shape[1:])`.
 
   Returns:
     `torch.tensor`. A tensor of the same shape as `xss`.
-
-  replace entries with their
-  standardization (which is (x - mean)/stdev) with respect to
-  the mean and standard deviation of that entries.
-
-  >>> `xss = standardize(torch.rand(10000, 2, 3))`
-  >>> `xss.shape`
-  torch.Size([10000, 2, 3])
-  >>> `torch.allclose(xss.mean(0), torch.zeros(2, 3), atol=1e-4)`
-  True
   """
-  if stdevs is not None:
-    assert len(xss) > 1 or unbiased == False,\
-        'len(xss) is 1 but unbiased is: '+str(unbiased)
+  # SHOULD THIS BE IN NORMALIZE??
+  #if stdevs is not None:
+  #  assert len(xss) > 1 or unbiased == False,\
+  #      'len(xss) is 1 but unbiased is: '+str(unbiased)
+  #if means is not None:
+  #  assert means.shape == xss.shape[1:] or \
+  #      means.shape == torch.Size([1]) + xss.shape[1:]
+  #if stdevs is not None:
+  #  assert stdevs.shape == xss.shape[1:] or \
+  #      stdevs.shape == torch.Size([1]) + xss.shape[1:]
   if isinstance(means,torch.Tensor):
     if  isinstance(stdevs,torch.Tensor):
       return normalize(center(xss, means)[0], stdevs, unbiased)[0]
