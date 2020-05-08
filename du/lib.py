@@ -250,7 +250,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9'
 __status__ = 'Development'
-__date__ = '05/06/20'
+__date__ = '05/08/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -443,8 +443,9 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
 
   As a simple example, if `xss` is a 100x1 tensor consisting of
   normal data centered at 7 and of width 3 then `standardize` can
-  be used as follows to compute the z-scores of elements of the
-  'vector' `xss`:
+  be used to compute the z-scores of elements of `xss` with respect
+  to the, in this case, mean and standard deviation of the sin-
+  gle dimensional features.
 
   >>> `xss = 7 + 2 * torch.randn(100).view(100,1)`
   >>> `zss = standardize(xss, xss.mean(0), xss.std(0))`
@@ -455,9 +456,8 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   >>> `torch.allclose(zss.std(0),torch.ones(1),atol=1e-4)`
   True
 
-  More generally, below, entries in all 6 'column vectors' are
-  mapped to their z-scores with respect to the means of the ap-
-  propriate column vector:
+  More generally, below, entries in `xss` are standardized with
+  respect to each of the 6 feature dimensions.
 
   >>> `xss = 50 + torch.randn(1000, 2, 3)`
   >>> `zss = standardize(xss, means = xss.mean(0))`
@@ -524,7 +524,14 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
     return xss
 
 def online_means_stdevs(data, batchsize=2, *transforms_):
-  """
+  """ Online compute the means and standard deviations of data.
+
+  Args:
+    `data` (`Union[tensor, DataLoader]`): Either a tensor whose 1st
+        dimension indexes examples or an instance of PyTorch's
+        DataLoader that yields (mini-batches) of examples wrap-
+        ped in a tuple (of length 1). If `dataset`
+    `batchsize` (`int`):
   Notes:
     - This works on one channel data image data
   Todo:
@@ -554,8 +561,6 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
   >>> means.item(), stdevs.item()
   (49.5, 28.86...
   """
-  transforms_ = [torchvision.transforms.Lambda(lambda xs: xs)]+list(transforms_)
-
   if isinstance(data, torch.Tensor):
     loader = torch.utils.data.DataLoader(
         dataset = torch.utils.data.TensorDataset(data),
@@ -565,8 +570,11 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
     assert isinstance(data, torch.utils.data.DataLoader),'data must be a ten'+\
         'sor or an instance of torch.utils.data.DataLoader yielding (minibat'+\
         'ches of) tensors'
+    assert transforms_==(),'transforms should be used only when xss is a tensor'
     loader = data
     batchsize = loader.batch_size
+
+  transforms_ = [torchvision.transforms.Lambda(lambda xs: xs)]+list(transforms_)
 
   assert len(loader.dataset) % batchsize == 0,\
       'batchsize must divide ' + str(len(loader.dataset))

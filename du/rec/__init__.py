@@ -1,7 +1,7 @@
 __doc__ = 'tools for recurrent networks.'
 __author__ = 'Scott Simmons'
 __status__ = 'Development'
-__date__ = '04/21/20'
+__date__ = '05/08/20'
 __version__ = '0.9'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
