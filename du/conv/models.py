@@ -7,8 +7,8 @@
   |OneMetaCNN|($in_size$, $n_out$, $channels$, $**kwargs$)
   |TwoMetaCNN|($in_size$, $n_out$, $channels$, $width$, $**kwargs$)
 
-  |metalayer|($channels$, $kernels$, $**kwargs$)
-  |convFFhidden|($channels$, $conv_kernels$, $pool_kernels$)
+  |metalayer|($channels$, $kernels$, $nonlin$, $**kwargs$)
+  |convFFhidden|($channels$, $conv_kernels$, $pool_kernels$,$**kwargs$)
 
 The convolutional models defined here are built from metalay-
 ers, where a single meta-layer consists of a 2d convolutional
@@ -68,8 +68,8 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   a single max-pooling layer.
 
   Let the input to the meta-layer returned by this function be
-  a tensor with shape defined by `(W_in, H_in)`, and let `(W_out,`
-  `H_out)` be the shape of the resulting output tensor. Then the
+  a tensor with shape defined by `(H_in, W_in)`, and let `(H_out,`
+  `W_out)` be the shape of the resulting output tensor. Then the
   default `strides` and `paddings` lead to the following.
 
   If `kernels[0]`, which is the size of the square convolutional
@@ -77,14 +77,14 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   size (since by default the padding is (`kernels[0]`-1)/2 and
   the stride is 1). Meanwhile the pooling layer has (default)
   padding 0 and stride `kernels[1]`; hence it reduces both the
-  width and the height by a factor of `kernels[1]`. We have:
+  height and the width by a factor of `kernels[1]`. We have:
 
   !Case 1!: `kernels[0]` is odd
 
-  If `W_in` and `H_in` are both divisible by `kernels[1]`, then
+  If `H_in` and `W_in` are both divisible by `kernels[1]`, then
 
-                `W_out = W_in / kernels[1]`, and
-                `H_out = H_in / kernels[1]`.
+                `H_out = H_in / kernels[1]`, and
+                `W_out = W_in / kernels[1]`.
 
   >>> `ml, out_size = metalayer((1,16), (5,2), nn.ReLU())`
   >>> `ml`
@@ -98,10 +98,10 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   >>> `out_size(48, 64)`
   (24, 32)
 
-  If one or both of `W_in` and `H_in` are not divisible by `kernels`
+  If one or both of `H_in` and `W_in` are not divisible by `kernels`
   `[1]`, then
-              `W_out = floor(W_in/kernels[1])`, and
-              `H_out = floor(H_in/kernels[1])`.
+              `H_out = floor(H_in/kernels[1])`, and
+              `W_out = floor(W_in/kernels[1])`.
 
   >>> `ml, out_size = metalayer((1,16), (5,3), nn.ReLU())`
   >>> `ml(torch.rand(1, 1, 48, 64)).size()`
@@ -109,15 +109,15 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   >>> `out_size(48, 64)`
   (16, 21)
 
-  !Case 2! `kernels[1]` is even:
+  !Case 2! `kernels[0]` is even:
 
   If this case, the width and the height of data both grow by 1
   in moving through the convolution layer; hence
 
-            `W_out = floor((W_in + 1)/kernels[1])`, and
-            `H_out = floor((H_in + 1)/kernels[1])`.
+            `H_out = floor((H_in + 1)/kernels[1])`, and
+            `W_out = floor((W_in + 1)/kernels[1])`.
 
-  >>> `ml, out_size = metalayer((1,16),(7,2),nn.ReLU())`
+  >>> `ml, out_size = metalayer((1,16), (7,2), nn.ReLU())`
   >>> `ml(torch.rand(1, 1, 48, 64)).size()`
   torch.Size([1, 16, 24, 32])
   >>> `out_size(48, 64)`
@@ -126,11 +126,11 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   Therefore, in any case that assumes the default `strides` and
   `paddings`, we have
 
-            `W_out = floor((W_in + 1)/kernels[1])`, and
-            `H_out = floor((H_in + 1)/kernels[1])`.
+            `H_out = floor((H_in + 1)/kernels[1])`, and
+            `W_out = floor((W_in + 1)/kernels[1])`.
 
-  #(Here we have excluded the case `kernels[1]` = 1 since, then,
-  #the pooling layer has no effect.)
+  (Here we have excluded the case `kernels[1]` = 1 since, then,
+  the pooling layer has no effect.)
 
   Args:
     $channels$ (`Tuple[int]`): This tuple is interpreted as `(in_`
@@ -139,19 +139,19 @@ def metalayer(channels, kernels, nonlin, **kwargs):
     $kernels$ (`Tuple[int]`): The first integer determines the
         width and height of the convolutional kernel; the sec-
         ond, the same for the max-pooling kernel.
-    $nonlin$(`nn.Module`): The nonlinearity.
+    $nonlin$ (`nn.Module`): The nonlinearity.
 
   Kwargs:
     $strides$ (`Tuple[int]`): The first int is the stride of the
         convolutional layer; the second is that of the pooling
-        layer. Default: `(1,kernels[1])`.
+        layer. Default: `(1, kernels[1])`.
     $paddings$ (`Tuple[int]`): The first int is the padding for the
         convolutional layer; the second is that for the pooling
-        layer. Default: `(int(kernels[0]/2),0)`.
+        layer. Default: `(int(kernels[0]/2), 0)`.
 
   Returns:
     `(nn.Sequential, function)`. The metalayer tupled with a fun-
-        tion that mapps `W_in, H_in` to `W_out, H_out`.
+        tion that mapps `H_in, W_in` to `H_out, W_out`.
 
   """
   # this is metalayer
@@ -170,8 +170,8 @@ def metalayer(channels, kernels, nonlin, **kwargs):
                kernel_size = kernels[1],
                stride = strides[1],
                padding = paddings[1]))
-  def out_size(width, height):
-    return int((width+1)/kernels[1]), int((height+1)/kernels[1])
+  def out_size(height, width):
+    return int((height+1)/kernels[1]), int((width+1)/kernels[1])
   return ml, out_size
 
 def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
