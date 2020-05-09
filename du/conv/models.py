@@ -77,7 +77,8 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   size (since by default the padding is (`kernels[0]`-1)/2 and
   the stride is 1). Meanwhile the pooling layer has (default)
   padding 0 and stride `kernels[1]`; hence it reduces both the
-  height and the width by a factor of `kernels[1]`. We have:
+  height and the width by a factor of `kernels[1]` if `kernels[1]`
+  is divides both height and width. More generally, We have:
 
   !Case 1!: `kernels[0]` is odd
 
@@ -108,29 +109,46 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   torch.Size([1, 16, 16, 21])
   >>> `out_size(48, 64)`
   (16, 21)
+  >>> `ml, out_size = metalayer((1,16), (5,2), nn.ReLU())`
+  >>> `ml(torch.rand(1, 1, 47, 64)).size()`
+  torch.Size([1, 16, 23, 32])
+  >>> `out_size(47, 64)`
+  (23, 32)
 
   !Case 2! `kernels[0]` is even:
 
-  If this case, the width and the height of data both grow by 1
+  If this case, the height and the width of data both grow by 1
   in moving through the convolution layer; hence
 
             `H_out = floor((H_in + 1)/kernels[1])`, and
             `W_out = floor((W_in + 1)/kernels[1])`.
 
-  >>> `ml, out_size = metalayer((1,16), (7,2), nn.ReLU())`
-  >>> `ml(torch.rand(1, 1, 48, 64)).size()`
+  >>> `ml, out_size = metalayer((1,16), (6,2), nn.ReLU())`
+  >>> `ml(torch.rand(1, 1, 47, 64)).size()`
   torch.Size([1, 16, 24, 32])
-  >>> `out_size(48, 64)`
+  >>> `out_size(47, 64)`
   (24, 32)
 
   Therefore, in any case that assumes the default `strides` and
   `paddings`, we have
 
-            `H_out = floor((H_in + 1)/kernels[1])`, and
-            `W_out = floor((W_in + 1)/kernels[1])`.
+  `H_out = floor((H_in + (kernel[0]+1) mod 2))/kernels[1])`, and
+  `W_out = floor((W_in + (kernel[0]+1) mod 2))/kernels[1])`.
 
   (Here we have excluded the case `kernels[1]` = 1 since, then,
   the pooling layer has no effect.)
+
+  >>> `ml, out_size = metalayer((1,16), (7,2), nn.ReLU())`
+  >>> `ml(torch.rand(1, 1, 47, 64)).size()`
+  torch.Size([1, 16, 23, 32])
+  >>> `out_size(47, 64)`
+  (23, 32)
+
+  >>> `ml, out_size = metalayer((1,16), (7,3), nn.ReLU())`
+  >>> `ml(torch.rand(1, 1, 47, 64)).size()`
+  torch.Size([1, 16, 15, 21])
+  >>> `out_size(47, 64)`
+  (15, 21)
 
   Args:
     $channels$ (`Tuple[int]`): This tuple is interpreted as `(in_`
@@ -171,7 +189,9 @@ def metalayer(channels, kernels, nonlin, **kwargs):
                stride = strides[1],
                padding = paddings[1]))
   def out_size(height, width):
-    return int((height+1)/kernels[1]), int((width+1)/kernels[1])
+    return tuple(ml(torch.randn(1,channels[0],height,width)).size()[2:])
+    #return int((height + (kernels[0] + 1) % 2) / kernels[1]),\
+    #       int((width + (kernels[0] + 1) % 2) / kernels[1])
   return ml, out_size
 
 def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
@@ -239,16 +259,17 @@ class ConvFFNet(FFNet_):
     """Constructor.
 
     Args:
-      $in_size$ (`Tuple[int]`): A tuple of length 2 holding the
-          width and height of each input.
+      $in_size$ (`Tuple[int]`): A tuple (height, width) holding
+          the height and width of each input (in pixels, for
+          images).
       $n_out$ (`int`): Number of outputs from the model in its
           entirety. This would be 10 to say classify digits,
           or 1 for a regression problem.
-      $channels$ (`Tuple[int]`): The first entry sets `in_channe`
-          `ls` for the first metalayer's convolutional part;
-          the rest of the entries are the successive `out_cha`
-          `nnels` for the convolutional part of the first met-
-          alayer, the second metalayer, etc.
+      $channels$ (`Tuple[int]`): The first entry sets `in_channels`
+          for the first metalayer's convolutional part; the
+          rest of the entries are the successive `out_chann`
+          `els` for the convolutional part of the first meta-
+          layer, the second metalayer, etc.
       $widths$ (`Tuple[int]`): The widths (no. of nodes) in the
           successive layers of the dense part.
 
@@ -297,15 +318,15 @@ class ConvFFNet(FFNet_):
   def forward(self, xss):
     """Forward inputs.
 
-    Forwards features (of a mini-batch of examples) through,
+    Forwards features (of a mini-batch of examples) through
     the convolutional part of the model followed by the ful-
     ly-connected part.
 
     Args:
-      $xss$ (`torch.Tensor`): The tensor to be forwarded.
+      $xss$ (`Tensor`): The tensor to be forwarded.
 
     Returns:
-      (`torch.Tensor`). The forwarded tensor.
+      (`Tensor`). The forwarded tensor.
     """
     xss = self.conv(xss.unsqueeze(1))
     xss = self.dense(xss.reshape(len(xss),-1))
