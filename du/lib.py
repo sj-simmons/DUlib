@@ -577,7 +577,7 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
   transforms_ = [torchvision.transforms.Lambda(lambda xs: xs)]+list(transforms_)
 
   assert len(loader.dataset) % batchsize == 0,\
-      'batchsize must divide ' + str(len(loader.dataset))
+      'batchsize '+str(batchsize)+' must divide ' + str(len(loader.dataset))
 
   # batch update the means and variances
   means = torch.zeros(loader.dataset[0][0].size()) # BxHxW

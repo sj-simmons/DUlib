@@ -91,8 +91,9 @@ def metalayer(channels, kernels, nonlin, **kwargs):
   >>> `ml`
   Sequential(
     (0): Conv2d(1, 16, k...=(5, 5), st...=(1, 1), pa...=(2, 2))
-    (1): ReLU()
-    (2): MaxPool2d(kernel_size=2, stride=2, padding=0, ...)
+    (1): BatchNorm2d(16, ...)
+    (2): ReLU()
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, ...)
   )
   >>> `ml(torch.rand(1, 1, 48, 64)).size()`
   torch.Size([1, 16, 24, 32])
@@ -166,6 +167,8 @@ def metalayer(channels, kernels, nonlin, **kwargs):
     $paddings$ (`Tuple[int]`): The first int is the padding for the
         convolutional layer; the second is that for the pooling
         layer. Default: `(int(kernels[0]/2), 0)`.
+    $batchnorm$ ('bool'): Whether to use insert a BatchNorm later.
+        Default: `True`.
 
   Returns:
     `(nn.Sequential, function)`. The metalayer tupled with a fun-
@@ -173,21 +176,38 @@ def metalayer(channels, kernels, nonlin, **kwargs):
 
   """
   # this is metalayer
-  du.utils._check_kwargs(kwargs,['strides','paddings'])
+  du.utils._check_kwargs(kwargs,['strides','paddings','batchnorm'])
   strides = kwargs.get('strides',(1,kernels[1]))
   paddings = kwargs.get('paddings',(int(kernels[0]/2),0))
-  ml = nn.Sequential(
-           nn.Conv2d(
-               in_channels = channels[0],
-               out_channels = channels[1],
-               kernel_size = kernels[0],
-               stride = strides[0],
-               padding = paddings[0]),
-           nonlin,
-           nn.MaxPool2d(
-               kernel_size = kernels[1],
-               stride = strides[1],
-               padding = paddings[1]))
+  batchnorm = kwargs.get('batchnorm', True)
+  if batchnorm:
+    if kernels[1] > 1:
+      ml=nn.Sequential(
+          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+          nn.BatchNorm2d(num_features=channels[1]),
+          nonlin,
+          nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
+          padding=paddings[1]))
+    else:
+      ml = nn.Sequential(
+          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+          nn.BatchNorm2d(num_features=channels[1]),
+          nonlin)
+  else:
+    if kernels[1] > 1:
+      ml=nn.Sequential(
+          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+          nonlin,
+          nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
+          padding=paddings[1]))
+    else:
+      ml = nn.Sequential(
+          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+          nonlin)
   def out_size(height, width):
     return tuple(ml(torch.randn(1,channels[0],height,width)).size()[2:])
     #return int((height + (kernels[0] + 1) % 2) / kernels[1]),\
@@ -218,6 +238,8 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
   Kwargs:
     $nonlins$ (`nn.Module`): The nonlinearities to compose bet-
         ween meta-layers. Default: `nn.ReLU()`.
+    $batchnorm$ ('bool'): Whether to batch standardize between
+        meta-layers. Default: `True`.
 
   Returns:
     `(nn.Sequential, function)`. The block consisting of the com-
@@ -226,7 +248,7 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
         an input to the bock and `(W_out, H_out)` is the corres-
         ponding output.
 
-  >>> `convFFhidden((1,32, 64), (5,3), (2,2))`
+  >>> `convFFhidden((1,32, 64), (5,3), (2,2), batchnorm=False)`
   (Sequential(
     (0): Sequential(
       (0): Conv2d(1, 32, kernel_size=(5, 5), ...)
@@ -240,10 +262,11 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
     )
   ), ...)
   """
-  du.utils._check_kwargs(kwargs,['nonlins'])
+  du.utils._check_kwargs(kwargs,['nonlins','batchnorm'])
   nonlins = kwargs.get('nonlin',nn.ReLU())
+  batchnorm = kwargs.get('batchnorm', True)
   assert len(channels)-1 == len(conv_kernels) == len(pool_kernels)
-  layers, funcs = list(zip(*[metalayer(chans, kerns, nonlins) for\
+  layers,funcs=list(zip(*[metalayer(chans,kerns,nonlins,batchnorm=batchnorm) for\
       chans, kerns in zip(
           zip(channels[:-1],channels[1:]), zip(conv_kernels, pool_kernels))]))
   return nn.Sequential(*layers), functools.reduce(
@@ -280,6 +303,8 @@ class ConvFFNet(FFNet_):
           ing the nonlinearities for, resp., the convolution-
           al and the dense parts of the network. Default: `(nn`
           `.ReLU(), nn.ReLU())`.
+      $batchnorm$ ('bool'): Whether to batch standardize between
+          convolutional meta-layers. Default: `True`.
       $outfn$ (`nn.Module`): A function to pipe out though lastly
           in the `forward` method; The default is `log_softmax`.
           For regression, you likely want to put `None`.
@@ -295,7 +320,7 @@ class ConvFFNet(FFNet_):
     torch.Size([100, 10])
     """
     du.utils._check_kwargs(kwargs, ['conv_kernels','pool_kernels','means',
-        'stdevs','outfn','nonlins'])
+        'stdevs','outfn','nonlins','batchnorm'])
     means = kwargs.get('means', None)
     stdevs = kwargs.get('stdevs', None)
     assert len(in_size) == 2,\
@@ -306,10 +331,12 @@ class ConvFFNet(FFNet_):
     conv_kernels = kwargs.get('conv_kernels',(len(channels)-1)*[5])
     pool_kernels = kwargs.get('pool_kernels',(len(channels)-1)*[2])
     nonlins = kwargs.get('nonlins', (nn.ReLU(), nn.ReLU()))
+    batchnorm = kwargs.get('batchnorm', True)
 
     # build the convolutional part:
     self.conv, out_size = convFFhidden(
-        channels, conv_kernels, pool_kernels, nonlins = nonlins[0])
+        channels, conv_kernels, pool_kernels,
+        nonlins = nonlins[0], batchnorm = batchnorm)
     # build the dense part
     self.dense = denseFFhidden(
         n_inputs = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size)),
