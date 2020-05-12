@@ -58,8 +58,8 @@ __license__= 'Apache 2.0'
 #  def update(self):
 #    pass
 
-def stand_args(desc = '', **kwargs):
-  """Factory for command line switches.
+def standard_args(desc = '', **kwargs):
+  """Factory for standard command line switches.
 
   Painlessly setup argparse command line switches for common
   hyperparameters, and return the parser object in such a way
@@ -100,7 +100,7 @@ def stand_args(desc = '', **kwargs):
           `type = float`, `required = True`)
       `parser.add_argument('-baz'`,
           `help = 'a bool that's False by default'`,
-          `action = store_true`)
+          `action = 'store_true'`)
       `args = parser.parse_args()`
       ...
       `print('the learning rate is', args.lr)`
