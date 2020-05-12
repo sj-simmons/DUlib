@@ -39,7 +39,7 @@ $classes$ are, as of this release,
   │  ├─ |models.py|
   │  └─ |examples.py|
   └─ |utils.py|    !potentially helpful utilites!
-     └─ $stand_args$     easily set command-line options
+     └─ $standard_args$   easily set command-line options
 
 Note: consume the examples by typing, e.g., `pd du.examples` or
 `pd du.conv.examples`.

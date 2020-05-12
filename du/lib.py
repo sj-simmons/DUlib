@@ -1045,7 +1045,6 @@ def train(model, crit, train_data, **kwargs):
   args = kwargs.get('args', None)
   if 'args' == None:
     class args: pass # a little finesse if args wasn't passed
-
   learn_params = kwargs.get('learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
           'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
@@ -1065,8 +1064,9 @@ def train(model, crit, train_data, **kwargs):
 
   start = time.time() # start (naive) timing here
 
-  graph = 1 if graph == True else graph
-  assert graph>=0, 'graph must be a non-negative integer, not {}.'.format(graph)
+  graph = 1 if graph is True else graph
+  assert isinstance(graph,int) and graph>=0,\
+      'graph must be a non-negative integer, not {}.'.format(graph)
 
   # get devices determined by the arg gpu
   if isinstance(gpu, (tuple,list)) and len(gpu) == 1: gpu = (gpu[0], gpu[0])
@@ -1276,6 +1276,8 @@ def train(model, crit, train_data, **kwargs):
             loss = crit(model_copy(test_feats), test_targs).item()
           losses_test.append(loss)
           v_dations_test.append(valid_crit(model_copy(test_feats), test_targs))
+
+        model.train()
         if epoch > epochs - graph:
           xlim_start += 1
         ax1.clear()
@@ -1317,6 +1319,7 @@ def train(model, crit, train_data, **kwargs):
           plt.ioff()
           exit()
         fig.tight_layout()
+      model.train()
 
   end = time.time()
   if verb > 0: print ('trained in {:.2f} secs'.format(end-start))
