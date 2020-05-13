@@ -523,7 +523,7 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   else:
     return xss
 
-def online_means_stdevs(data, batchsize=2, *transforms_):
+def online_means_stdevs(data, batchsize=1, *transforms_):
   """ Online compute the means and standard deviations of data.
 
   Args:
@@ -542,7 +542,7 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
       (possibly a batched version of what's on wikipedia).
     - The stdevs here are always biased.
     - a passed loader batchsize override arg batchsize
-    - adjust so last batch can be smaller ...
+    - adjust so last batch can be smaller ... DONE
 
   >>> data = torch.arange(100.).view(100,1)
   >>> means, stdevs = online_means_stdevs(data)
@@ -817,21 +817,52 @@ class _DataLoader:
   An instance of this can be used in the same way that one uses
   an instance of `DataLoader`.
   """
-  class _Dataset(torch.utils.data.Dataset):
-    def __init__(self, tup):
-      self.tuple = tup
-      self.features = tup[0]
-      self.targets = tup[-1]
-    def __len__(self):
-      return len(self.tuple[0])
-    def __getitem__(self, idx):
-      return tuple(t[idx] for t in self.tuple)
+  #class _Dataset(torch.utils.data.Dataset):
+  #  def __init__(self, tup):
+  #    self.tuple = tup
+  #    #self.features = tup[0]
+  #    #self.targets = tup[-1]
+  #  def __len__(self):
+  #    return len(self.tuple[0])
+  #  def __getitem__(self, idx):
+  #    return tuple(t[idx] for t in self.tuple)
 
   #def __init__(self, data_tuple, batch_size, data_device, model_device):
-  def __init__(self, data_tuple, batch_size, data_device):
+  def __init__(self, data_tuple, batch_size, data_device=torch.device('cpu',0)):
     """
+    Examples:
+
+    >>> `xss = torch.rand(144).view(12,3,4)`
+    >>> `yss = torch.arange(12).view(12,1)`
+    >>> `dl =_DataLoader(data_tuple=(xss,yss),batch_size=6)`
+    >>> `for mb in dl:`
+    ...     `print(mb[0].size(), mb[1].size())`
+    torch.Size([6, 3, 4]) torch.Size([6, 1])
+    torch.Size([6, 3, 4]) torch.Size([6, 1])
+
+    >>> `dl =_DataLoader(data_tuple=(xss,yss),batch_size=12)`
+    >>> `for mb in dl:`
+    ...     `print(mb[0].size(), mb[1].size())`
+    torch.Size([12, 3, 4]) torch.Size([12, 1])
+
+    Note that this, like DataLoader, produces smaller last
+    minibatches if the batch_size does not divide the length.
+
+    >>> `dl =_DataLoader(data_tuple=(xss,yss),batch_size=7)`
+    >>> `for mb in dl:`
+    ...     `print(mb[0].size(), mb[1].size())`
+    torch.Size([7, 3, 4]) torch.Size([7, 1])
+    torch.Size([5, 3, 4]) torch.Size([5, 1])
+
+    >>> `dataset = torch.utils.data.TensorDataset(xss,yss)`
+    >>> `dl = torch.utils.data.DataLoader(dataset, batch_size=7)`
+    >>> `for mb in dl:`
+    ...     `print(mb[0].size(), mb[1].size())`
+    torch.Size([7, 3, 4]) torch.Size([7, 1])
+    torch.Size([5, 3, 4]) torch.Size([5, 1])
+
     Args:
-      $data_tuple$ (`Tuple[tensor]`): The tensors to be coher-
+      $data_tuple$ (`Tuple[Tensor]`): The tensors to be coher-
           ently batched.
       $batch_size$ (`int`): The batchsize.
       $data_device$ (`Union[str, torch.device]`): The device on
@@ -840,32 +871,46 @@ class _DataLoader:
           to move the minibatches to just before returning
           them.
     """
-    self.tuple = tuple([t.to(data_device) for t in data_tuple])
-    self.dataset = self._Dataset(self.tuple)
+    self.len = len(data_tuple[0])
+    self.dataset = tuple([t.to(data_device) for t in data_tuple])
+    #self.dataset = self._Dataset(self.tuple)
     self.batch_size = batch_size
     self.data_device = data_device
     #self.model_device = model_device
-    self.indices = torch.randperm(len(self.dataset), device = data_device)
+    #self.indices = torch.randperm(len(self.dataset), device = data_device)
+    #self.indices = torch.randperm(self.len, device = data_device)
+    #self.idx = 0
 
   def __iter__(self):
+    self.indices = torch.randperm(self.len, device = self.data_device)
     self.idx = 0
     return self
 
   def __next__(self):
-    if self.idx >= len(self.dataset) - 1:
-      self.idx = 0
-      self.indices = torch.randperm(len(self.dataset), device=self.data_device)
+    if self.idx > self.len - 1:
       raise StopIteration
+    minibatch = tuple([t.index_select(0,
+        self.indices[self.idx: self.idx + self.batch_size]) for\
+            t in self.dataset])
+    self.idx += self.batch_size
+    #if self.idx > len(self.dataset) - 1:
     #minibatch = tuple([t.index_select(0,
     #    self.indices[self.idx: self.idx + self.bs]).to(self.model_device)\
     #        for t in self.tuple])
-    minibatch = tuple([t.index_select(0,
-        self.indices[self.idx: self.idx + self.batch_size]) for t in self.tuple])
-    self.idx += self.batch_size
     return minibatch
 
 def _getLoss(model, dataloader, crit, device):
   """Return loss.
+
+  This uses `crit` to evaluate `model` on data wrapped in `dataloa`
+  `der`; on 'device' it computes, and then returns, the loss. Here
+  `dataloader` can be an instance of `torch.utils.data.DataLoader`
+  or `du.lib._DataLoader`.
+
+  Args:
+    $model$ (`nn.Module`): The model to applied.
+    $dataloader$ ('Union[DataLoader, _DataLoader])
+    $crit$ ('Union[DataLoader, _DataLoader])
 
   `dataloader` can be an instance of DataLoader or _DataLoader.
   """
@@ -1093,9 +1138,9 @@ def train(model, crit, train_data, **kwargs):
     assert all([isinstance(x, torch.Tensor) for x in train_data])
     has_lengths = True if len(train_data) > 2  else False
     num_examples = len(train_data[0])
+    if bs <= 0: bs = num_examples
     train_data = _DataLoader(train_data, bs, data_device)
 
-  if bs <= 0: bs = num_examples
 
   model = model.to(model_device) # move the model to the right device
   if verb > 2: print(model)
@@ -1231,6 +1276,7 @@ def train(model, crit, train_data, **kwargs):
     #this breaks if not Dataloader
     #for batch in _batcher(train_data, bs, data_device, model_device):
     for minibatch in train_data:
+      #print(minibatch[0].size(), minibatch[-1].size()); quit()
       loss = crit(model(
           *map(lambda x: x.to(model_device), minibatch[:-1])),
           minibatch[-1].to(model_device))
