@@ -529,11 +529,11 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
   Args:
     `data` (`Union[tensor, DataLoader]`): Either a tensor whose 1st
         dimension indexes examples or an instance of PyTorch's
-        DataLoader that yields (mini-batches) of examples wrap-
-        ped in a tuple (of length 1). If `dataset`
+        DataLoader that yields (mini-batches) of examples which
+        are wrapped in a tuple (of length 1). If `dataset`
     `batchsize` (`int`):
   Notes:
-    - This works on one channel data image data
+    - This works on one channel data (image) data
   Todo:
     - Write something that works on multichannel and calls this?
       One say 3 channel images, try passing a transform that flattens
@@ -556,6 +556,12 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
   (49.5, 28.86...
 
   >>> dataset = torch.utils.data.TensorDataset(data)
+  >>> loader = torch.utils.data.DataLoader(dataset, batch_size=37)
+  >>> means, stdevs = online_means_stdevs(loader)
+  >>> means.item(), stdevs.item()
+  (49.5, 28.86...
+
+  >>> dataset = torch.utils.data.TensorDataset(data)
   >>> loader = torch.utils.data.DataLoader(dataset, batch_size=1)
   >>> means, stdevs = online_means_stdevs(loader)
   >>> means.item(), stdevs.item()
@@ -570,14 +576,12 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
     assert isinstance(data, torch.utils.data.DataLoader),'data must be a ten'+\
         'sor or an instance of torch.utils.data.DataLoader yielding (minibat'+\
         'ches of) tensors'
-    assert transforms_==(),'transforms should be used only when xss is a tensor'
+    if transforms_!=():\
+        'Warning: best practice is to put transforms in your dataloader'
     loader = data
     batchsize = loader.batch_size
 
   transforms_ = [torchvision.transforms.Lambda(lambda xs: xs)]+list(transforms_)
-
-  assert len(loader.dataset) % batchsize == 0,\
-      'batchsize '+str(batchsize)+' must divide ' + str(len(loader.dataset))
 
   # batch update the means and variances
   means = torch.zeros(loader.dataset[0][0].size()) # BxHxW
@@ -586,6 +590,7 @@ def online_means_stdevs(data, batchsize=2, *transforms_):
   for transform in transforms_:
     for xss in loader: # loader kicks out tuples; so do
       batch = transform(xss[0])  # <-- this; xs is now a BxHxW tensor
+      batchsize = len(batch)
       prev_means = means
       batch_means = batch.mean(0)
       denom = m+batchsize
