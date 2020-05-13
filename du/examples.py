@@ -50,7 +50,7 @@ we use 'shape' and 'size' interchangeably.
 
 Later, when we want to classify or otherwise model images (all
 of which we will assume to be the same size), our features will
-have shape `(n, image_width, image_height)` where `n` is the number
+have shape `(n, image_height, image_width)` where `n` is the number
 of images. Let us agree to denote this as `(n,*)` where, in fact,
 there could be any number of additional dimensions beyond the
 first.
@@ -64,8 +64,8 @@ mber. In that case, `xss` should of shape `(n,1)`, not `(n)`.
 
 (Therefore, you may wish, in your code, to deploy the `PyTorch`
 utility `unsqueeze` when writing a program that calls, say, the
-`train` function in this library.  Again, see below for basic ex-
-amples.)
+`train` function in this library. Again, see below for basic exa-
+mples.)
 
 Given features (or inputs) denoted `xss` we, throughout, notate
 the corresponding ~targets~ (or ~outputs~) by `yss`. What is the con-
@@ -120,8 +120,19 @@ be an `int` in the range `0` to `C-1` where `C` is the number of class-
 es. Importantly, `yss` must be a `torch.LongTensor` in the case of
 a classification problem.
 
-A final note on notation: we often use `yhatss` to denote pre-
-dictions made using a model on features unseen during training.
+Final notes on notation:
+
+ - We often use `yhatss` to denote predictions made using a model
+   on features unseen during training.
+
+ - When writing a program that solves a particular problem (so
+   that we have an actual data set that we are working with),
+   we often use `feats` and `targs` for the inputs, respectively,
+   outputs.
+
+   When writing code, such as libraries in DUlib, applicable to
+   general problems and their data sets, we often use `xss` resp.
+   `yss`, as described above.
 
                     _____________________
 
@@ -135,11 +146,12 @@ led ~linear perceptron~.
 First, we generate some data.
 
 >>> `import torch`
->>> `xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)`
+>>> `xss = 100*torch.rand(40)`
+>>> `yss = torch.normal(2*xss+9, 10.0)`
 
-The `x`-values, `xs`, above are selected uniformly from the inter-
+The `x`-values, `xss`, above are selected uniformly from the inter-
 val `[0, 100]`. The `y`-values were obtained by adding normally di-
-stributed error to `y=2x+9` when `x` runs through the `xs`.
+stributed error to `y=2x+9` as `x` runs through the `xs`.
 
 Let us next cast the data as tensors of a size appropriate for
 training a neural net using the `train` function in `DUlib`. (The
@@ -147,16 +159,20 @@ training a neural net using the `train` function in `DUlib`. (The
 use the documentation for the `train` function by typing, for ex-
 ample, `pd du.lib.train` at the command line.)
 
->>> `xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)`
->>> `xss.size(); yss.size()`
+>>> `feats = xss.unsqueeze(1); targs = yss.unsqueeze(1)`
+>>> `feats.size(); targs.size()`
 $torch.Size([40, 1])$
 $torch.Size([40, 1])$
 
-For best performance, we ~center~ and ~normalize~ the data.
+For best performance, we ~center~ and ~normalize~ the data, saving
+for later the mean and standard deviation of each of the inputs
+and the outputs.
 
 >>> `from du.lib import center, normalize`
->>> `xss,xss_means = center(xss); yss,yss_means = center(yss)`
->>> `xss,xss_stds=normalize(xss); yss,yss_stds=normalize(yss)`
+>>> `feats, feats_mean = center(feats)`
+>>> `feats, feats_std = normalize(feats)`
+>>> `targs, targs_mean = center(targs)`
+>>> `targs, targs_std = normalize(targs)`
 
 Next, let us create an instance of a model that, upon training,
 computes the ~least-squares regression~ line for the given data.
@@ -171,11 +187,11 @@ computes the ~least-squares regression~ line for the given data.
 ...     `return self.layer(xss)`
 >>> `model = LinRegModel()`
 
-(Using the functionality of `DUlib`, we can quickly define the
-previous class with
+Note: using the functionality of `DUlib`, we can quickly define
+the previous class with
 
 >>> `from du.models import DenseFFNet`
->>> `LinRegModel = DenseFFNet(1,1)`
+>>> `model = DenseFFNet(1, 1)`
 
 This is equivalent to the definition above with one added bene-
 fit that has to do with serialization. Type `pd du.models` in or-
@@ -188,16 +204,17 @@ We now specify a ~loss function~ and train our model.
 >>> `model = train(`
 ...     `model = model`,
 ...     `crit = criterion`,
-...     `train_data = (xss, yss)`,
+...     `train_data = (feats, targs)`,
 ...     `learn_params = {'lr': 0.1}`,
 ...     `epochs = 50`,
 ...     `verb = 0)`
 
-Suppose that we want to predict the `y`-value associated to the
-`x`-value 50. If 50 happens to be an `x`-value in the data set, we
-could just take for the prediction the corresponding `y`-value (or
-the average of the corresponding `y`-values if 50 happens to oc-
-cur more than once as an input of data).
+Suppose that we want to predict the `y`-value (or output, or tar-
+get) associated to the `x`-value (or input, or feature) 50. If 50
+happens to be an `x`-value in the data set, we could just take
+for the prediction the corresponding `y`-value (or the average of
+the corresponding `y`-values if 50 happens to occur more than
+once as an input of data).
 
 If 50 does not occur, we can use the regression line to make
 our prediction (which should be close to 2*50+9, by the way).
@@ -205,23 +222,23 @@ But notice that, even if 50 does occur in the data, we still
 want to use the regression line since we are assuming that the
 original data includes error.
 
->>> `testss = torch.tensor([50.]).unsqueeze(1)`
->>> `testss; testss.size()`
+>>> `xs = torch.tensor([50.]).unsqueeze(1)`
+>>> `xs; xs.size()`
 $tensor([[50.]])$
 $torch.Size([1, 1])$
 
 We mean center and normalize with respect to the means and
 standard deviations of the training data.
 
->>> `testss, _ = center(testss, xss_means)`
->>> `testss, _ = normalize(testss, xss_stds)`
+>>> `xs, _ = center(xs, feats_mean)`
+>>> `xs, _ = normalize(xs, feats_std)`
 
-After running the inputs for which we wish to make an predic-
-tion through our trained model, we translate the output to
-where it is supposed to be.
+After running the inputs for which we wish to make a predict-
+ion through our trained model, we translate the output to where
+it is supposed to be.
 
->>> `yhatss = model(testss)`
->>> `prediction = (yhatss.mul_(yss_stds)+yss_means).item()`
+>>> `yhats = model(xs)`
+>>> `prediction = (yhats.mul_(targs_std)+targs_mean).item()`
 >>> `abs(prediction - 109) < 5`
 $True$
 
@@ -262,7 +279,7 @@ $0.99575$
 >>> `model = train(`
 ...   `model = model`,
 ...   `crit = criterion`,
-...   `train_data = (xss, yss)`,
+...   `train_data = (feats, targs)`,
 ...   `learn_params = LR_decay(learning_rate, decay_rate)`,
 ...   `epochs = epochs`,
 ...   `verb = 0)`
@@ -277,8 +294,8 @@ the original data.
 Now map the weights back to unnormalized/uncentered data, and
 check that the slope and intercept are close to 2 and 9,
 
->>> `my=yss_means.item(); mx=xss_means.item()`
->>> `sy=yss_stds.item(); sx=xss_stds.item()`
+>>> `my=targs_mean.item(); mx=feats_mean.item()`
+>>> `sy=targs_std.item(); sx=feats_std.item()`
 >>> `slope = m*sy/sx; intercept = my+b*sy-slope*mx`
 >>> `all([abs(slope - 2)  < 0.2, abs(intercept - 9.0) < 13.0])`
 $True$
@@ -292,14 +309,14 @@ lem. But, for the sport of it, one can use the `optimize_ols`
 function in `DUlib` as follows:
 
 >>> `model = DenseFFNet(1,1)`
->>> `xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 10.0)`
->>> `xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)`
+>>> `xss = 100*torch.rand(40); yss=torch.normal(2*xss+9, 10.0)`
+>>> `feats = xss.unsqueeze(1); targs = yss.unsqueeze(1)`
 >>> `from du.lib import optimize_ols`
 >>> `model = train(`
 ...     `model = model`,
 ...     `crit = criterion`,
-...     `train_data = (xss, yss)`,
-...     `learn_params = optimize_ols(xss)`,
+...     `train_data = (feats, targs)`,
+...     `learn_params = optimize_ols(feats)`,
 ...     `epochs = 4000`,
 ...     `verb = 0`)
 >>> `params = list(model.parameters())`
@@ -312,8 +329,8 @@ r^2, the ~coefficient of determination~. For the current demon-
 stration, r^2 can be computed with
 
 >>> `from du.lib import r_squared`
->>> `yhatss = model(xss)`
->>> `0.96 < r_squared(yhatss, yss) < 0.985`
+>>> `yhatss = model(feats)`
+>>> `0.96 < r_squared(yhatss, targs) < 0.985`
 $True$
 
 This means that about 97% of the variation in the data is ex-
@@ -365,9 +382,9 @@ a bias by default).
 Let us generate some data by adding i.i.d. noise to a sampled
 non-linear function:
 
->>> `xs = 40*torch.rand(20)-80/3`
->>> `ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
->>> `xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)`
+>>> `xss = 40*torch.rand(20)-80/3`
+>>> `yss = torch.normal(2*xss*torch.cos(xss/10)-5, 10.0)`
+>>> `feats = xss.unsqueeze(1); targs = yss.unsqueeze(1)`
 
 and try to fit to those data a polynomial of degree:
 
@@ -392,7 +409,7 @@ Let us instance and train this new class.
 >>> `model = train(`
 ...     `model = SimpleLinReg(degree)`,
 ...     `crit = nn.MSELoss()`,
-...     `train_data = (xss, yss)`,
+...     `train_data = (feats, targs)`,
 ...     `learn_params = {'lr': 1e-9, 'mo': 0.999}`,
 ...     `graph = 0,`
 ...     `epochs = 8000`,
@@ -402,14 +419,14 @@ Let us now compute r^2 for regression polynomial found by the
 model, though we should ask ourselves if using r^2 is appropr-
 iate in this scenario.
 
->>> `r_squared(model(xss), yss)` #doctest:+SKIP
+>>> `r_squared(model(feats), targs)` #doctest:+SKIP
 
 We can also pick 20 test points not seen during training.
 
->>> `xs = 40*torch.rand(20)-80/3`
->>> `xss_test = xs.unsqueeze(1)`
->>> `ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
->>> `yss_test = ys.unsqueeze(1)`
+>>> `xss = 40*torch.rand(20)-80/3`
+>>> `xss_test = xss.unsqueeze(1)`
+>>> `yss = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
+>>> `yss_test = yss.unsqueeze(1)`
 >>> `r_squared(model(xss_test), yss_test)` #doctest:+SKIP
 
 These r^2 values jump around, over multiple runs of the code
@@ -422,8 +439,9 @@ plays the (sample) point cloud along with the regression poly.
 The r^2 values are also computed and displayed.
 
 How can r^2 be negative? What is r^2 actually computing in the
-cas of polynomial regression? Why is r^2 never negative in the
-case of a degree 1 poly (i.e., a line)?
+case of polynomial regression? Why is r^2 never negative in the
+case of a degree 1 poly (i.e., a line) if we assume a model
+that has converged to actual min of the loss function?
 
 For the (ols) regression line, r^2 computes the proportion of
 the variation of the data explained by the regression line `over`
@@ -445,9 +463,9 @@ outputs of f(x) = 2x*cos(x/10)-5, as in the last demonstration.
 
 Let us generate the data as in last demonstration.
 
->>> `xs = 40*torch.rand(20)-80/3`
->>> `ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
->>> `xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)`
+>>> `xss = 40*torch.rand(20)-80/3`
+>>> `yss = torch.normal(2*xss*torch.cos(xss/10)-5, 10.0)`
+>>> `feats = xss.unsqueeze(1); targs = yss.unsqueeze(1)`
 
 The following class has a single hidden layer.
 
@@ -469,20 +487,20 @@ Or, equivalently, using `DUlib`:
 >>> model = DenseFFNet(1, 1, (8,))
 
 >>> `model=train(`
-...     `model = model,
+...     `model = model`,
 ...     `crit = nn.MSELoss()`,
-...     `train_data = (xss, yss)`,
+...     `train_data = (feats, targs)`,
 ...     `learn_params = {'lr': 1e-5, 'mo': 0.98}`,
 ...     `epochs = 8000`,
 ...     `graph = 0,`
 ...     `verb = 0)`
 
->>> `r_squared(model(xss), yss)`
+>>> `r_squared(model(feats), targs)`
 
->>> `xs = 40*torch.rand(20)-80/3`
->>> `xss_test = xs.unsqueeze(1)`
->>> `ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
->>> `yss_test = ys.unsqueeze(1)`
+>>> `xss = 40*torch.rand(20)-80/3`
+>>> `xss_test = xss.unsqueeze(1)`
+>>> `yss = torch.normal(2*xss*torch.cos(xss/10)-5, 10.0)`
+>>> `yss_test = yss.unsqueeze(1)`
 >>> `r_squared(model(xss_test), yss_test)`
 
 #doctest:+SKIP
@@ -697,7 +715,7 @@ def poly_string(coeffs):
   Returns:
     `str`.
 
-  >>> print(poly_string([-5,2,3]))
+  >>> `print(poly_string([-5,2,3]))`
   3x^2+2x+-5
   """
   coeffs = coeffs[::-1]
