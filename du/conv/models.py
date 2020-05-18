@@ -167,25 +167,40 @@ def metalayer(channels, kernels, nonlin, **kwargs):
     $paddings$ (`Tuple[int]`): The first int is the padding for the
         convolutional layer; the second is that for the pooling
         layer. Default: `(int(kernels[0]/2), 0)`.
-    $batchnorm$ ('bool'): Whether to use insert a BatchNorm later.
-        Default: `True`.
+    $batchnorm$ ('(str, kwargs)'): A tuple which, if not emp-
+        ty, results in a batch normalization layer being inser-
+        ted in the metalayer. If the string in the first posit-
+        ion is 'before', respectively 'after', then batch nor-
+        malization takes place before, resp. after, applying
+        the nonlinearity. Keyword arguments for `torch.nn.Batch`
+        `Norm2d` can also be supplied in the form of a `dict`.
+        Default: `('before',)`.
+
+  >>> `bn = ('before',{'momentum':.99})
+  >>> `ml,_= metalayer((1,16), (7,3), nn.ReLU(), batchnorm=bn)`
+  >>> `ml(torch.rand(1, 1, 47, 64)).size()`
+  torch.Size([1, 16, 15, 21])
 
   Returns:
     `(nn.Sequential, function)`. The metalayer tupled with a fun-
         tion that mapps `H_in, W_in` to `H_out, W_out`.
-
   """
   # this is metalayer
   du.utils._check_kwargs(kwargs,['strides','paddings','batchnorm'])
   strides = kwargs.get('strides',(1,kernels[1]))
   paddings = kwargs.get('paddings',(int(kernels[0]/2),0))
-  batchnorm = kwargs.get('batchnorm', True)
+  batchnorm = kwargs.get('batchnorm', ('before',))
   if batchnorm:
+    if len(batchnorm) == 1: bn_kwargs = {} # batchnorm kwargs
+    else:
+      bn_kwargs = batchnorm[1]
+      assert isinstance(bn_kwargs,dict),\
+         'second element of batchnorm must be a dict'
     if kernels[1] > 1:
       ml=nn.Sequential(
           nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
               kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
-          nn.BatchNorm2d(num_features=channels[1]),
+          nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
           nonlin,
           nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
           padding=paddings[1]))
@@ -193,7 +208,7 @@ def metalayer(channels, kernels, nonlin, **kwargs):
       ml = nn.Sequential(
           nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
               kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
-          nn.BatchNorm2d(num_features=channels[1]),
+          nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
           nonlin)
   else:
     if kernels[1] > 1:
@@ -238,8 +253,16 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
   Kwargs:
     $nonlins$ (`nn.Module`): The nonlinearities to compose bet-
         ween meta-layers. Default: `nn.ReLU()`.
-    $batchnorm$ ('bool'): Whether to batch standardize between
-        meta-layers. Default: `True`.
+    $batchnorm$ (`(str, kwargs)`): A tuple which, if not empty, re-
+        sults in a batch normalization layer being inserted in
+        each convolutional metalayer. If the string in the
+        first position is 'before', resp. 'after', then batch
+        normalization takes place before, resp.  after, the
+        nonlinearity in each convolutional metalayer. Keywords
+        for `torch.nn.BatchNorm2d` can be supplied in the form a
+        `dict` and included as the second element of this tuple;
+        those will be applied in each convolutional metalayer's
+        batch normalization layer. Default: `('before',)`.
 
   Returns:
     `(nn.Sequential, function)`. The block consisting of the com-
@@ -248,7 +271,7 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
         an input to the bock and `(W_out, H_out)` is the corres-
         ponding output.
 
-  >>> `convFFhidden((1,32, 64), (5,3), (2,2), batchnorm=False)`
+  >>> `convFFhidden((1,32, 64), (5,3), (2,2), batchnorm=())`
   (Sequential(
     (0): Sequential(
       (0): Conv2d(1, 32, kernel_size=(5, 5), ...)
@@ -264,7 +287,7 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
   """
   du.utils._check_kwargs(kwargs,['nonlins','batchnorm'])
   nonlins = kwargs.get('nonlin',nn.ReLU())
-  batchnorm = kwargs.get('batchnorm', True)
+  batchnorm = kwargs.get('batchnorm', ('before',))
   assert len(channels)-1 == len(conv_kernels) == len(pool_kernels)
   layers,funcs=list(zip(*[metalayer(chans,kerns,nonlins,batchnorm=batchnorm) for\
       chans, kerns in zip(
@@ -303,8 +326,17 @@ class ConvFFNet(FFNet_):
           ing the nonlinearities for, resp., the convolution-
           al and the dense parts of the network. Default: `(nn`
           `.ReLU(), nn.ReLU())`.
-      $batchnorm$ ('bool'): Whether to batch standardize between
-          convolutional meta-layers. Default: `True`.
+      $batchnorm$ (`(str, kwargs)`): A tuple which, if not empty,
+          results in a batch normalization layer being inser-
+          ted in each convolutional metalayer. If the string
+          in the first position is 'before', resp. 'after',
+          then batch normalization takes place before, resp.
+          after, the nonlinearity in each convolutional meta-
+          layer. Keywords for `torch.nn.BatchNorm2d` can be
+          supplied in the form a `dict` and included as the
+          second element of this tuple; those will be applied
+          in each convolutional metalayer's batch normalizat-
+          ion layer. Default: `('before',)`.
       $outfn$ (`nn.Module`): A function to pipe out though lastly
           in the `forward` method; The default is `log_softmax`.
           For regression, you likely want to put `None`.
@@ -313,11 +345,18 @@ class ConvFFNet(FFNet_):
       $stdevs$ (`torch.Tensor`): A tensor typically holding the
           standard deviations of the training data.
 
-    >>> model = ConvFFNet((28,28), 10, (1,16,8), (100,50))
-    >>> xss = torch.rand(100,28,28) # e.g., b&w images
-    >>> yhatss = model(xss)
-    >>> yhatss.size()
+    >>> `model = ConvFFNet((28,28), 10, (1,16,8), (100,50))`
+    >>> `xss = torch.rand(100,28,28)` # e.g., b&w images
+    >>> `yhatss = model(xss)`
+    >>> `yhatss.size()`
     torch.Size([100, 10])
+
+    >>> bn = ('before',{'momentum':0.9})
+    >>> `model=ConvFFNet((28,28),8,(1,16),(100,),batchnorm=bn)`
+    >>> `xss = torch.rand(100,28,28)` # e.g., b&w images
+    >>> `yhatss = model(xss)`
+    >>> `yhatss.size()`
+    torch.Size([100, 8])
     """
     du.utils._check_kwargs(kwargs, ['conv_kernels','pool_kernels','means',
         'stdevs','outfn','nonlins','batchnorm'])
@@ -331,7 +370,7 @@ class ConvFFNet(FFNet_):
     conv_kernels = kwargs.get('conv_kernels',(len(channels)-1)*[5])
     pool_kernels = kwargs.get('pool_kernels',(len(channels)-1)*[2])
     nonlins = kwargs.get('nonlins', (nn.ReLU(), nn.ReLU()))
-    batchnorm = kwargs.get('batchnorm', True)
+    batchnorm = kwargs.get('batchnorm', ('before',))
 
     # build the convolutional part:
     self.conv, out_size = convFFhidden(

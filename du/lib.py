@@ -158,6 +158,8 @@ trained models.
                     _____________________
 """
 #Todo:
+#  - consider adaptive pooling
+#  - do something sensible about cudnn.benchmark
 #  - get rid of batchsize = -1 stuff
 #  - consider removing datadevice from train.  Don't need it?
 #  - look closely at 'center' for center and similar for normalize
@@ -1128,6 +1130,8 @@ def train(model, crit, train_data, **kwargs):
     print('training on {} (data on {})'.format(model_device, data_device),end='')
     if valid_crit and graph>0: print('; validating on {}'.format(valid_device))
     else: print()
+  # is this what and where you want
+  if model_device.type == 'cuda': torch.backends.cudnn.benchmark = True
 
   # parse the training data and leave it in data_device memory
   if isinstance(train_data, torch.utils.data.DataLoader):
