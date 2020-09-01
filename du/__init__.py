@@ -41,7 +41,7 @@ $classes$ are, as of this release,
   └─ |utils.py|    !potentially helpful utilites!
      └─ $standard_args$   easily set command-line options
 
-Note: consume the examples by typing, e.g., `pd du.examples` or
+Note: consume the examples by typing, e.g., `pd du.examples` and
 `pd du.conv.examples`.
 
 To import `DUlib`'s functionality into your program, consider do-

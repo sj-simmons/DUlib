@@ -505,7 +505,7 @@ class _Markdown:
   def gray(self, docstring, strip=False):
     """Makes gray >>> and ... ."""
     if not strip:
-      return re.sub(r'(>>>|\.\.\.)', self.GREY+r'\1'+ self.END, docstring)
+      return re.sub(r'(>>>|\.\.\.)', self.BOLD+self.GREY+r'\1'+ self.END, docstring)
     else:
       return docstring
 

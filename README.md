@@ -16,6 +16,8 @@
   ``` bash
   pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9  --user
   ```
+* Absolute best practice is to replace the command `pip3` in the commands above (and below)
+  with the command `/usr/bin/pip3`; see e.g., [here](https://sj-simmons.github.io/dl/setup/install_packages).
 
 You can now:
 * have a look at the module structure of DUlib: `pd du`
