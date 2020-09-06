@@ -537,7 +537,13 @@ __copyright__ = """
 """
 __license__= 'Apache 2.0'
 
+# if someone is running in WSL, try to catch if no Xserver running
+_not_WSL =  not 'WSL_DISTRO_NAME' in os.environ
 _has_display = 'DISPLAY' in os.environ
+_display = True if _not_WSL or _has_display else False
+# This doesn't work currently in WSL. Disabling:
+_display = True
+
 
 def simple_linear_regression():
   """Commandline program that graphs a regression line."""
@@ -568,7 +574,7 @@ def simple_linear_regression():
   params = list(model.parameters())
   slope = params[0].item(); intercept = params[1].item()
 
-  if _has_display:
+  if _display:
     fig, _ = plt.subplots()
     plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
     plt.scatter(xs.tolist(),ys.tolist(),s=9)
@@ -578,6 +584,8 @@ def simple_linear_regression():
         label='reg. line: y = {:.2f}x + {:.2f}'.format(slope, intercept))
     plt.legend(loc=0);
     plt.show()
+  else:
+    print('no X server running')
 
   print('r^2 for the original data: {}'.\
       format(dulib.r_squared(model(xss),yss)))
@@ -588,7 +596,7 @@ def simple_linear_regression():
 
 def simple_linear_regression_animate():
   """Program that plays a regression line animation."""
-  assert _has_display, 'no X-server found'
+  assert _display, 'no X-server found'
 
   xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 50.0)
   xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
@@ -682,7 +690,7 @@ def simple_polynomial_regression():
       graph = args.gr,
       verb = 2)
 
-  if _has_display:
+  if _display:
     fig, _ = plt.subplots()
     plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
     plt.scatter(xs.tolist(),ys.tolist(),s=9,
@@ -695,6 +703,8 @@ def simple_polynomial_regression():
         label='reg. poly (deg={})'.format(degree))
     plt.legend(loc=0);
     plt.show()
+  else:
+    print('no X server running')
 
   print('r^2 on the original data: {}'.format(dulib.r_squared(model(xss),yss)))
   xs = 40*torch.rand(20)-80/3
@@ -734,7 +744,7 @@ def poly_string(coeffs):
 
 def simple_polynomial_regression_animate():
   """Program that plays a regression polynomial animation."""
-  assert _has_display, 'no X-server found'
+  assert _display, 'no X-server found'
   num_points = 20; x_width = 40.0; h_scale = 1.5; v_shift = 5
   xs = x_width*torch.rand(num_points) - x_width /h_scale
   ys = torch.normal(2*xs*torch.cos(xs/10)-v_shift, 10.0)
