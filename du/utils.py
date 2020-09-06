@@ -475,7 +475,7 @@ class _Markdown:
     self.red_pat = re.compile(r"\$([^\$]+)\$")
     self.cyan_pat = re.compile(r"~([^~]+)~")
     #self.blue_pat = re.compile()
-    #self.gray_pat = re.compile()
+    #self.ellipses_pat = re.compile()
     #self.underline_pat = re.compile()
     #self.seperator_pat = re.compile()
 
@@ -502,10 +502,10 @@ class _Markdown:
     return re.sub(
         r'\|([^\|]+)\|', self.BOLD+self.BLUE+r'\1'+ self.END, docstring)
 
-  def gray(self, docstring, strip=False):
-    """Makes gray >>> and ... ."""
+  def ellipses(self, docstring, strip=False):
+    """colors >>> and ... ."""
     if not strip:
-      return re.sub(r'(>>>|\.\.\.)', self.GREY+r'\1'+ self.END, docstring)
+      return re.sub(r'(>>>|\.\.\.)', self.MAGENTA+r'\1'+ self.END, docstring)
     else:
       return docstring
 
