@@ -1,7 +1,7 @@
 DUlib
 =====
 
-Machine and deep learning tools.
+Machine and Deep Learning tools.
 
 Installation
 ------------
@@ -23,4 +23,11 @@ Notes
 * To upgrade to the newest release of DUlib in the presence of a previously installed one, issue the
   command: ``pip3 install -U DUlib --user``
 
-* See the `upstream repo <https://github.com/sj-simmons/DUlib>`_ for release/usage notes.
+* DUlib's documentation is read via a retooling of pydoc3 that includes custom
+  highlighting. Issue the following command to check syntax highlighting and, if
+  necessary, read notes on troubleshooting.
+  command: ``pd du.highlight``
+  If all is well, read introductory usage remarks with:
+  command: ``pd du``
+
+* See the `upstream repo <https://github.com/sj-simmons/DUlib>`_ for release information.
