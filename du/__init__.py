@@ -2,6 +2,12 @@ __doc__ =\
 """
 tools from `The DL@DU Project`.
 
+If you see escape characters around words in the tree diagram
+below, exit reading this and, at your commandline, issue the
+following command. Troubleshoot and return here.
+
+  pd du.highlight
+
 The |module| structure, along with the (non-helper) $functions$ and
 $classes$ are, as of this release,
 
@@ -38,14 +44,14 @@ $classes$ are, as of this release,
   │  │  └─ |cbow.py|      model CBOW wordvecs given a corpus
   │  ├─ |models.py|
   │  └─ |examples.py|
-  └─ |utils.py|    !potentially helpful utilites!
-     └─ $standard_args$   easily set command-line options
+  ├─ |utils.py|   !potentially helpful utilites!
+  │   └─ $standard_args$  easily set command-line options
+  └─ |highlight.py|       highlighting conventions for docs
 
-Note: consume the examples by typing, e.g., `pd du.examples` or
-`pd du.conv.examples`.
+!Quick Start!
 
-To import `DUlib`'s functionality into your program, consider do-
-ing something like:
+Import `DUlib`'s functionality into your program with something
+like:
 
   ...
   `import du.lib as dulib`
@@ -66,6 +72,17 @@ ing something like:
   `)`
 
   ...
+
+Familiarize yourself with DUlib by reading through some core
+usage examples. From your command line:
+
+  `pd du.examples`
+
+Our goal is to provide demonstrations for most all basic funct-
+ionality in `DUlib`. Hence, examples of usage can be found in the
+submodules of DUlib: type, e.g., `pd du.conv.examples` or `pd du.`
+`rec.examples`. to see demonstrations involving ~convolutional~ and
+~recurrent~ nets.
 
 !Overview!
 
@@ -103,18 +120,6 @@ of big data that were previously unobserved.
 Cutting-edge techniques in Deep Learning even put machines at
 liberty to conceptualize parts of their own architectures.
 
-!Quick Start!
-
-A good place to begin is by reading/working through some core
-examples, which you do by issuing the command `pd du.examples` at
-your command line.
-
-Our goal is to provide demonstrations for most all basic funct-
-ionality in `DUlib`. Hence, examples of usage can be found in the
-submodules of DUlib: type, e.g., `pd du.conv.examples` or `pd du.`
-`rec.examples`. to see demonstrations involving ~convolutional~ and
-~recurrent~ nets.
-
                     _____________________
 
 
@@ -130,46 +135,6 @@ Try typing at your command line `dulib<TAB><TAB>` which means to
 type the letters `dulib` and then hit the `TAB` key twice. You will
 see all of the available visualizations. Alternatively, simply
 start reading the docs.
-
-                    _____________________
-
-
-A technical note on !breaking out of charset encoding hell!.
-
-If you can easily and normally read the trailing phrase in the
-last sentence, then you are not even in charset encoding hell.
-In this case, you can simply go ahead and start deep learning.
-
-However, if that line (and, in fact, other words or phrases in
-the discussion above) is enclosed in boxes or other weird char-
-acters, then you are in so-called charset encoding hell. There
-are a number of ways around such rendering issues.
-
-There is a good chance that the problems you are experiencing
-are due to your being in IDLE (which is the IDE that ships with
-Python) or some other IDE that doesn't play nice with `ansi` es-
-cape sequences.
-
-Recommendation: consume the documentation for `DUlib` by using
-the `pd` command at the command-line as described above. That way
-you can enjoy a few enhancements like bolding and colorizing of
-certain words. This aids in quickly and easily finding apis for
-this library.
-
-Now, if you in fact already are using the command-line and yet
-still experiencing char escape hell, then try manually setting
-PAGER and TERM environment variables.
-
-A great value for PAGER is the value: less -r. You can set the
-PAGER environment variable on *nix with the bash command:
-
-  export PAGER='less -r'
-
-which you can add to the end of ~/.bashrc if you wish. Viable
-values for TERM are, for example, any one of: screen-256color,
-xterm-256color, or ansi.
-
-You can set TERM in bash with, e.g.: export TERM=xterm-256color
 
 """
 import du.utils
