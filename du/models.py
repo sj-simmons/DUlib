@@ -83,7 +83,7 @@ __copyright__ = """
 __license__= 'Apache 2.0'
 
 def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
-  """Return a dense, feed-forward block of a neural net.
+  """Return an instance of `nn.ModuleDict` which can be used to dense, feed-forward block of a neural net.
 
   Builds and returns the fully-connected composition of linear
   layers with the specified widths and nonlinearities.
@@ -98,6 +98,9 @@ def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
     $nonlins$ (`Tuple[nn.Module]`): The nonlinearities for each
         layer. If this has length 1, then use that nonlinearity
         for each hidden layer. Default: `(nn.ReLU(),)`.
+
+  Returns:
+    `nn.ModuleDict`.
 
   >>> `print(denseFFhidden(1, 1, (16, 32)))`
   Sequential(
