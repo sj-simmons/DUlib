@@ -13,46 +13,60 @@
 
 ## Quickstart
 
-* DUlib assumes functioning installations of
-  [torch](https://pypi.org/project/torch/),
-  [matplotlib](https://pypi.org/project/matplotlib/), and
-  [scipy](https://pypi.org/project/scipy/).
-  * In an effort to circumvent dependency hell, we avoid using a
-    [requirements file](https://pip.pypa.io/en/stable/user_guide/#requirements-files).
-    DUlib strives to live harmoniously alongside any semi-modern versions
-    of the three well-known packages above. It runs on cheap Arm
-    laptops, GPU servers in the cloud, and everything in-between.
-  * You may find
-    [OS-dependent options](https://sj-simmons.github.io/dl/setup/dev_environ)
-    useful for setting up your [PyTorch](https://pytorch.org) development environment.
-* At the command line, install the latest stable release of DUlib (from [pypi.org](https://pypi.org/project/DUlib/)):
-  ``` bash
-  pip3 install DUlib --user
-  ```
-  (In the presence of a previously installed version, try `pip3 install -U DUlib --user`.)
+DUlib assumes functioning installations of
+[torch](https://pypi.org/project/torch/),
+[matplotlib](https://pypi.org/project/matplotlib/), and
+[scipy](https://pypi.org/project/scipy/).
+* In an effort to circumvent dependency hell, we avoid using a
+  [requirements file](https://pip.pypa.io/en/stable/user_guide/#requirements-files).
+  DUlib strives to live harmoniously alongside any semi-modern versions
+  of the three Python packages listed above. It runs on cheap Arm
+  laptops, GPU servers in the cloud, and everything in-between.
+* You may find [this page ](https://sj-simmons.github.io/dl/setup/dev_environ)
+  at the [DL@DU Project](https://sj-simmons.github.io/dl/) useful when setting up
+  a development environment for [PyTorch](https://pytorch.org).
 
-  Or, install the latest development release with, e.g.:
-  ``` bash
-  pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.1  --user
-  ```
-  Note: absolute best practice is to replace `pip3` in the commands
-  above (and below) with the command `/usr/bin/pip3`; see, for example,
-  [best practice package management](https://sj-simmons.github.io/dl/setup/install_packages).
+At the command line, install the latest stable release of DUlib (from [pypi.org](https://pypi.org/project/DUlib/)):
+```shell
+pip3 install DUlib --user
+```
+(In the presence of a previously installed version, try `pip3 install --upgrade  DUlib --user`.)
 
-You can now:
-* check that [torch](https://pypi.org/project/torch/),
+Or, install the latest development release with, e.g.:
+```shell
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.1  --user
+```
+Notes
+* Safest practice is to replace **pip3** in the commands above (and below) with
+  the command **/usr/bin/pip3**.
+* Calling **pip3** with the **--user** switch is also good practice since, without
+  it, you likely must use **sudo**, which installs possibly malicious code with
+  super-user privileges. Mere mortals should never **sudo pip3 install some_package**
+  unless they know what they are doing.
+* If the command **pip** is available on your system, you can replace **pip3** above
+  and below with just **pip** if, as in more modern Python installations, **pip**
+  points to the Python3 version.  You can check this with `pip -V`.
+
+You can now
+* check that your previously installed [torch](https://pypi.org/project/torch/),
   [matplotlib](https://pypi.org/project/matplotlib/), and
-  [scipy](https://pypi.org/project/scipy/) are successfully
-  installed and integrated into your development environment by running
-  one of four pre-built programs that are included in DUlib.
+  [scipy](https://pypi.org/project/scipy/) are available and  integrated into
+  your development environment by running one of the pre-built programs that
+  is included with DUlib.
 
   Run a program that fits a polynomial to a transcendental function
   by issuing at your command-line:
   ```shell
   dulib_polyreg_anim
   ```
-  If that command is not found, see the detailed installation notes below
-  for how to set the appropriate environment variable.
+  If that command is not found, see [here](#here1) in the detailed
+  installation notes below for how to set your PATH variable.
+
+  If the command is found, then the program should train for a model
+  for 2500 epochs and then throw up a gui window and run an animation
+  while it trains for another 2500 epochs.  If the gui never pops up,
+  then see [here](#here2) in the detailed install notes.
+
 * have a look at the module structure of DUlib:
   ```bash
   pd du
@@ -61,6 +75,7 @@ You can now:
   (something like [this](https://github.com/sj-simmons/DUlib#highlight)), you see
   escape sequences scattered all over, then see the detailed installation
   notes below ([here](https://github.com/sj-simmons/DUlib#char_esc_hell)).
+
 * work through some demonstrations that illustrate basic usage:
   ```shell
   pd du.examples
@@ -70,70 +85,117 @@ You can now:
 
 By now you are likely aware of [python environment
 hell](https://imgs.xkcd.com/comics/python_environment.png).  We recommend simply
-*always* installing DUlib using the `--user` option with `pip3` &mdash; unless
+*always* installing DUlib using the **--user** option with **pip3** &mdash; unless
 you are installing system-wide for multiple users, in which case prefacing with
-`sudo` (and dropping `--user`) might be best.
+**sudo** (and dropping **--user**) might be best.
 
-* At the command line, install the latest release:
+At the command line, install the latest release:
+``` bash
+pip3 install DUlib --user
+```
+(or `pip3 install --upgrade  DUlib --user` in the presence of a previously
+installed version).
+
+Notes
+* If you don't have a **pip3** command, then your **pip** command must in fact
+  *be* **pip3** (you can check this with `pip -V`).  In this case, just use
   ``` bash
-  pip3 install DUlib --user
+  pip install DUlib --user
   ```
-  (or `pip3 install -U DUlib --user` in the presence of a previously installed version).
+  or, more safely,
+  ``` bash
+  /usr/bin/pip install DUlib --user
+  ```
+* If you've previously installed several different versions of DUlib and especially
+  if you've installed from a local cloned version of this repo, then things
+  on your system might be kind of a mess. Consider reinstalling after first
+  uninstalling DUlib with:
+  ``` bash
+  pip3 uninstall DUlib
+  ```
+  You might also try forcing an upgrade
+  ``` bash
+  pip3 install --upgrade   DUlib --force --user
+  ```
+* To verify without doubt that DUlib is installed, start up the Python3
+  interpreter and type `import du`. If you see no errors, then you are good.
 
-  Notes:
-  * If you don't have a pip3 command, then your pip command  must in fact
-    *be* pip3 (you can check this with `pip -V`).  In this case, just use
-    ``` bash
-    pip install DUlib --user
-    ```
-    or, more safely,
-    ``` bash
-    /usr/bin/pip install DUlib --user
-    ```
-
-  * If you've previously installed several different versions of DUlib and especially
-    if you've installed from a local cloned version of this repo, then things
-    on your system might be kind of a mess. Consider reinstalling after first
-    uninstalling DUlib with:
-    ``` bash
-    pip3 uninstall DUlib
-    ```
-    You might also try forcing an upgrade
-    ``` bash
-    pip3 install -U  DUlib --force --user
-    ```
-
-Assuming that you installed using `--user`, various DUlib related executables should
+<a id="here1"></a>
+Assuming that you installed using **--user**, various DUlib related executables should
 now be installed in a certain subdirectory below your home directory. We want
 that subdirectory to be in your PATH.
 
-* Type `which pd` at the command line. If you see something
-  like **/home/your_username/.local/bin/pd** (in Linux or the WSL) or
-  **/Users/your_username/Library/Python/3.8/bin/pd** (on a Mac), then you
-  are in good shape; so, skip the next bullet-point.
-* If you see nothing, then likely you need to adjust your PATH variable
-  by running the following command at the command line:
-  ``` bash
-  echo "export PATH=$PATH:~/.local/bin" >> ~/.profile
-  ```
-  alternatively, on a Mac, you may need to run something like
-  ``` bash
-  echo "export PATH=$PATH:~/Library/Python/3.8/bin" >> ~/.profile
-  ```
-  Note: your PATH will *not* automatically be updated for the remainder of
-  your shell session.  To update without exiting and restarting your shell do:
-  ``` bash
+Type `which pd` at the command line. If you see something
+like **/home/your_username/.local/bin/pd** (in Linux or the WSL) or
+**/Users/your_username/Library/Python/3.8/bin/pd** (on a Mac), then you
+are in good shape; so, skip the next bullet-point.
+If you see nothing, then likely you need to adjust your PATH variable
+by running the following command at the command line:
+```shell
+echo "export PATH=$PATH:~/.local/bin" >> ~/.profile
+```
+alternatively, on a Mac, you may need to run something like
+``` bash
+echo "export PATH=$PATH:~/Library/Python/3.8/bin" >> ~/.profile
+```
+Notes
+* Your PATH will *not* automatically be updated for the remainder of
+  your shell session.  To update without restarting your system do:
+  ```shell
   source ~/.profile
   ```
-  Note 2: Each time you run, for instance, the first command above that
-  begins with `echo`, the line `export PATH=$PATH:~/.local/bin` is appended
-  to your **.profile** file. If you'e run that command more
+  Now retry `which pd`.
+* Each time you run, for instance, the first command above that
+  begins with **echo**, the line **export PATH=$PATH:~/.local/bin** is appended
+  to your **.profile** file. If you've run that command more
   than once, you may want to edit **.profile** and delete any duplicate lines.
-* Now check, as in the Quickstart section above, that you can run the
-  pre-installed executables; for example:
-  ```shell
-  dulib_polyreg_anim
+
+Now check, as in the Quickstart section above, that you can run the
+other pre-installed executables; for example:
+```shell
+dulib_polyreg_anim
+```
+<a id="here2"></a>
+This command should train a model in your console for 2500 epochs then
+throw up a gui window and train for another 2500 epochs while showing
+an animation.  If the gui never pops up or if it pops up and is static,
+then we troubleshoot as follows.
+
+If you are running on a Mac, there's a good chance that the matplotlib
+backend needs to be adjusted. We do this by editing the file
+**matplotlibrc**.
+* First, let us find **matplotlibrc**. In the Python 3 interpreter type:
+  ```python
+  >>> import matplotlib
+  >>> matplotlib.matplotlib_fname()
   ```
+* We want to edit that file.  Find the line **#backend: agg** or **backend: agg**.
+* In September '20, a DUlib user reported that the following
+  worked on their machine:
+  * At the commandline:
+    ```shell
+    brew install pyqt
+    pip install PyQt5
+    ```
+  * In **matplotlibrc**, you want:
+    ```shell
+    backend: Qt5Agg
+    ```
+    (That line  should *not* be commented out.)
+* In December '19, a DUlib and Mac user reported that **backend: TkAgg**
+  worked to get the animation up and running.
+
+For some bare-metal Linux installs (namely, Arch and Solus) you might see
+a **_tkinter** error. You could be missing a **tk** system library or a
+**tk** Python package.
+
+If `python3 -c 'import _tkinter'` (or just  `python3 -c 'import _tkinter'`
+depending on your setup) throws an error, then try to
+Try to install or re-install the appropriate Python package, something
+like **python3-tk** or, maybe, **python-tk**.
+
+It's also possible that you are missing some shared **tk** system library.
+
 
 <a id="char_esc_hell"></a>
 ####
@@ -141,7 +203,7 @@ that subdirectory to be in your PATH.
 If, while you were working through the
 [Quickstart](https://github.com/sj-simmons/DUlib#quickstart)
 guide, the output of command `pd du` was littered with escape sequences,
-then you likely should set your TERM and/or PAGER environment variables.
+then you should try setting your TERM and/or PAGER environment variables.
 
 On a newish Mac, you likely just need to set PAGER:
 * Type `echo $PAGER` at the commandline to see if `PAGER` is set.
@@ -161,14 +223,8 @@ export TERM=screen-256color
 ```
 Once you get highlighting working, add the correct command to your *~/.profile*.
 
-You can see all the highlighting conventions used in DUlib's docs with:
-```shell
-pd du.highlight
-```
-
-To verify without doubt that DUlib is installed:
-* start up the Python3 interpreter and type, say, `import du`. If you see
-  no errors, then you are good.
+You can see all the highlighting conventions used in DUlib's docs with
+`pd du.highlight`.
 
 ## Release history
 
@@ -193,7 +249,7 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     on your setup, `pip3 install DUlib --user`) at the command line.
     * The pypi page is here:
       [pypi.org/project/DUlib](https://pypi.org/project/DUlib)
-    * Your DUlib installation can be upgraded with a command like `pip3 install -U DUlib`
+    * Your DUlib installation can be upgraded with a command like `pip3 install --upgrade  DUlib`
   * The **graph** argument of the train function is now an **int** rather than
     a boolean.  To enable graphing while training (which requires
     [matplotlib](https://pypi.org/project/matplotlib/) and
@@ -313,6 +369,9 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
 ####
 
 **Version 0.9.1** (Sept. 7th, 2020)
+  * **utils.stand_args** is now **utils.standard_args**.
+  * **lib.train**
+  * In the presence of GPU(s), massive overhaul of training process
 
 ## Modifying DUlib
 
@@ -334,11 +393,11 @@ pip3 install git+https://github.com/sj-simmons/DUlib.git --user
 ```
 or
 ``` bash
-pip3 install -U DUlib --user
+pip3 install --upgrade  DUlib --user
 ```
 
 Please let Simmons know of any new functionality that you implement and wish
-to add to DUlib. Or just fork, create/fix/modify, and issue a pull request.
+to add to DUlib. Or just fork, create/fix/modify and issue a pull request.
 
 ## Todo
 * In the **optimize_ols** function in [lib.py](du/lib.py), improve robustness the
