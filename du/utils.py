@@ -342,47 +342,54 @@ def print_devices():
 
   print('number of available (CPU) threads:',torch.get_num_threads())
   if torch.cuda.is_available():
-    import pycuda.driver as cuda
-    cuda.init()
-    print("CUDA is available:")
-    print("  ID of default device is:", torch.cuda.current_device())
-    print("  Name of default device is:", cuda.Device(0).name())
-    import pycuda.autoinit
-    class aboutCudaDevices():
-      def __init__(self):
-        pass
-
-      def num_devices(self):
-        """Return number of devices connected."""
-        return cuda.Device.count()
-
-      def devices(self):
-        """Get info on all devices connected."""
-        num = cuda.Device.count()
-        print("%d device(s) found:"%num)
-        for i in range(num):
-          print(cuda.Device(i).name(), "(Id: %d)"%i)
-
-      def mem_info(self):
-        """Get available and total memory of all devices."""
-        available, total = cuda.mem_get_info()
-        print("Available: %.2f GB\nTotal:     %.2f GB"%(available/1e9,total/1e9))
-
-      def attributes(self, device_id=0):
-        """Get attributes of device with device Id = device_id"""
-        return cuda.Device(device_id).get_attributes()
-
-      def __repr__(self):
-        """Class representation as number of devices connected and about them."""
-        num = cuda.Device.count()
-        string = ""
-        string += ("%d CUDA device(s) found:\n"%num)
-        for i in range(num):
-          string += ("  %d) %s (Id: %d)\n"%((i+1),cuda.Device(i).name(),i))
-          string +=\
-              ("     Memory: %.2f GB\n"%(cuda.Device(i).total_memory()/1e9))
-        return string
-    print(aboutCudaDevices())
+    try:
+      import pycuda.driver as cuda
+    except ImportError:
+      print('Error: the pycuda package is not installed.')
+    else:
+      cuda.init()
+      print("CUDA is available:")
+      print("  ID of default device is:", torch.cuda.current_device())
+      print("  Name of default device is:", cuda.Device(0).name())
+      import pycuda.autoinit
+      class aboutCudaDevices():
+        def __init__(self):
+          pass
+  
+        def num_devices(self):
+          """Return number of devices connected."""
+          return cuda.Device.count()
+  
+        def devices(self):
+          """Get info on all devices connected."""
+          num = cuda.Device.count()
+          print("%d device(s) found:"%num)
+          for i in range(num):
+            print(cuda.Device(i).name(), "(Id: %d)"%i)
+  
+        def mem_info(self):
+          """Get available and total memory of all devices."""
+          available, total = cuda.mem_get_info()
+          print("Available: %.2f GB\nTotal:     %.2f GB"\
+              %(available/1e9,total/1e9))
+  
+        def attributes(self, device_id=0):
+          """Get attributes of device with device Id = device_id"""
+          return cuda.Device(device_id).get_attributes()
+  
+        def __repr__(self):
+          """Class representation gives number of devices connected and
+          basic info about them.
+          """
+          num = cuda.Device.count()
+          string = ""
+          string += ("%d CUDA device(s) found:\n"%num)
+          for i in range(num):
+            string += ("  %d) %s (Id: %d)\n"%((i+1),cuda.Device(i).name(),i))
+            string +=\
+                ("     Memory: %.2f GB\n"%(cuda.Device(i).total_memory()/1e9))
+          return string
+      print(aboutCudaDevices())
 
 def format_num(number):
   """Format a small number nicely.
