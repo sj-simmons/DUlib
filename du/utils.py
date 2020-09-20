@@ -517,7 +517,7 @@ class _Markdown:
       return docstring
 
   def underline(self, docstring, strip=False):
-    """Underlines words or phrases on one line surrounded by _ symbols."""
+    """Underlines words or phrases on one line surrounded by ! symbols."""
     s = re.sub(r'!([a-zA-Z0-9][a-zA-Z0-9 ,:\-]+)!',\
         self.UNDERLINE+r'\1'+self.END,docstring)
     return re.sub(r'\_\_\_([\_]+)',self.UNDERLINE+r'___\1'+self.END,s)

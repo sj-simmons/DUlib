@@ -3,7 +3,7 @@
 
 \n`QUICK SIGNATURES`
 
-  |FFNet_|~($means$=None, $stdevs$=None)
+  |FFNet_|($means$=None, $stdevs$=None)
     |SimpleLinReg|($degree$=1, $**kwargs$)
     |DenseFFNet|($n_inputs$, $n_outputs$, $widths$, $**kwargs$)
 
@@ -25,8 +25,8 @@ Then, when we later want to use the pre-trained model to make
 a ~prediction~, we can read in the serialized model and easily
 ~center~ and/or ~normalize~ (if in fact we pre-applied either or
 both of those processes to the training data) the ~features~ of
-the prediction with respect to the means and centers of the
-training data.
+the prediction with respect to the means and standard devia-
+tions of the training data.
 
 If we serialized, in this way, the means and/or stdevs of the
 training data, then we typically don't even need the training
@@ -83,10 +83,11 @@ __copyright__ = """
 __license__= 'Apache 2.0'
 
 def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
-  """Return an instance of `nn.ModuleDict` which can be used to dense, feed-forward block of a neural net.
+  """Return `ModuleDict` for a dense chunk of a feed-forward net.
 
-  Builds and returns the fully-connected composition of linear
-  layers with the specified widths and nonlinearities.
+  Returns an instance of `nnModuleDict` determining the fully-
+  connected composition of linear layers with the specified
+  widths and nonlinearities.
 
   Args:
     $n_inputs$ (`int`): Number of inputs into the first layer.
