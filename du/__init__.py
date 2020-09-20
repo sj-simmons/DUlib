@@ -12,7 +12,7 @@ The |module| structure, along with the (non-helper) $functions$ and
 $classes$ are, as of this release,
 
   |du|
-  ├─ |lib.py|     !the core library!
+  ├─ |lib|     !the core library!
   │  ├─ $center$          mean-center some data
   │  ├─ $normalize$       normalize data
   │  ├─ $coh_split$       split out testing data
@@ -23,30 +23,30 @@ $classes$ are, as of this release,
   │  ├─ $optimize_ols$    optimize learning rate and momentum
   │  ├─ $LearnParams_$    class to add training hyper-params
   │  └─ $Momentum$        add momentum to SGD
-  ├─ |models.py|  !model classes for feed-forward nets!
+  ├─ |models|  !model classes for feed-forward nets!
   │  ├─ $denseFFhidden$   compose dense layers
   │  ├─ $polyize$         for making polynomials
   │  ├─ $FFNet_$          base class for feed-forward nets
   │  ├─ $SimpleLinReg$    fit polys to 2d point clouds
   │  └─ $DenseFFNet$      factory for dense FF nets
-  ├─ |examples.py|
-  ├─ |conv|       !convolutional tools for images and more!
-  │  ├─ |models.py|
+  ├─ |examples|
+  ├─ |conv|     !convolutional tools for images and more!
+  │  ├─ |models|
   │  │  ├─ $metalayer$    make a conv2d plus max_pooling layer
   │  │  ├─ $convFFhidden$ make a composition of metalayers
   │  │  ├─ $ConvFFNet$    factory for convolutional nets
   │  │  ├─ $OneMetaCNN$   one metalayer, one dense conv net
   │  │  └─ $TwoMetaCNN$   two metalayer, two dense conv net
-  │  └─ |examples.py|
-  ├─ |rec|        !recurrence and natural language processing!
-  │  ├─ |lib.py|
-  │  │  ├─ |ngrams.py|    model n-grams for a word corpus
-  │  │  └─ |cbow.py|      model CBOW wordvecs given a corpus
-  │  ├─ |models.py|
-  │  └─ |examples.py|
-  ├─ |utils.py|   !potentially helpful utilites!
+  │  └─ |examples|
+  ├─ |rec|      !recurrence and natural language processing!
+  │  ├─ |lib|
+  │  │  ├─ |ngrams|    model n-grams for a word corpus
+  │  │  └─ |cbow|      model CBOW wordvecs given a corpus
+  │  ├─ |models|
+  │  └─ |examples|
+  ├─ |utils|   !potentially helpful utilites!
   │   └─ $standard_args$  easily set command-line options
-  └─ |highlight.py|       highlighting conventions for docs
+  └─ |highlight|       highlighting conventions for docs
 
 !Quick Start!
 

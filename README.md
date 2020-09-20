@@ -6,10 +6,11 @@
 ### Contents
 * [Quickstart](https://github.com/sj-simmons/DUlib#quickstart)
 * [Detailed installation notes](https://github.com/sj-simmons/DUlib#detailed-installation-notes)
-* [Release History](https://github.com/sj-simmons/DUlib#release-history)
+* [Release history](https://github.com/sj-simmons/DUlib#release-history)
   * [latest](https://github.com/sj-simmons/DUlib#latest)
 * [Modifying](https://github.com/sj-simmons/DUlib#modifying-dulib)
 * [Todo](https://github.com/sj-simmons/DUlib#todo)
+* [Dev notes](#development-notes)
 
 ## Quickstart
 
@@ -412,3 +413,5 @@ to add to DUlib. Or just fork, create/fix/modify and issue a pull request.
   starting point see the end of this
   [distill article on momentum](https://distill.pub/2017/momentum/).
 
+## Development notes
+* [Consortium for Python Data API Standards](https://data-apis.org/blog/announcing_the_consortium/) 

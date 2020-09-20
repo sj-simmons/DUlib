@@ -1104,7 +1104,7 @@ def train(model, crit, train_data, **kwargs):
   bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
   epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
   print_lines = kwargs.get('print_lines',
-      (7,) if not hasattr(args,'print_lines') else args.print_lines)
+      (7, 8) if not hasattr(args,'print_lines') else args.print_lines)
   if len(print_lines) > 1:
     print_init, print_last = print_lines
   else:
