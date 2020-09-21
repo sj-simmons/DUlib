@@ -570,7 +570,8 @@ def simple_linear_regression():
       learn_params = {'lr':args.lr, 'mo':args.mo},
       epochs = args.epochs,
       graph = args.gr,
-      verb = 2)
+      verb = 2,
+      gpu = (-2,))
   params = list(model.parameters())
   slope = params[0].item(); intercept = params[1].item()
 
@@ -628,7 +629,8 @@ def simple_linear_regression_animate():
         learn_params = {'lr':args.lr, 'mo':args.mo},
         epochs = 1,
         bs = args.bs,
-        verb = 0)
+        verb = 0,
+        gpu = (-2,))
     params = list(model.parameters())
     slope = params[0].item(); intercept = params[1].item()
 
@@ -688,7 +690,8 @@ def simple_polynomial_regression():
       learn_params = learn_params,
       epochs = args.epochs,
       graph = args.gr,
-      verb = 2)
+      verb = 2,
+      gpu = (-2,0))
 
   if _display:
     fig, _ = plt.subplots()
@@ -786,7 +789,8 @@ def simple_polynomial_regression_animate():
       learn_params = learn_params,
       epochs = int(args.train_first*args.epochs),
       graph = args.gr,
-      verb = 2)
+      verb = 2,
+      gpu = (-2,))
 
   plt.ion(); fig, _ = plt.subplots()
   plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
@@ -803,7 +807,8 @@ def simple_polynomial_regression_animate():
         train_data = (xss, yss),
         learn_params = learn_params,
         epochs = 1,
-        verb = 0)
+        verb = 0,
+        gpu = (-2,))
     params = list(model.parameters())
     coeffs = [params[-1].item()]
     for param in params[0].squeeze(0):
