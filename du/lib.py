@@ -913,8 +913,6 @@ def _getLoss(model, dataloader, crit, device):
     $model$ (`nn.Module`): The model to applied.
     $dataloader$ ('Union[DataLoader, _DataLoader])
     $crit$ ('Union[DataLoader, _DataLoader])
-
-  `dataloader` can be an instance of DataLoader or _DataLoader.
   """
   accum_loss = 0.0
   for minibatch in dataloader:
@@ -929,7 +927,7 @@ def train(model, crit, train_data, **kwargs):
   le over an epoch as that average is accumulated during train-
   ing. If the number of training examples is divisible by the
   batchsize then, during training, the model sees each example
-  in the training data exactly once.
+  in the training data exactly once during an epoch.
 
   !Notes on specifying training hyper-parameters!
 
@@ -1222,8 +1220,8 @@ def train(model, crit, train_data, **kwargs):
 
     # Once and for all clone and move train data for validation purposes if nec.
     # By now, training data is an instance of either DataLoader or _DataLoader.
-    # But if dataset does not have has the attribute transform (or it is None),
-    # we repackage into a new  _DataLoader instance and with batchsize =
+    # But if dataset doesn't have has the attribute transform (or if it's None),
+    # we repackage into a new _DataLoader instance and with batchsize =
     # len(features) = len(targets)
     if not hasattr(train_data.dataset, 'transform') or \
         train_data.dataset.transform == None:
