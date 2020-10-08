@@ -55,7 +55,7 @@ You can now
   your development environment by running one of the pre-built programs that
   is included with DUlib.
 
-  Run a program that fits a polynomial to a transcendental function
+  Run a program that fits a polynomial using linear regression
   by issuing at your command-line:
   ```shell
   dulib_polyreg_anim
@@ -129,7 +129,7 @@ that subdirectory to be in your PATH.
 Type `which pd` at the command line. If you see something
 like **/home/your_username/.local/bin/pd** (in Linux or the WSL) or
 **/Users/your_username/Library/Python/3.8/bin/pd** (on a Mac), then you
-are in good shape; so, skip the next bullet-point.
+are in good shape; so, skip to just below the next two bullet-points.
 If you see nothing, then likely you need to adjust your PATH variable
 by running the following command at the command line:
 ```shell
@@ -151,8 +151,8 @@ Notes
   to your **.profile** file. If you've run that command more
   than once, you may want to edit **.profile** and delete any duplicate lines.
 
-Now check, as in the Quickstart section above, that you can run the
-other pre-installed executables; for example:
+Now check, as in the Quickstart section above, that you can run one of the
+pre-installed executables; for example:
 ```shell
 dulib_polyreg_anim
 ```
@@ -192,7 +192,7 @@ a **_tkinter** error. You could be missing a **tk** system library or a
 
 If `python3 -c 'import _tkinter'` (or just  `python3 -c 'import _tkinter'`
 depending on your setup) throws an error, then try to
-Try to install or re-install the appropriate Python package, something
+install or re-install the appropriate Python package, something
 like **python3-tk** or, maybe, **python-tk**.
 
 It's also possible that you are missing some shared **tk** system library.
@@ -366,13 +366,25 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     **du.conv.models.ConvFFNet** (type `pd du.conv.examples` at your command-line
     for details).
 
+**Version 0.9.1** (Sept. 7th, 2020)
+  * **utils.stand_args** is now **utils.standard_args**.
+  * In the presence of GPU(s), massive overhaul of training and evaluation
+    process that allows control of hardware resources. This is generally
+    controlled via a parameter called **gpu**.
+  * With the exception of the two bullet points above, the API is largely
+    unchanged (compared to the previous release).
+  * Support for **torch.utils.data.Dataset** and **torch.utils.data.DataLoader**
+    was added for training data.
+
 <a id="latest"></a>
 ####
 
-**Version 0.9.1** (Sept. 7th, 2020)
-  * **utils.stand_args** is now **utils.standard_args**.
-  * **lib.train**
-  * In the presence of GPU(s), massive overhaul of training process
+**Version 0.9.2** (Sept. __, 2020)
+  * **du.lib.confusion_matrix** is now **du.lib.class_accuracy**
+  * Several new helper functions (whose names begin with an underscore) were
+    added to **lib.py** but, generally, users should use the non-helper functions.
+  * Documentation was vastly extended/improved.
+  * **Dataloader** support for validation and testing data was added.
 
 ## Modifying DUlib
 
