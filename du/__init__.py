@@ -15,10 +15,13 @@ $classes$ are, as of this release,
   ├─ |lib|     !the core library!
   │  ├─ $center$          mean-center some data
   │  ├─ $normalize$       normalize data
+  │  ├─ $standardize$     mean-center and normalize
+  │  ├─ $online_means_stdevs$
+  │  │                    compute these in an online fashion
   │  ├─ $coh_split$       split out testing data
   │  ├─ $train$           train a model
   │  ├─ $cross_validate$  cross-validate train a model
-  │  ├─ $confusion_matrix$
+  │  ├─ $class_accuracy$  compute accuracy for classification
   │  ├─ $r-squared$
   │  ├─ $optimize_ols$    optimize learning rate and momentum
   │  ├─ $LearnParams_$    class to add training hyper-params
@@ -45,7 +48,9 @@ $classes$ are, as of this release,
   │  ├─ |models|
   │  └─ |examples|
   ├─ |utils|   !potentially helpful utilites!
-  │   └─ $standard_args$  easily set command-line options
+  │   ├─ $standard_args$  easily set command-line options
+  │   ├─ $split_df$       split a dataframe
+  │   └─ $args2string$    easily make a logging string
   └─ |highlight|       highlighting conventions for docs
 
 !Quick Start!

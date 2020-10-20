@@ -111,8 +111,9 @@ ConvFFNet(
   (conv): Sequential(
     (0): Sequential(
       (0): Conv2d(1, 16, kernel_size=(5, 5), stride=(1, 1),...)
-      (1): ReLU()
-      (2): MaxPool2d(kernel_size=2, stride=2, padding=0, ...)
+      (1): BatchNorm2d(16,...)
+      (2): ReLU()
+      (3): MaxPool2d(kernel_size=2, stride=2, padding=0, ...)
     )
   )
   (dense): Sequential(
@@ -158,6 +159,52 @@ Let us check accuracy on the test data.
 ...     `test_targs`,
 ...     `torch.arange(10))`# doctest:+SKIP
 True
+                    _____________________
+
+For convenience, below is the code in this demo in the form of
+a program:
+
+`import torch`
+`import torch.nn as nn`
+`import du.lib as dulib`
+`from du.conv.models import ConvFFNet`
+`from torchvision import datasets`
+`from torch.utils.data import DataLoader`
+
+`dl = DataLoader(`
+    `datasets.MNIST('mnist',train=True,download=True))`
+
+`features = dl.dataset.data.to(dtype=torch.float32)`
+`targets = dl.dataset.targets.to(dtype=torch.long)`
+
+`feats, _, targs, _ = dulib.coh_split(0.1,features,targets)`
+
+`train_feats, test_feats, train_targs, test_targs = \`
+    `dulib.coh_split(5/6, feats, targs)`
+
+`train_feats, train_means = dulib.center(train_feats)`
+`train_feats, train_stdevs = dulib.normalize(train_feats)`
+
+`test_feats, _ = dulib.center(test_feats, train_means)`
+`test_feats, _ = dulib.normalize(test_feats, train_stdevs)`
+
+`model = dulib.train(`
+    `model = ConvFFNet(`
+        `in_size = (28, 28),`
+        `n_out = 10,`
+        `channels = (1, 16),`
+        `widths = (10,)),`
+    `crit =  nn.NLLLoss(),`
+    `train_data = (train_feats, train_targs),`
+    `test_data = (test_feats, test_targs),`
+    `learn_params = {'lr' : 0.001, 'mo': 0.92},`
+    `bs = 20,`
+    `epochs = 15,`
+    `gpu = (-1,))`
+
+`print('accuracy on test data:', dulib.confusion_matrix(`
+    `(model, test_feats), test_targs, torch.arange(10)))`
+
 
 !Demo 2: 60,000 digits!
 
@@ -259,7 +306,7 @@ We can now take slices; e.g.,
 
 Using PyTorch's DataLoader class, we define
 
->>> dataLoader
+>>> #dataLoader
 
 Train the model
 
@@ -280,7 +327,6 @@ Let us check accuracy on the test data.
 ...     `test_targs`,
 ...     `torch.arange(10))` # doctest:+SKIP
 True
-
 
 """
 import du.utils

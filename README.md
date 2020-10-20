@@ -375,16 +375,28 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     unchanged (compared to the previous release).
   * Support for **torch.utils.data.Dataset** and **torch.utils.data.DataLoader**
     was added for training data.
+  * New functions **du.lib.online_mens_stdevs** and **du.lib.standardize** were
+    added.
 
 <a id="latest"></a>
 ####
 
-**Version 0.9.2** (Sept. __, 2020)
-  * **du.lib.confusion_matrix** is now **du.lib.class_accuracy**
+**Version 0.9.2pre** (Oct. 19, 2020)
+  * API changes (please modify you code accordingly):
+    * The function **du.lib.confusion_matrix** is now **du.lib.class_accuracy**;
+      to print the confusion matrix pass **show_cm = True**.
+    * The parameter **test_data** for **du.lib.train** is now, more correctly,
+      **valid_data**.
+    * The function **du.utils.standard_args** now takes parameter **props** (for
+      proportions) instead of **prop**. See the documentation. Also, the parameter
+      **small** has been removed.
+  * **Dataloader** support for validation and testing data was added. For instance,
+    the **valid_data** argument to **train** can be an instance of **Dataloader**.
+  * A new function **du.utils.split_df**.
+  * Easy logging was facilitated in **du.models.conv.ConvFFNet**.
   * Several new helper functions (whose names begin with an underscore) were
     added to **lib.py** but, generally, users should use the non-helper functions.
   * Documentation was vastly extended/improved.
-  * **Dataloader** support for validation and testing data was added.
 
 ## Modifying DUlib
 

@@ -268,7 +268,7 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
     `(nn.Sequential, function)`. The block consisting of the com-
         posed metalayers tupled with a function mapping `W_in,`
         `H_in` to `W_out, H_out` where `(W_in, H_in)` is the shape of
-        an input to the bock and `(W_out, H_out)` is the corres-
+        an input to the block and `(W_out, H_out)` is the corres-
         ponding output.
 
   >>> `convFFhidden((1,32, 64), (5,3), (2,2), batchnorm=())`
@@ -351,12 +351,21 @@ class ConvFFNet(FFNet_):
     >>> `yhatss.size()`
     torch.Size([100, 10])
 
-    >>> bn = ('before',{'momentum':0.9})
+    >>> `bn = ('before',{'momentum':0.9})`
     >>> `model=ConvFFNet((28,28),8,(1,16),(100,),batchnorm=bn)`
     >>> `xss = torch.rand(100,28,28)` # e.g., b&w images
     >>> `yhatss = model(xss)`
     >>> `yhatss.size()`
     torch.Size([100, 8])
+
+    >>> `print(model.extra_repr())`
+    Conv.: channels 1 16 with ReLU and batchnorm:before
+    Dense: widths 3136 100 8 with ReLU
+
+    >>> `model=ConvFFNet((28,28),8,(1,16),(),batchnorm=bn)`
+    >>> `print(model.extra_repr())`
+    Conv.: channels 1 16 with ReLU and batchnorm:before
+    Dense: widths 3136 8 with ReLU
     """
     du.utils._check_kwargs(kwargs, ['conv_kernels','pool_kernels','means',
         'stdevs','outfn','nonlins','batchnorm'])
@@ -377,9 +386,21 @@ class ConvFFNet(FFNet_):
         channels, conv_kernels, pool_kernels,
         nonlins = nonlins[0], batchnorm = batchnorm)
     # build the dense part
+    n_inputs_dense = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size))
     self.dense = denseFFhidden(
-        n_inputs = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size)),
+        n_inputs = n_inputs_dense,
         n_outputs = n_out, widths = widths, nonlins = (nonlins[1],))
+
+    # build a short representation string
+    nonlins = list(map(lambda mo: repr(mo)[repr(mo).rfind('.')+1:-2], nonlins))
+    batchnorm = 'none' if len(batchnorm)==0 else batchnorm[0]
+    convpart = functools.reduce(lambda x, y: x + ' ' + y,
+        ['Conv.: channels']+list(map(str, channels))+['with']+[nonlins[0]]+ \
+            ['and batchnorm:'+ str(batchnorm)])
+    densepart = functools.reduce(lambda x, y: x + ' ' + y,
+        ['\nDense: widths'] + list(map(str, (n_inputs_dense,) + tuple(widths)+\
+            (n_out,))) + ['with'] + [nonlins[1]])
+    self.repr_ = convpart + densepart
 
   def forward(self, xss):
     """Forward inputs.
@@ -398,6 +419,10 @@ class ConvFFNet(FFNet_):
     xss = self.dense(xss.reshape(len(xss),-1))
     if self.outfn: xss = self.outfn(xss)
     return xss
+
+  def extra_repr(self):
+    """Return concise representaton string."""
+    return du.utils._markup(self.repr_)
 
 class OneMetaCNN(FFNet_):
   """One meta-layer CNN with a two fully-connected layers.

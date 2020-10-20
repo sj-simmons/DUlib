@@ -17,6 +17,7 @@
 #   - Consider changing more of the bools in stand_args to some
 #     thing similar to the setup for cm.
 
+import time
 import torch
 import argparse
 import re
@@ -111,7 +112,7 @@ def standard_args(desc = '', **kwargs):
 
   Args:
     $desc$ (`str`): A short description of what the calling program
-        does.  Default: `''`.
+        does. Default: `''`.
 
   Kwargs:
     $lr$ (`Union[bool,float]`): If `True`, then add a commandline
@@ -129,8 +130,9 @@ def standard_args(desc = '', **kwargs):
         leads to batch gradient descent. Default: `False`.
     $epochs$ (`Union[bool,int]`): As above for the number of epochs
         over which train. Default: `False`.
-    $prop$ (`Union[bool,float]`): As above, but for the proportion
-        on which train. Default: `False`.
+    $props$ (`Union[bool,Tuple[float]]`): Similar to above, but
+        for the proportions on which to train, validate, and/or
+        validate. Default: `False`.
     $gpu$ (`Union[bool,Tuple[int]]`): Add a `gpu` switch. with a note
         in the help string to the effect:   ~which gpu (int or~
         ~ints separated by whitespace) for training/validating;~
@@ -174,8 +176,6 @@ def standard_args(desc = '', **kwargs):
         ~fusion matrix~. Default: `None`.
     $seed$ (`bool`): Same as `ser` but for `seed` which refers to the
         random seed. Default: `False`.
-    $small$ (`Union[bool,float]`): Read in only this proportion of
-        the data. Default: `False`.
     $print_lines$ (`Union[bool,tuple[int]]`): Whether to add switch
         controlling compressed printing to console; help string
         is: ~ints separated by whitespace controlling the no. of~
@@ -187,16 +187,15 @@ def standard_args(desc = '', **kwargs):
     (`argparse.ArgumentParser`). The parser object to which the
         calling program can add more names.
   """
-  _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','prop', 'gpu',\
-      'graph','ser','pred','widths','channels','verb','small','cm',\
-      'print_lines'])
+  _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','props', 'gpu',\
+      'graph','ser','pred','widths','channels','verb','cm','print_lines'])
   lr = kwargs.get('lr', False)
   mo = kwargs.get('mo', False)
   bs = kwargs.get('bs', False)
   epochs = kwargs.get('epochs', False)
   seed = kwargs.get('seed', False)
   cm = kwargs.get('cm', None)
-  prop = kwargs.get('prop', False)
+  props = kwargs.get('props', False)
   gpu = kwargs.get('gpu', False)
   graph = kwargs.get('graph', False)
   ser = kwargs.get('ser', False)
@@ -204,7 +203,6 @@ def standard_args(desc = '', **kwargs):
   widths = kwargs.get('widths',False)
   channels = kwargs.get('channels',False)
   verb = kwargs.get('verb',False)
-  small = kwargs.get('small',False)
   print_lines = kwargs.get('print_lines',False)
 
   parser = argparse.ArgumentParser( description = desc, formatter_class =\
@@ -233,11 +231,13 @@ def standard_args(desc = '', **kwargs):
   elif isinstance(epochs,bool) and epochs:
     parser.add_argument('-epochs', type=int, help=hstr, required=True)
 
-  hstr='proportion to train on'
-  if isinstance(prop, float):
-    parser.add_argument('-prop', type=float, help=hstr, default=prop)
-  elif prop:
-    parser.add_argument('-prop', type=float, help=hstr, required = True)
+  hstr='proportion(s) to train, and/or validate, and/or test on'
+  if not isinstance(props, bool) and isinstance(props, tuple):
+    parser.add_argument('-props', type=int, help=hstr, metavar='props',
+        nargs='*', default=props)
+  elif isinstance(props, bool) and props:
+    parser.add_argument('-props', type=int, help=hstr, metavar='props',
+        nargs='*', required=True)
 
   hstr='which gpu (int or ints separated by whitespace) for\
       training/validating; -1 for last gpu found (or to use cpu\
@@ -299,12 +299,6 @@ def standard_args(desc = '', **kwargs):
     else:
       parser.add_argument('-cm', help=hstr, action='store_true')
 
-  hstr='read in only this proportion of the data'
-  if not isinstance(small, bool) and  isinstance(small, (float, int)):
-    parser.add_argument('-small', type=float, help=hstr, default=small)
-  elif small is True:
-    parser.add_argument('-small', type=float, help=hstr, required = True)
-
   hstr='ints separated by whitespace controlling no. lines to print\
     before/after the ellipsis; put -1 to disable compressed printing'
   if not isinstance(print_lines, bool) and isinstance(print_lines, tuple):
@@ -315,6 +309,124 @@ def standard_args(desc = '', **kwargs):
         metavar='print_lines', nargs='*', required=True)
 
   return  parser
+
+def split_df(df, splits):
+  """Randomize and/or split a dataframe.
+
+  If `splits` is `()`, return a tuple of length one consisting of
+  `df` randomized. If `splits` is a nonempty tuple of proportions,
+  then return a tuple (the same length as `splits`) of disjoint
+  dataframes of those proportions randomly sampled from `df`.
+
+  If the !sum! of the splits is 1, then the returned dataframes'
+  union is `df`; otherwise, the returned dataframes proportion-
+  ately and disjointly partition 100*!sum! percent of the data.
+  E.g., if `df` consists of 500 entries and `splits=(.7,.15,.15)`,
+  then the returned tuple containing dataframes of sizes 350,
+  75, and 75; but, if `splits=(.4,.1,.1)`, then dataframes are
+  of sizes 120, 50, and 50.
+
+  Args:
+    $df$ (`pandas.Dataframe`): The dataframe to be split.
+    $splits$ (`Tuple`): A tuple of non-negative floats whose sum is
+        less than or equal to 1.0, or the empty tuple `()`.
+
+  Returns:
+    `Tuple[pandas.Dataframe]`. A tuple of disjoint dataframes.
+
+  >>> `import pandas`
+  >>> `df = pandas.DataFrame({'x':list(range(10))})`
+  >>> `train_df, test_df = split_df(df, (0.6,0.4))`
+  >>> `print(len(train_df), len(test_df))`
+  6 4
+  >>> `df = pandas.DataFrame({'x':list(range(500))})`
+  >>> `train_df, valid_df, test_df = split_df(df, (.7,.15,.15))`
+  >>> `print(len(train_df), len(valid_df), len(test_df))`
+  350 75 75
+  >>> `df = pandas.DataFrame({'x':list(range(11))})`
+  >>> `train_df, valid_df, test_df = split_df(df, (.4,.3,.3))`
+  >>> `print(len(train_df), len(valid_df), len(test_df))`
+  4 4 3
+  >>> `df = pandas.DataFrame({'x':list(range(500))})`
+  >>> `dfs = split_df(df, (0.4,0.1,0.1))`
+  >>> `print(len(dfs[0]), len(dfs[1]), len(dfs[2]))`
+  200 50 50
+  >>> `df = pandas.DataFrame({'x':list(range(100))})`
+  >>> `dfs = split_df(df, (0.3,0.3,0.2,0.2))`
+  >>> `print(len(dfs[0]), len(dfs[1]), len(dfs[2]), len(dfs[3]))`
+  30 30 20 20
+  >>> `df = pandas.DataFrame({'x':list(range(100))})`
+  >>> `df_ = split_df(df, ())`
+  >>> `print(len(df_[0]))`
+  100
+  """
+  assert isinstance(splits, tuple), _markup('Arg. $splits$ should be a tuple.')
+  randomized = df.sample(frac = 1.0)
+  returnlist = []
+  if len(splits) == 0:
+    returnlist.append(randomized.copy())
+    return tuple(returnlist)
+  else:
+    sum_ = sum(splits)
+    assert sum_ <= 1.0, _markup('sum of entries in arg. $splits$ must be <= 1.0')
+    frac = .5; splits = [1.0] + list(splits)
+    for idx in range(len(splits)-1):
+      frac = (frac / (1-frac)) * (splits[idx+1] / splits[idx])
+      if idx < len(splits) or sum_ < 1:
+        # no real need to randomly sample here but ... whatever
+        #splitout = randomized.sample(frac = 1 if frac > 1 else frac)
+        #randomized = randomized.drop(splitout.index).copy()
+        # nevermind, just do this
+        cutoff = round(frac*len(randomized))
+        splitout = randomized.head(cutoff)
+        randomized = randomized.tail(-cutoff)
+        returnlist.append(splitout.copy())
+      else:
+        returnlist.append(randomized)
+  return tuple(returnlist)
+
+def args2string(args, keys, timestamp=True, maxlength=100):
+  """Return string with selected values from args namespace.
+
+  E.g., if your `args.Namespace()` contains 'lr' and 'mo', and you
+  want to include only info about 'lr' in the output string then
+  call this like `args2string(args, ['lr'], False)`.
+
+  Args:
+    $args$ (`argparse.ArgumentParser`): Instance of `ArgumentParser`.
+    $keys$ (`List[str]`). The keys of `args` to be included in the
+        output string.
+    $timestamp$ (`bool`): Whether to prepend the output string
+        a timestamp. Default: `True`.
+    $maxlength$ (`int`): Start wrapping the output string after
+        this many characters. Default: `100`.
+
+  Return (`str`).
+
+  >>> `parser = standard_args(epochs=10,lr=0.5,mo=0.9)`
+  >>> `args = parser.parse_args()`
+  >>> `args2string(args, ['lr'], timestamp=False)`
+  'lr:0.5'
+  """
+  length = 0
+  def add_info(base_str, info, length):
+    if length +len(info) > maxlength:
+      base_str += '\n'
+      length = len(info)
+    else:
+      length += len(info)
+    return base_str + info, length
+  d = vars(args)
+  string = time.ctime()+'\n' if timestamp else ''
+  for kwarg in keys:
+    assert kwarg in d.keys(), "{} is not in args.Namespace()".format(kwarg)
+    if isinstance(d[kwarg],float):
+      string, length =\
+          add_info(string, kwarg+':'+str(format_num(d[kwarg]))+' ', length)
+    else:
+      string, length =\
+          add_info(string, kwarg+':'+str(d[kwarg]).replace(' ','')+' ', length)
+  return string[:-1]
 
 def get_device(gpu = -1):
   """Get a device, among those available, on which to compute.
@@ -338,7 +450,11 @@ def get_device(gpu = -1):
     return torch.device('cpu:0')
 
 def print_devices():
-  """print available devices"""
+  """Print available devices.
+
+  Returns:
+    `str`.
+  """
 
   print('number of available (CPU) threads:',torch.get_num_threads())
   if torch.cuda.is_available():
@@ -355,28 +471,28 @@ def print_devices():
       class aboutCudaDevices():
         def __init__(self):
           pass
-  
+
         def num_devices(self):
           """Return number of devices connected."""
           return cuda.Device.count()
-  
+
         def devices(self):
           """Get info on all devices connected."""
           num = cuda.Device.count()
           print("%d device(s) found:"%num)
           for i in range(num):
             print(cuda.Device(i).name(), "(Id: %d)"%i)
-  
+
         def mem_info(self):
           """Get available and total memory of all devices."""
           available, total = cuda.mem_get_info()
           print("Available: %.2f GB\nTotal:     %.2f GB"\
               %(available/1e9,total/1e9))
-  
+
         def attributes(self, device_id=0):
           """Get attributes of device with device Id = device_id"""
           return cuda.Device(device_id).get_attributes()
-  
+
         def __repr__(self):
           """Class representation gives number of devices connected and
           basic info about them.

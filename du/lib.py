@@ -60,8 +60,8 @@ trained models.
      $valid_crit$ = `True`)
                  -function determining how the model is valida-
                   ted w/r to test data. The default results in
-                  using `r_squared` for regression and `confusion_`
-                  `matrix` for classification.
+                  using `r_squared` for regression and `class_accu`
+                  `racy` for classification.
 
   |cross_validate_train|
     ($model$, $crit$, $train_data$, $k$, $**kwargs$)
@@ -104,8 +104,8 @@ trained models.
                  erride found gpu(s) and use the cpu.  Consider
                  just accepting the default here.
 
-  |confusion_matrix| compute the confusion matrix when classify-
-                 ing, say, `m` classes; returns `float`.
+  |class_accuracy| compute the proportion correct for a classifi-
+                 cation problem; returns `float`.
     ($prob_dists$,-these are the predictions of the model in the
                  form of a tensor (of shape `(n,m)`) of discrete
                  probability dists; this is normally just `mod-`
@@ -115,14 +115,12 @@ trained models.
      $classes$,   -a tensor of shape `(n)` holding the possible
                  classes; normally this is `torch.arange(10)`, if
                  there are say 10 things being classified
-     $return_error$ = `False`,
-                -return error instead of proportion correct
-     $show$ = `False`,
-                -display the confusion matrix       -
-     $gpu$ = `-1`,  -run on the fastest device, by default
      $class2name$ = `None`)
                 -a dict mapping `int`s representing the classes
                  to the corresponing descriptive name (`str`)
+     $show_cm$ = `False`,
+                -display the confusion matrix       -
+     $gpu$ = `-1`,  -run on the fastest device, by default
 
   |r_squared|     return (`float`) the coefficient of determination
     ($yhatss$,    -either a trained model's best guesses (so of-
@@ -236,6 +234,7 @@ trained models.
 #    will be fast.
 
 import time
+import math
 import functools
 import tkinter
 import copy
@@ -285,13 +284,18 @@ def center(xss, shift_by = None):
   a random point cloud in the plane so that it is centered at
   the origin:
 
-  >>> `xss = torch.rand(100,2)`  # point cloud indexed by dim 0
+  A point cloud indexed by dim 0:
+  >>> `xss = torch.rand(100,2)`
+
+  Let's center it:
   >>> `xss, _ = center(xss)`
+
+  And check that it is centered:
   >>> `torch.all(torch.lt(torch.abs(xss.mean(0)),1e-5)).item()`
   1
 
-  If the `new_centers` is `None`, then `center` simply mean-centers
-  the data:
+  If `new_centers` is `None`, then `center` simply mean-centers the
+  data:
 
   >>> `xss = torch.arange(2400.).view(100, 2, 3, 4)`
   >>> `means = center(xss)[0].mean(0)`
@@ -311,16 +315,22 @@ def center(xss, shift_by = None):
         sions of which is one less than that of `xss` and whose
         shape is in fact `(d_1,`...`,d_n)` where `xss` has as its
         shape `(d_0, d_1,`...`,d_n)`. The default is `None` which is
-        equivalent to `new_center` being the zero tensor.
+        equivalent to `shift_by` being the `xss.mean(0)`.
+        The first returned tensor is `xss` with the `(i_1,`...`,i_n)`
+        entry of `shift_by` subtracted from the `(j, i_1,`...`,i_n)`
+	entry of `xss`, `0 <= j < d_0`.
 
   Returns:
     `(torch.Tensor, torch.Tensor)`. A tuple of tensors the first
-        of which is `xss` centered with respect to the first dim-
-        ension according to `new_centers`; the second is a tensor
-        the size of the remaining dimensions holding the means
-        of the original data `xss`.
+        of which is `xss` shifted with respect to the first dim-
+        ension according to `shift_by`, and the second of which
+        is a tensor the size of the remaining dimensions holding
+        the means of the original data `xss` with respect to the
+        first dimension.
 
-  >>> `xss = torch.arange(12.).view(3,4); xss`
+  More Examples:
+  >>> `xss = torch.arange(12.).view(3,4)`
+  >>> `xss`
   tensor([[ 0.,  1.,  2.,  3.],
           [ 4.,  5.,  6.,  7.],
           [ 8.,  9., 10., 11.]])
@@ -333,6 +343,8 @@ def center(xss, shift_by = None):
   >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
 
+  You can shift the center of the data arbitrary by specifying
+  `shift_by` appropriately.
   >>> `xss = torch.arange(12.).view(3,2,2)`
   >>> `xss_, xss_means = center(xss)`
   >>> `xss_means.shape`
@@ -341,39 +353,28 @@ def center(xss, shift_by = None):
   >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
   """
-  #xss_means = xss.mean(0)
-  #if isinstance(shift_by, torch.Tensor):
-  #  assert shift_by.size() == xss_means.size(),\
-  #      'shift_by must have size {}, not {}'.\
-  #          format(xss_means.size(),shift_by.size())
-  #else:
-  #  shift_by = xss_means
-  #return xss - shift_by, xss_means
-
   if shift_by is None:
     xss_means = xss.mean(0)
     return xss - xss_means, xss_means
   else:
-    return xss - shift_by, None
+    return xss - shift_by, xss.mean(0)
 
 def normalize(xss, scale_by = None, unbiased = True):
   """Normalize data without dividing by zero.
 
   See the documentation for the function `center`. This function
-  is entirely analagous. The data are assumed to be indexed by
-  the first dimenion. The data will be scaled so that, with re-
-  pect to each of its remaining dimensions, the standard devia-
-  tions will have been divided by the corresponding entry of `new`
-  `widths` (or unaltered it that entry is 0).
+  is entirely analogous. The data are assumed to be indexed by
+  the first dimension.
 
-  More precisely, let `(d0, d1,..., dn)` denote the shape of `xss`.
-  In case `scale_by` is not `None`, then the `(i0, i1, ..., in)` ent-
-  ry of `xss` is divided by the `(i1, i2,..., in)` entry of `scale_`
+  More precisely, let `(d0, d1,`...`, dn)` denote the shape of `xss`.
+  In case `scale_by` is not `None`, then the `(i0, i1,` ..., `in)` ent-
+  ry of `xss` is divided by the `(i1, i2,`..., `in)` entry of `scale_`
   `by` unless that entry `scale_by` is (nearly) 0, in which case
-  the `(i0, i1, ..., in)` of `xss` is left unchanged.
+  the `(i0, i1,` ...`, in)` of `xss` is left unchanged.
 
   The default, `scale_by=None` is equivalent to setting `scale_by=`
-  `xss.std(0)`.
+  `xss.std(0)` and leads to the first returned tensor being `xss`
+  scaled so that its 'columns' have standard deviation 1.
 
   Args:
     $xss$ (`torch.Tensor`) A tensor whose entries, when thought of
@@ -388,27 +389,47 @@ def normalize(xss, scale_by = None, unbiased = True):
     `(torch.Tensor, torch.Tensor)`. A tuple of tensors the first
         of which is `xss` normalized with respect to the first
         dimension, except that those columns with standard dev
-        less than a threshold are left unchanged.
+        less than a small threshold are left unchanged; the se-
+        cond is `xss.std(0)`.
 
-  >>> `xss = torch.tensor([[1, 2, 3], [6, 7, 8]]).float()`
+  Example:
+  >>> `xss = torch.tensor([[1., 2., 3.], [6., 7., 8.]])`
+  >>> `xss`
+  tensor([[1., 2., 3.],
+          [6., 7., 8.]])
   >>> `xss, xss_stdevs = normalize(xss, unbiased = False)`
-  >>> `xss.tolist()`
-  [[0.4...
-  >>> `xss_stdevs.tolist()`
-  [2.5...
+
+  The columns of xss are now normalized:
+  >>> `xss`
+  tensor([[0.4000, 0.8000, 1.2000],
+          [2.4000, 2.8000, 3.2000]])
+
+  The stand. devs the original columns:
+  >>> `xss_stdevs`
+  tensor([2.5000, 2.5000, 2.5000])
+
+  Let us check that the new columns are normalized:
   >>> `_, xss_stdevs = normalize(xss, unbiased = False)`
-  >>> `xss_stdevs.tolist()`
-  [1.0...
-  >>> `xss = torch.tensor([[1, 2, 3], [1, 7, 3]]).float()`
+  >>> `xss_stdevs`
+  tensor([1., 1., 1.])
+
+  More examples:
+  >>> `xss = torch.tensor([[1.,2,3], [6,100,-11]])`
+  >>> `xss.std(0)`
+  tensor([ 3.5355, 69.2965,  9.8995])
+  >>> `scale_by = 2.0*torch.ones(xss.shape[1:])`
+  >>> `scale_by`
+  tensor([2., 2., 2.])
+  >>> `xss, stdevs  = normalize(xss, scale_by, unbiased=False)`
+  >>> `stdevs`
+  tensor([ 1.2500, 24.5000,  3.5000])
+  >>> `xss.std(0)/math.sqrt(2)`
+  tensor([ 1.2500, 24.5000,  3.5000])
+
+  >>> `xss = torch.tensor([[1., 2, 3], [1, 7, 3]])`
   >>> `xss, _ = normalize(xss, unbiased = False)`
-  >>> `xss.tolist()`
-  [[1.0...
-  >>> `xss = torch.tensor([[1,2,3], [6,7,8]]).float()`
-  >>> `new_widths = 2.0*torch.ones(xss.shape[1:])
-  >>> `xss, _  = normalize(xss, new_widths, unbiased=False)`
-  >>> `_, stdevs = normalize(xss, unbiased=False)`
-  >>> `stdevs.tolist()`
-  [1.25...
+  >>> `xss`
+  tensor([[1.0...
   """
   # add and assert checking that scale_by is right dim.
   #xss_stdevs = xss.std(0, unbiased)
@@ -421,7 +442,6 @@ def normalize(xss, scale_by = None, unbiased = True):
   #else:
   #  new_xss = xss.div(xss_stdevs_no_zeros)
   #return new_xss, xss_stdevs
-
   if scale_by is None:
     xss_stdevs = xss.std(0, unbiased)
     xss_stdevs_no_zeros = xss_stdevs.clone()
@@ -430,7 +450,8 @@ def normalize(xss, scale_by = None, unbiased = True):
   else:
     scale_by_no_zeros = scale_by.clone()
     scale_by_no_zeros[scale_by_no_zeros < 1e-7] = 1.0
-    return xss.div(scale_by_no_zeros), None
+    newxss = xss.div(scale_by_no_zeros)
+    return xss.div(scale_by_no_zeros), newxss.std(0, unbiased)
 
 def standardize(xss, means=None, stdevs=None, unbiased=True):
   """Standardize (a minibatch of) data w/r to `means` and `stdevs`.
@@ -449,7 +470,7 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   to the, in this case, mean and standard deviation of the sin-
   gle dimensional features.
 
-  >>> `xss = 7 + 2 * torch.randn(100).view(100,1)`
+  >>> `xss = 7 + 3 * torch.randn(100).view(100,1)`
   >>> `zss = standardize(xss, xss.mean(0), xss.std(0))`
   >>> `zss.shape`
   torch.Size([100, 1])
@@ -526,25 +547,22 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
     return xss
 
 def online_means_stdevs(data, batchsize=1, *transforms_):
-  """ Online compute the means and standard deviations of data.
+  """Online compute the means and standard deviations of data.
 
   Args:
-    `data` (`Union[tensor, DataLoader]`): Either a tensor whose 1st
+    $data$ (`Union[tensor, DataLoader]`): Either a tensor whose 1st
         dimension indexes examples or an instance of PyTorch's
-        DataLoader that yields (mini-batches) of examples which
-        are wrapped in a tuple (of length 1). If `dataset`
-    `batchsize` (`int`):
-  Notes:
-    - This works on one channel data (image) data
-  Todo:
-    - Write something that works on multichannel and calls this?
-      One say 3 channel images, try passing a transform that flattens
-      those channels to 3 dimensions. Then tack on targets and have...
-    - Work out a numerically stable version of the online variance algo.
-      (possibly a batched version of what's on wikipedia).
-    - The stdevs here are always biased.
-    - a passed loader batchsize override arg batchsize
-    - adjust so last batch can be smaller ... DONE
+        `DataLoader` class that yields (mini-batches) of examples
+        which are wrapped in a tuple (of length 1).
+    $batchsize$ (`int`): If `data` is a tensor, then an instance of
+        `DataLoader` is created with this `batchsize`. If `data` is
+        already an instance of `DataLoader`, this argument is ig-
+        nored. Default: `1`.
+    $transforms$ (`Tuple[torchvision.transforms]`): If you wish to
+        compute means and stdevs of augmented data, consider
+        defining an apropriate instance of `DataLoader`. But, if
+        you really want to, you can include transformations via
+        this parameter.
 
   >>> data = torch.arange(100.).view(100,1)
   >>> means, stdevs = online_means_stdevs(data)
@@ -568,7 +586,20 @@ def online_means_stdevs(data, batchsize=1, *transforms_):
   >>> means, stdevs = online_means_stdevs(loader)
   >>> means.item(), stdevs.item()
   (49.5, 28.86...
+
   """
+  #Notes:
+  #  - This works on one channel data (image) data
+  #Todo:
+  #  - Generalize this to work on multichannel and calls this?
+  #    On say 3 channel images, try passing a transform that flattens
+  #    those channels to 3 dimensions. Then tack on targets and have...
+  #  - Work out a numerically stable version of the online variance algo.
+  #    (possibly a batched version of what's on wikipedia).
+  #  - The stdevs here are always biased.
+  #  - a passed loader batchsize overrides arg batchsize
+  #  - adjust so last batch can be smaller ... DONE
+
   if isinstance(data, torch.Tensor):
     loader = torch.utils.data.DataLoader(
         dataset = torch.utils.data.TensorDataset(data),
@@ -761,9 +792,9 @@ class Momentum(LearnParams_):
       $parameters$ (`generator`): The parameters (in the form of
           an iterator of tensors) to be updated.
     """
-    for i, (z_param, param) in enumerate(zip(self.z_params, params)):
-      self.z_params[i] = z_param.mul_(self.mo).add_(param.grad.data)
-      param.data.sub_(self.z_params[i] * self.lr)
+    for z_param, param in zip(self.z_params, params):
+      z_param = z_param.mul_(self.mo).add_(param.grad.data)
+      param.data.sub_(z_param * self.lr)
 
 def _parse_data(data_tuple, device = 'cpu'):
   """Simple helper function for the train function.
@@ -788,52 +819,48 @@ def _parse_data(data_tuple, device = 'cpu'):
           format(len(feats), len(targs))
   return feats, feats_lengths, targs
 
-#def _batcher(data_tuple, bs, data_device, model_device):
-#  """Helper function for the train function that returns a gen-
-#  erator which, after the data are coherently randomized, kicks
-#  out batches of the specified size.
-#
-#  Args:
-#    $data_tuple$ (`Tuple[tensor]`): The tensors to be coherent-
-#        ly batched.
-#    $bs$ (`int`): The batchsize.
-#    $data_device$ (`Union[str, torch.device]`): The device on which
-#        to batch the tensors from.
-#    $model_device$ (`Union[str, torch.device]`): The device to move
-#        the batches to just before yielding them.
-#
-#  Returns:
-#    `generator`. A generator that yields batches in the form of
-#        tuples of the same length as `data_tuple`.
-#  """
-#  num_examples = len(data_tuple[0])
-#  tuple([t.to(data_device) for t in data_tuple])
-#  indices = torch.randperm(num_examples, device = data_device)
-#  for idx in range(0, num_examples, bs):
-#    yield tuple([t.index_select(0,indices[idx: idx + bs]).to(model_device)\
-#        for t in data_tuple])
+def _tuple2dataset(tup):
+  """Return instance of Dataset.
 
+  If you don't need any transforms, this a quick way to create
+  a dataset from a tuple that fits well in memory.
+
+  >>> feats = torch.rand(40, 2); targs = torch.rand(40, 1)
+  >>> dataset = _tuple2dataset((feats, targs))
+  >>> len(dataset[0])
+  2
+  >>> len(dataset[0][0]), len(dataset[0][1])
+  (2, 1)
+  """
+  class Data(torch.utils.data.Dataset):
+    def __init__(self, tup):
+      self.tup = tup
+
+    def __len__(self):
+      return len(self.tup[0])
+
+    def __getitem__(self, idx):
+      return tuple([tup[j][idx] for j in range(len(self.tup))])
+  return Data(tup)
+
+# keeping this since it's faster than DataLoader
 class _DataLoader:
-  """Helper class for the train function.
+  """Emulate `torch.utils.data.DataLoader`.
 
   An instance of this can be used in the same way that one uses
-  an instance of `DataLoader`.
+  an instance of `DataLoader`. If you are not using transforms
+  and the totality of your data fits in RAM, this can be faster
+  that `DataLoader`.
   """
-  #class _Dataset(torch.utils.data.Dataset):
-  #  def __init__(self, tup):
-  #    self.tuple = tup
-  #    #self.features = tup[0]
-  #    #self.targets = tup[-1]
-  #  def __len__(self):
-  #    return len(self.tuple[0])
-  #  def __getitem__(self, idx):
-  #    return tuple(t[idx] for t in self.tuple)
 
-  #def __init__(self, data_tuple, batch_size, data_device, model_device):
-  def __init__(self, data_tuple, batch_size, data_device=torch.device('cpu',0)):
+  def __init__(self, data_tuple, batch_size, shuffle=False):
     """
-    Examples:
+    Args:
+      $data_tuple$ (Tuple[`torch.Tensor`]).
+      $batchsize$ (`Int`).
+      $shuffle$ (`bool`).
 
+    Examples:
     >>> `xss = torch.rand(144).view(12,3,4)`
     >>> `yss = torch.arange(12).view(12,1)`
     >>> `dl =_DataLoader(data_tuple=(xss,yss),batch_size=6)`
@@ -841,6 +868,8 @@ class _DataLoader:
     ...     `print(mb[0].size(), mb[1].size())`
     torch.Size([6, 3, 4]) torch.Size([6, 1])
     torch.Size([6, 3, 4]) torch.Size([6, 1])
+    >>> `len(dl)`
+    2
 
     >>> `dl =_DataLoader(data_tuple=(xss,yss),batch_size=12)`
     >>> `for mb in dl:`
@@ -855,6 +884,8 @@ class _DataLoader:
     ...     `print(mb[0].size(), mb[1].size())`
     torch.Size([7, 3, 4]) torch.Size([7, 1])
     torch.Size([5, 3, 4]) torch.Size([5, 1])
+    >>> `len(dl)`
+    2
 
     >>> `dataset = torch.utils.data.TensorDataset(xss,yss)`
     >>> `dl = torch.utils.data.DataLoader(dataset, batch_size=7)`
@@ -862,46 +893,39 @@ class _DataLoader:
     ...     `print(mb[0].size(), mb[1].size())`
     torch.Size([7, 3, 4]) torch.Size([7, 1])
     torch.Size([5, 3, 4]) torch.Size([5, 1])
-
-    Args:
-      $data_tuple$ (`Tuple[Tensor]`): The tensors to be coher-
-          ently batched.
-      $batch_size$ (`int`): The batchsize.
-      $data_device$ (`Union[str, torch.device]`): The device on
-          which to batch the tensors from.
-      $model_device$ (`Union[str, torch.device]`): The device
-          to move the minibatches to just before returning
-          them.
     """
     self.len = len(data_tuple[0])
-    self.dataset = tuple([t.to(data_device) for t in data_tuple])
-    #self.dataset = self._Dataset(self.tuple)
+    # we don't really use self.dataset as an instance of Dataset, here. But we
+    # can now # get len(self.dataset) as with instances of DataLoader. So self.
+    # dataset is just storing the tuple, really.
+    self.dataset = _tuple2dataset(data_tuple)
     self.batch_size = batch_size
-    self.data_device = data_device
-    #self.model_device = model_device
-    #self.indices = torch.randperm(len(self.dataset), device = data_device)
-    #self.indices = torch.randperm(self.len, device = data_device)
-    #self.idx = 0
+    self.shuffle = shuffle
 
   def __iter__(self):
-    self.indices = torch.randperm(self.len, device = self.data_device)
+    if self.shuffle:
+      self.indices = torch.randperm(self.len)
+    else:
+      self.indices = torch.arange(self.len)
     self.idx = 0
     return self
+
+  def __len__(self):
+    return math.ceil(len(self.dataset)/self.batch_size)
 
   def __next__(self):
     if self.idx > self.len - 1:
       raise StopIteration
+    #minibatch = tuple([t.index_select(0,
+    #    self.indices[self.idx: self.idx + self.batch_size]) for\
+    #        t in self.dataset])
     minibatch = tuple([t.index_select(0,
         self.indices[self.idx: self.idx + self.batch_size]) for\
-            t in self.dataset])
+            t in self.dataset.tup])
     self.idx += self.batch_size
-    #if self.idx > len(self.dataset) - 1:
-    #minibatch = tuple([t.index_select(0,
-    #    self.indices[self.idx: self.idx + self.bs]).to(self.model_device)\
-    #        for t in self.tuple])
     return minibatch
 
-def _getLoss(model, dataloader, crit, device):
+def _evaluate(model, dataloader, crit, device):
   """Return loss.
 
   This uses `crit` to evaluate `model` on data wrapped in `dataloa`
@@ -911,14 +935,75 @@ def _getLoss(model, dataloader, crit, device):
 
   Args:
     $model$ (`nn.Module`): The model to applied.
-    $dataloader$ ('Union[DataLoader, _DataLoader])
-    $crit$ ('Union[DataLoader, _DataLoader])
+    $dataloader$ (`Union[DataLoader, _DataLoader]`)
+    $crit$ (`function`): A function that maps a mini-batch output
+        by `dataloader` to a float.
+    $device$ (`Tuple[int,torch.device]`): The model should already
+        be on this device. The mini-batches are moved to this
+        device just before passing them through the model and
+        evaluating with criterion. As usual: if this a non-neg-
+        ative `int`, then it use that GPU; -1, use the last GPU;
+        -2 force use of the CPU.
+
+  Returns:
+    `float`. The total loss over one epoch of `dataloader`.
   """
+  device = du.utils.get_device(device) if isinstance(device,int) else device
   accum_loss = 0.0
+  num_examples = 0
   for minibatch in dataloader:
     accum_loss += crit(model(
         *map(lambda x: x.to(device), minibatch[:-1])), minibatch[-1].to(device))
-  return accum_loss/len(dataloader)                           # to device here??
+    num_examples += len(minibatch[0])
+  return accum_loss/len(dataloader)
+
+def _batch2class_accuracy(probdists, yss):
+  """Return the proportion correctly classified.
+
+  Args:
+    $prob_dists$ (`torch.Tensor`): A tensor of dimension 2 holding,
+        for each example, the probability distribution predict-
+        ing the correct class. The first dimension must index
+        the examples. This argument is, then, the predictions,
+        in the form of probability distributions, made by a mo-
+        del when fed the features of some set of examples. This
+        should often be just `model(xss)`, for example.
+    $yss$ (`IntTensor`): A 1-dimensional tensor holding the cor-
+        rect class (as some flavor of an `int`) for each example.
+
+  Returns:
+    `float`. The proportion of examples correctly predicted.
+
+  Todo:
+    - See if moving moving probdists and yss back to CPU
+      improves speed (likely not).
+  """
+  assert len(probdists) == len(yss), dedent(f"""\
+      Lengths must be equal, but len(probdists)={len(probdists)}
+      and len(yss)={len(yss)}.""")
+  assert isinstance(yss, IntTensor), dedent(f"""\
+      Argument yss must be a Long-, Int-, or ShortTensor, not {type(yss)}.""")
+  accum = 0
+  for probdist, ys in zip(probdists, yss):
+    if torch.argmax(probdist).item() == ys:
+      accum += 1
+  return accum/len(probdists)
+
+def _class_accuracy(model, dataloader, device=-2):
+  """Return proportion correct.
+
+  """
+  return _evaluate(
+      model=model,dataloader=dataloader,crit=_batch2class_accuracy,device=device)
+  #device = du.utils.get_device(device) if isinstance(device,int) else device
+  #correct = 0
+  #num_examples = 0
+  #for batch in dataloader:
+  #    correct += _class_accuracy_count(
+  #        model(batch[0].to(device)), batch[1].to(device).to('cpu'))
+  #    num_examples += len(batch[0])
+  #return correct / num_examples
+
 
 def train(model, crit, train_data, **kwargs):
   """Train a model.
@@ -952,7 +1037,7 @@ def train(model, crit, train_data, **kwargs):
 
   In the presence of at least one GPU, the `gpu` argument can be
   used to move some or all computations to the GPU(s). Generic-
-  ally one can accept the default (`gpu` = `(-1,)`) which sends all
+  ally, one can accept the default (`gpu`=`(-1,)`) which sends all
   computations to the (last of any) found GPU(s) and, if there
   are no GPU(s), to the (first) CPU (thread).
 
@@ -965,22 +1050,24 @@ def train(model, crit, train_data, **kwargs):
   !Note on validation and efficiency!
 
   In order to provide an option that trains as efficiently as
-  possible, unless `graph` is positive, any test data is ignored;
+  possible, unless `graph` is positive, any validation data that
+  may have been passed as an argument of `valid_data` is ignored;
   that is, the model is simply trained on the provided training
   data, and the loss per epoch is displayed to the console. Use
   the default `gpu = (-1,)` to train on the fastest available de-
   vice.
 
-  You can set `graph` to be positive (and forego testing data) in
+  You can set `graph` to be positive (and forego validation) in
   order to real-time graph the losses per epoch at cost in time
   but at no cost in VRAM (assuming you have GPU(s)) if you set
   `gpu = (-1, -2)`. Here the -1 leads to training on the GPU and
   the -2 causes validation during training to take place on the
-  CPU. Moreover, the training data is immediately copied to the
-  CPU, thus freeing VRAM for training (at the expense of time
-  efficiency since the validation is slower on a CPU).
+  CPU.  Moreover, the training data, for the purpose of valida-
+  remains on the CPU, thus freeing VRAM for training (at the
+  expense of time efficiency since validation is likely slower
+  on a CPU).
 
-  By default, any provided `test_data` resides on the device on
+  By default, any provided `valid_data` resides on the device on
   which training occurs. In a bind (such as running out of VRAM
   when training on a GPU) one can again set `gpu = (-1,-2)` which
   causes `model` to, after each training loop, be deep copied to
@@ -996,16 +1083,17 @@ def train(model, crit, train_data, **kwargs):
   Args:
     $model$ (`nn.Module`): The instance of Module to be trained.
     $crit$ (`nn.modules.loss`): The loss function when training.
-    $train_data$ (`Tuple[torch.Tensor]`): A tuple consisting of
-        either 2 or 3 tensors. Passing a length 3 tensor is on-
-        ly necessary when training a recurrent net on variable
-        length inputs. In that case, the triple of tensors must
-        be of the form
+    $train_data$ (`Union[Tuple[torch.Tensor],DataLoader]`) Either a
+        tuple consisting of 2 or 3 tensors (as described below)
+        or an instance of `torch.data.utils.DataLoader` yielding
+        such tuples.
+        Passing a length 3 tensor is only necessary when train-
+        ing a recurrent net on variable length inputs. In that
+        case, the triple of tensors must be of the form
            `(train_features, train_lengths, train_targets)`;
         i.e., the first tensor holds the inputs of the training
         data, the second holds the corresponding lengths, and
         the third holds the training data outputs.
-
         If the data are not of variable length, then there is
         no need to pass the middle tensor in the triple above;
         so one passes just
@@ -1020,12 +1108,14 @@ def train(model, crit, train_data, **kwargs):
         testing data.)
 
   Kwargs:
-    $test_data$ (`Tuple[torch.Tensor]`): (Optional) data on which
-        to test, in the form of a tuple of length 2 or 3; i.e.,
-        that matches the length of `train_data`. The loss on test
-        data is computed each epoch. However, The test data is
-        not shown to the model as part of backpropagation. Def-
-        ault: `None`.
+    $valid_data$ (`Union[Tuple[torch.Tensor],DataLoader]`):
+        (Optional) data on which to validate the model in the
+        form of a tuple of length 2 or 3 (that is, matching the
+        length of `train_data`) or an instance of `torch.data.util`
+        `s.data.DataLoader` yielding such tensors.
+        The loss on validation data is computed each epoch; but
+        `valid_data` is not shown to the model as part of back-
+        propagation. Default: `None`.
     $learn_params$
         (`Union[dict,LearnParam_, torch.optim.Optimizer]`): The
         training, or 'learning', hyperparameters in the form of
@@ -1035,7 +1125,7 @@ def train(model, crit, train_data, **kwargs):
         Default: `{'lr': 0.1}`.
     $bs$ (`int`): The mini-batch size where -1 forces batch gradi-
         ent descent (i.e. feed-forwarding all training examples
-        before each back-propagation). Default: -1.
+        before each back-propagation). Default: `-1`.
     $epochs$ (`int`): The number of epochs to train over, where an
         epoch is the 'time' required to see each training exam-
         ple exactly once. Default: `10`.
@@ -1050,16 +1140,18 @@ def train(model, crit, train_data, **kwargs):
         ellipses during compressed printing to the console. A
         length one tuple is duplicated into a length two one.
         Put (-1,) to print all losses. Default: `(7,)`.
-    $verb$ (`int`): Verbosity; 0 = silent, ... , 3 = all. Def.: `2`.
+    $verb$ (`int`): Verbosity; 0, silent; 1, just timing info; 2,
+        also print device notes; 3, add loss per epoch. Def.:`3`.
     $gpu$ (`Tuple[int]`): Tuple of `int`s of length 1 or 2 where the
         first entry determines the device to which the model is
         moved and, in fact, on which the forwarding and back-
-        propagation through the model takes place. The second
-        entry determines the device to which the model is deep
-        copied (if necessary) for the purpose of validation ag-
-        aisnt any test data present. If this is a length 1 tup-
-        le, then that number is used to determine both devices.
-
+        propagation through the model takes place during train-
+        ing.
+        The second entry determines the device to which the mo-
+        del is deep copied (if necessary) for the purpose of
+        validation including validation agaisnt any test data
+        provided. If this is a length 1 tuple, then that number
+        is used to determine both devices.
         If no GPUs are present, then accept the default. Other-
         wise an `int` determines the GPU to use for training/val-
         idating. When GPU(s) are present, set an entry of the
@@ -1067,21 +1159,31 @@ def train(model, crit, train_data, **kwargs):
         to -1 to use the last GPU found (and to use the CPU if
         no GPU is found), or to -2 to override using a found
         GPU and instead use the CPU. Default: `(-1, -1)`.
-    $valid_crit$ (`Union(bool, function)`): If `graph` is positive,
-        and `test_data` is present then, while graphing, `valid_`
-        `crit` is applied to test data after every epoch, and the
-        output is displayed on the graph. The default (which is
-        `True`) results in automatically using `r-squared` if the
-        target data are floating point tensors, and to using `co`
-        `nfusion_matrix` if the targets are tensors of integers.
-
-        Any function that maps the outputs of `model` (e.g., `yhat`
-        `ss` or `prob_dists`) along with `yss` to a float can be
-        provided for `valid_crit`.
-    $args$ (`argparse.Namespace`): With the exception of `test_data`
+    $valid_crit$ (`Union(bool, function)`): If this is set to `True`
+        and `graph` is positive, then the model is validated for
+        accuracy on training data and the result is diplayed
+        on the graph. If the targets are tensors of integers,
+        then we assume a classification problem and the accur-
+        acy is the proportion correct; with float targets, the
+        accuracy gauge is r-squared.
+        A custom accuracy gauge can be provided in the form a
+        function that maps a model, a dataloader, and a device
+        to a number; e.g., `du.lib._class_accuracy`.
+        If `valid_data` is present, then model accuracy on it is
+        also gauged and displayed. Default: `True`.
+        Notes:
+        - To simply train the model as efficiently as possible,
+          set `graph = 0` which disables all validation.
+        - Or, set this to `False`, to disable all validation and
+          just graph (so put, e.g., `graph = 1`) the loss.
+    $args$ (`argparse.Namespace`): With the exception of `valid_data`
         `valid_crit`, and this argument, all `kwargs` can be passed
         in via attributes (of the same name) of an instance of
         `argparse.Namespace`. Default: None.
+
+        Note: arguments that are passed explicitly via their
+        parameter above |override| any of those values passed via
+        `args`.
 
   Returns:
     `nn.Module`. The trained model (still on the device determin-
@@ -1089,109 +1191,112 @@ def train(model, crit, train_data, **kwargs):
   """
   # this is train
   # check and process kwargs
-  du.utils._check_kwargs(kwargs,['test_data','learn_params','bs','epochs',
-      'graph','print_lines','verb','gpu','valid_crit','args'])
-  test_data = kwargs.get('test_data', None)
+  du.utils._check_kwargs( kwargs,
+      ['valid_data', 'learn_params', 'bs', 'epochs', 'graph',
+       'print_lines', 'verb', 'gpu', 'valid_crit', 'args'])
+  valid_data = kwargs.get('valid_data', None)
   args = kwargs.get('args', None)
   if 'args' == None:
     class args: pass # a little finesse if args wasn't passed
-  learn_params = kwargs.get('learn_params',
+  bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
+  verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
+  gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
+  epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
+  valid_crit = kwargs.get('valid_crit', True)
+  learn_params = kwargs.get( 'learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
           'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
           not hasattr(args,'learn_params') else args.learn_params)
-  bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
-  epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
-  print_lines = kwargs.get('print_lines',
+  print_lines = kwargs.get( 'print_lines',
       (7, 8) if not hasattr(args,'print_lines') else args.print_lines)
-  if len(print_lines) > 1:
-    print_init, print_last = print_lines
-  else:
-    print_init, print_last = print_lines[0], print_lines[0]
-  verb = kwargs.get('verb', 2 if not hasattr(args,'verb') else args.verb)
+  if len(print_lines) > 1: print_init, print_last = print_lines
+  else: print_init, print_last = print_lines[0], print_lines[0]
   graph = kwargs.get('graph', 0 if not hasattr(args,'graph') else args.graph)
-  gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
-  valid_crit = kwargs.get('valid_crit', True)
+  graph = 1 if graph is True else graph
+  assert isinstance(graph,int) and graph >= 0,\
+      f'graph must be a non-negative integer, not {graph}.'
 
   start = time.time() # start (naive) timing here
 
-  graph = 1 if graph is True else graph
-  assert isinstance(graph,int) and graph>=0,\
-      'graph must be a non-negative integer, not {}.'.format(graph)
-
-  # get devices determined by the arg gpu
+  # get devices determined by the gpu argument
   if isinstance(gpu, (tuple,list)) and len(gpu) == 1: gpu = (gpu[0], gpu[0])
   else: assert isinstance(gpu, (tuple,list)) and len(gpu) > 1
-  model_device = du.utils.get_device(gpu[0])  # where the training takes place
-  valid_device = du.utils.get_device(gpu[1])  # where validation happens
-  data_device = torch.device('cpu',0)
-  if verb > 0:
-    print('training on {} (data on {})'.format(model_device, data_device),end='')
-    if valid_crit and graph>0: print('; validating on {}'.format(valid_device))
+  # The training happens on the model device; training minibatches are moved
+  # just before being forwarded throught the model.
+  model_dev = du.utils.get_device(gpu[0])
+  valid_dev = du.utils.get_device(gpu[1])  # where validation happens
+  data_dev = torch.device('cpu',0) # where the data lives
+  if verb > 1:
+    print(f'training on {model_dev} (data is on {data_dev})',end='')
+    if valid_crit and graph > 0: print(f'; validating on {valid_dev}')
     else: print()
-  # is this what and where you want
-  if model_device.type == 'cuda': torch.backends.cudnn.benchmark = True
 
-  # parse the training data and leave it in data_device memory
+  # is this what you want and where you want it
+  if model_dev.type == 'cuda': torch.backends.cudnn.benchmark = True
+
+  # parse the training data and leave it in data_dev memory
   if isinstance(train_data, torch.utils.data.DataLoader):
     has_lengths = True if len(train_data.dataset[0]) > 2 else False
     num_examples = len(train_data.dataset)
-  else:
+  else: # is tuple of tensors; wrap it in an instance of _DataLoader
     assert 2 <= len(train_data) <= 3
     assert all([isinstance(x, torch.Tensor) for x in train_data])
     has_lengths = True if len(train_data) > 2  else False
     num_examples = len(train_data[0])
     if bs <= 0: bs = num_examples
-    train_data = _DataLoader(train_data, bs, data_device)
+    #  train_data = torch.utils.data.DataLoader(_tuple2dataset(train_data),
+    #      batch_size = bs, num_workers=2, shuffle=True, pin_memory = True)
+    # Note: using _DataLoader here is faster than using DataLoader
+    train_data = _DataLoader(train_data, bs, shuffle=True)
 
-
-  model = model.to(model_device) # move the model to the right device
-  if verb > 2: print(model)
+  model = model.to(model_dev) # move the model to the right device
+  #if verb > 2: print(model)
 
   # process learn_params
   has_optim = False
   if isinstance(learn_params, Dict):
     for key in learn_params.keys(): assert key in ['lr','mo'],\
-        "keys of learn_params dict should be 'lr' or 'mo', not {}.".format(key)
+        f"keys of learn_params dict should be 'lr' or 'mo', not {key}."
     assert 'lr' in learn_params.keys(), "input dict must map 'lr' to  a float"
     lr = learn_params['lr']
-    if verb > 1: print('learning rate:', du.utils.format_num(lr), end=', ')
+    #if verb > 1: print('learning rate:', du.utils.format_num(lr), end=', ')
     if 'mo' not in learn_params.keys():
       learn_params = LearnParams_(lr = lr)
       mo = None
     else:
       mo = learn_params['mo']
-      if verb > 1: print('momentum:', du.utils.format_num(mo), end=', ')
+      #if verb > 1: print('momentum:', du.utils.format_num(mo), end=', ')
       learn_params = Momentum(model, lr = lr, mo = mo)
-      learn_params.set_device(model_device)
-    if verb > 1: print('batchsize:', bs)
+      learn_params.set_device(model_dev)
+    #if verb > 1: print('batchsize:', bs)
   elif isinstance(learn_params, torch.optim.Optimizer):
     has_optim = True
   else:
-    assert isinstance(learn_params, LearnParams_), dedent("""\
+    assert isinstance(learn_params, LearnParams_), dedent(f"""\
         learn_params must be a dict or an instance of a subclass of
-        LearnParams_, not a {}.""".format(type(learn_params)))
-    # set the device for learn params
-    learn_params.set_device(model_device)
-    if verb > 1: print(learn_params, end=', ')
-    if verb > 1: print('batchsize:', bs)
+        LearnParams_, not a {type(learn_params)}.""")
+    learn_params.set_device(model_dev) # set the device for learn params
+    #if verb > 1: print(learn_params, end=', ')
+    #if verb > 1: print('batchsize:', bs)
 
-  # setup valid_crit
   if isinstance(valid_crit, bool):
     if valid_crit:
-      if isinstance(train_data.dataset[0][-1], FloatTensor):
-        valid_crit = lambda yhatss, yss: r_squared(yhatss,yss,gpu=valid_device)
-      elif isinstance(train_data.dataset[0][-1], IntTensor):
-        valid_crit = lambda prob_dists, yss:\
-            confusion_matrix(prob_dists, yss, gpu=valid_device)
-      else:
-        raise RuntimeError('please specify a function to use for validation')
+      # Setup valid_crit according to whether this looks like a regression
+      # or a classification problem.
+      for minibatch in train_data:
+        if isinstance(minibatch[-1][0], FloatTensor):
+          valid_crit = lambda yhatss, yss: r_squared(yhatss,yss,gpu=valid_dev)
+        elif isinstance(minibatch[-1][0], IntTensor):
+          valid_crit = _class_accuracy
+        else:
+          raise RuntimeError('please specify a function to use for validation')
+        break
   else:
     assert isinstance(valid_crit, FunctionType)
 
   if graph:
-    # don't import this until now in case someone no haz matplotlib
-    import matplotlib.pyplot as plt
-    import numpy as np
+    import matplotlib.pyplot as plt # Don't import these until now in case
+    import numpy as np              # someone no haz matplotlib or numpy.
     plt.ion()
     fig, ax1 = plt.subplots()
     ax1.set_xlabel('epoch', size='larger')
@@ -1200,71 +1305,33 @@ def train(model, crit, train_data, **kwargs):
     ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
 
-    ## CHANGE THIS DOC:
-    # Once and for all clone and move train data for validation purposes if nec.
-    # By now, training data is an instance of either DataLoader or _DataLoader.
-    # But if dataset has attributes features and targets we repackage into a new
-    # _DataLoader instance and with batchsize = len(features) = len(targets)
-    #if isinstance(train_data, du.lib._Dataset):
-    #  if valid_device == data_device:
-    #    train_feats_copy = train_data.dataset.features
-    #    train_targs_copy = train_data.dataset.targets
-    #  else:
-    #    train_feats_copy, train_targs_copy = \
-    #        (features.detach().clone().to(valid_device), \
-    #            targets.detach().clone().to(valid_device))
-    #train_feats_copy, train_targs_copy = (train_feats, train_targs) if\
-    #    valid_device == data_device else\
-    #        (train_feats.detach().clone().to(valid_device),\
-    #            train_targs.detach().clone().to(valid_device))
-
-    # Once and for all clone and move train data for validation purposes if nec.
-    # By now, training data is an instance of either DataLoader or _DataLoader.
-    # But if dataset doesn't have has the attribute transform (or if it's None),
-    # we repackage into a new _DataLoader instance and with batchsize =
-    # len(features) = len(targets)
-    if not hasattr(train_data.dataset, 'transform') or \
-        train_data.dataset.transform == None:
-      validLoss = functools.partial(_getLoss, dataloader=torch.utils.data.\
-          DataLoader(train_data.dataset, batch_size = len(train_data.dataset)),
-          crit = valid_crit, device = valid_device)
-    else:
-      validLoss = functools.partial(_getLoss, dataloader=train_data,
-          crit = valid_crit, device = valid_device)
-
-    #if isinstance(train_data, torch.utils.data.DataLoader):
-    #  if not hasattr(train_data.dataset, 'transform') or \
-    #      train_data.dataset.transform == None:
-    #    # perhaps use _DataLaoder here
-    #    validLoss = functools.partial(_getLoss, dataloader=torch.utils.data.\
-    #        DataLoader(train_data.dataset, batch_size = len(train_data.dataset)),
-    #        crit = valid_crit, device = valid_device)
-    #  else:
-    #    validLoss = functools.partial(_getLoss, dataloader=train_data,
-    #        crit = valid_crit, device = valid_device)
-    #    #validLoss = functools.partial(_getLoss, dataloader=train_data.dataset,
-    #    #    crit = valid_crit, device = valid_device)
-    #else: # this is an instance of _DataLoader
-    #  pass
+    if valid_crit:
+      v_dation_train=functools.partial(  # this maps: model -> float
+          valid_crit, dataloader=train_data, device=valid_dev)
 
     # these will hold the losses and validations for train data
     losses = []
     if valid_crit: v_dations = []
 
-    # only bother with the following if there are test_data and valid_crit
-    if test_data and valid_crit:
-      if len(test_data[0]) == 0: test_data = None
+    if valid_data and valid_crit:
+      if len(valid_data.dataset) == 0: valid_data = None
       else:
-        # once and for all put the test data on valid_device
-        test_feats, test_feats_lengths, test_targs =\
-            _parse_data(test_data, valid_device)
-        num_test_examples = len(test_data)
+        # parse the validation data
+        if isinstance(valid_data, torch.utils.data.DataLoader):
+          assert len(valid_data.dataset[0]) == len(train_data.dataset[0])
+        else:
+          assert len(valid_data) == 3 if has_lengths else 2
+          assert all([isinstance(x, torch.Tensor) for x in valid_data])
+          #just use the same batchsize as with training data
+          valid_data = _DataLoader(valid_data, bs, shuffle = False)
 
-        # this will hold the losses for test data
-        losses_test=[]
+        v_dation_valid=functools.partial(  # this maps:  model -> float
+          valid_crit, dataloader=valid_data, device=valid_dev)
+        loss_valid = functools.partial(    # also maps:  model -> float
+          _evaluate, dataloader=valid_data, crit=crit, device=valid_dev)
 
-      # this will hold the validations for test data
-      v_dations_test = []
+      losses_valid=[] # this will hold the losses for test data
+      v_dations_valid = [] # this will hold the validations for test data
 
   # set up console printing
   if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
@@ -1276,22 +1343,21 @@ def train(model, crit, train_data, **kwargs):
   for epoch in range(epochs):
     accum_loss = 0
     #this breaks if not Dataloader
-    #for batch in _batcher(train_data, bs, data_device, model_device):
+    #for batch in _batcher(train_data, bs, data_dev, model_dev):
     for minibatch in train_data:
       #print(minibatch[0].size(), minibatch[-1].size()); quit()
       loss = crit(model(
-          *map(lambda x: x.to(model_device), minibatch[:-1])),
-          minibatch[-1].to(model_device))
+          *map(lambda x: x.to(model_dev), minibatch[:-1])),
+          minibatch[-1].to(model_dev))
       accum_loss += loss.item()
       if has_optim: learn_params.zero_grad()
       else: model.zero_grad()
       loss.backward()
-
       if has_optim: learn_params.step()
       else: learn_params.update(model.parameters())
 
     # print to terminal
-    if print_init * print_last != 0 and verb > 0:
+    if print_init * print_last != 0 and verb > 2:
       loss_len = 20
       base_str = "epoch {0}/{1}; loss ".format(epoch+1, epochs)
       loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
@@ -1309,26 +1375,30 @@ def train(model, crit, train_data, **kwargs):
         print(base_str+loss_str, end='\b'*loss_len, flush=True)
 
     if graph:
+      # set some facecolors:
+      #blue_fc = 'tab:blue'; red_fc = 'tab:red'  # primary
+      #blue_fc = '#799FCB'; red_fc = '#F9665E'    # pastel
+      #blue_fc = '#95B4CC'; red_fc = '#FEC9C9'    # more pastel
+      blue_fc = '#AFC7D0'; red_fc = '#EEF1E6'    # more
+
       with torch.no_grad():  # check that this is what you want
         losses.append(accum_loss*bs/num_examples)
 
-        # copy the model to the valid_device, if necessary
-        model_copy = model if valid_device == model_device else\
-            copy.deepcopy(model).to(valid_device)
+        # copy the model to the valid_dev, if necessary
+        model_copy = model if valid_dev == model_dev else\
+            copy.deepcopy(model).to(valid_dev)
         model_copy.eval() # and check that this is what you want
 
-        # graph stuff while validating the model
-        # validate on training data
-        #v_dations.append(valid_crit(model_copy(train_feats_copy),train_targs_copy))
-        v_dations.append(validLoss(model_copy))
-        # validate on test data
-        if test_data is not None:
-          if has_lengths:   # remove this if-else using  *map stuff as above?
-            loss=crit(model_copy(test_feats,test_feats_lengths),test_targs).item()
-          else:
-            loss = crit(model_copy(test_feats), test_targs).item()
-          losses_test.append(loss)
-          v_dations_test.append(valid_crit(model_copy(test_feats), test_targs))
+        if valid_crit:
+          v_dations.append(v_dation_train(model_copy))
+        # validate on valid_data
+        if valid_data is not None:
+          #if has_lengths:   # remove this if-else using  *map stuff as above?
+          #  loss=crit(model_copy(test_feats,test_feats_lengths),test_targs).item()
+          #else:
+          #  loss = crit(model_copy(test_feats), test_targs).item()
+          losses_valid.append(loss_valid(model_copy))
+          v_dations_valid.append(v_dation_valid(model_copy))
 
         model.train()
         if epoch > epochs - graph:
@@ -1339,34 +1409,37 @@ def train(model, crit, train_data, **kwargs):
         ax1.set_ylabel('average loss',size='larger')
         ax2.set_ylabel('validation',size='larger')
         xlim = range(xlim_start,len(losses)+1)
-        loss_ys = np.array(losses[xlim_start-1:])
-        v_dation_ys = np.array(v_dations[xlim_start-1:])
-        if test_data:
-          losstest_ys = np.array(losses_test[xlim_start-1:])
-          v_dationtest_ys = np.array(v_dations_test[xlim_start-1:])
+        loss_ys = np.array(losses[xlim_start-1:], dtype=float)
+        if valid_crit:
+          v_dation_ys = np.array(v_dations[xlim_start-1:], dtype=float)
+        if valid_data:
+          losstest_ys = np.array(losses_valid[xlim_start-1:], dtype=float)
+          v_dationtest_ys = np.array(v_dations_valid[xlim_start-1:], dtype=float)
           ax1.plot(xlim,losstest_ys,xlim,loss_ys,color='black',lw=.5)
           ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys >=loss_ys,
-              facecolor='tab:red',interpolate=True, alpha=.8)
+              facecolor=red_fc,interpolate=True, alpha=.8)
           ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys <=loss_ys,
-              facecolor='tab:blue',interpolate=True, alpha=.8)
+              facecolor=blue_fc,interpolate=True, alpha=.8)
           ax2.plot(xlim,v_dationtest_ys,xlim,v_dation_ys,color='black',lw=.5)
           ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
-              where = v_dationtest_ys >=v_dation_ys, facecolor='tab:red',
+              where = v_dationtest_ys >=v_dation_ys, facecolor=red_fc,
               interpolate=True, alpha=.8,label='test > train')
           ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
               where = v_dationtest_ys <=v_dation_ys,
-              facecolor='tab:blue',interpolate=True, alpha=.8,label='train > test')
+              facecolor=blue_fc,interpolate=True, alpha=.8,label='train > test')
           ax2.legend(fancybox=True, loc=2, framealpha=0.8, prop={'size': 9})
         else:
           ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
-          ax2.plot(xlim,v_dations,color='tab:blue',lw=1.2,label='validation')
           ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
-          ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
-        len_test_data = len(test_data[0]) if test_data is not None else 0
+          if valid_crit:
+            ax2.plot(xlim,v_dation_ys,color=blue_fc,lw=1.2,label='validation')
+            ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
+        len_valid_data = len(valid_data.dataset) if valid_data is not None else 0
         plt.title('training on {} ({:.1f}%) of {} examples'.format( num_examples,
-            100*(num_examples/(num_examples+len_test_data)),
-            num_examples+len_test_data))
+            100*(num_examples/(num_examples+len_valid_data)),
+            num_examples+len_valid_data))
         try:
+          fig.canvas.draw()
           fig.canvas.flush_events()
         except tkinter.TclError:
           plt.ioff()
@@ -1380,10 +1453,11 @@ def train(model, crit, train_data, **kwargs):
   if graph:
     plt.ioff()
     plt.title('trained on {} ({:.1f}%) of {} examples'.format(num_examples,
-        100*(num_examples/(num_examples+len_test_data)),
-        num_examples+len_test_data))
+        100*(num_examples/(num_examples+len_valid_data)),
+        num_examples+len_valid_data))
     fig.tight_layout()
-    plt.show(block = True)
+    #plt.show(block = True)
+    plt.show()
 
   #model = model.to('cpu')
   return model
@@ -1752,135 +1826,137 @@ def optimize_ols(feats, **kwargs):
 
   return return_dict
 
-def confusion_matrix(prob_dists, yss, classes=None, **kwargs):
-  """Compute and optionally display the confusion matrix.
+def class_accuracy(model, data, **kwargs):
+  """Return the classification accuracy.
 
-  Compute the confusion matrix with respect to given `prob_dists`
-  and targets, `yss`. The columns in the displayed table corres-
-  pond to the actual (i.e,, correct) target class; the rows are
-  the class predicted by model.
-
-  Note: the `gpu` argument is ignored unless `prob_dists` has the
-  form of the model tupled with the inputs (see below). In that
-  case, the model as well as the inputs are moved in place to
-  the device determined by `gpu`.
+  By default, this returns the proportion correct when using
+  `model` to classify the features in `test_data`; optionally,
+  the confusion 'matrix' is displayed as a table - where the
+  columns correspond to the correct target class; the rows are
+  the class predicted by `model`.
 
   Args:
-    $prob_dists$ (`torch.Tensor`): A tensor of dimension 2 holding,
-        for each example, the probability distribution predict-
-        ing the correct class. The first dimension must index
-        the examples. This argument is, then, the predictions,
-        in the form of probability distributions, made by a mo-
-        del when fed the features of some set of examples. This
-        should often be just `model(xss)`, for example.
-        Alternatively, `prob_dists` can be a tuple consisting of,
-        first, `model` and, second, the inputs `xss` of some data;
-        in this case, the model will be applied to the data on
-        the devie determined by `gpu`.
-    $yss$ (`IntTensor`): A 1-dimensional tensor holding the cor-
-        rect class (as some flavor of an `int`) for each example.
+    $model$ (`nn.Module`): The trained model.
+    $data$ (`Union[Tuple[Tensor], DataLoader`): Either a tuple of
+        tensors `(xss, yss)` where `xss` holds the features of the
+        test data (and whose first dimension indexes the examp-
+        les to be tested) and `yss` is a tensor of dimension 1
+        holding the corresponding correct classes (as `int`s),
+        or an instance of `torch.utils.data.DataLoader` which
+        yields mini-batches of such 2-tuples.
+
   Kwargs:
     $classes$ (`IntTensor`): A 1-dimensional tensor holding the nu-
         merical classes. This is naturally `torch.arange(10)` for
-        digit classification, for instance.
-        Default: `torch.arange(len(prob_dists[0]))`.
-    $return_error$ (`bool`): If `True`, return the error in the form
-        of a `float` between 0 and 1, inclusive; if `False`, return
-        a `float` representing the proportion of examples correc-
-        tly classified. Default: `False`.
-    $show$ (`bool`): If `True`, display the (ascii) confusion matrix.
-        Default: `False`.
+        digit classification, for instance. The default is `None`
+        which leads to `classes=torch.arange(num_classes)` where
+        `num_classes` is the length of the output of `model` on the
+        features of a single example.
+    $show_cm$ (`bool`): If `True`, then display an ascii confusion
+        matrix. Default: `False`.
     $class2name$ (`Dict[int, str]`): A dictionary mapping each num-
-        erical class to its classname. Default: `None`.
+        erical class to its classname. (The classnames are only
+        used when displaying the confusion matrix.) Def.: `None`.
     $gpu$ (`Union[torch.device, int]`): The GPU to use if there are
         any available. Set this to -1 to use the last GPU found
-        or, if none GPUs are found, use the (first) CPU; set to
+        or to, if no GPU is found, use the (first) CPU; set to
         -2 to override using any found GPU and instead use the
         CPU. Alternatively, one can set this to an instance of
         `torch.device`. Default: `-1`.
 
   Returns:
-    `float`. The total proportion of correct predictions or, opt-
-        ionally, one minus that ratio (i.e., the error).
+    `float`. The proportion of correct predictions.
   """
+  #this is class_accuracy
   #check and get kwargs
-  du.utils._check_kwargs(kwargs,['classes','return_error','show','class2name',
-      'gpu'])
+  du.utils._check_kwargs(kwargs,['classes','show_cm','class2name', 'gpu'])
   classes = kwargs.get('classes', None)
-  return_error = kwargs.get('return_error', False)
-  show = kwargs.get('show', False)
+  show = kwargs.get('show_cm', False)
   class2name = kwargs.get('class2name', None)
   gpu = kwargs.get('gpu', -1)
   device = gpu if isinstance(gpu,torch.device) else du.utils.get_device(gpu)
 
-  # check things and if necessary push the inputs through the model
-  if classes is not None:
-    assert classes.dim() == 1,\
-        'The classes argument should be a 1-dim tensor not a {}-dim one.'\
-            .format(classes.dim())
-  assert isinstance(yss, IntTensor),\
-      'Argument yss must be a Long-, Int-, or ShortTensor, not {}.'.\
-          format(yss.type() if isinstance(yss,torch.Tensor) else type(yss))
-  if not isinstance(prob_dists, torch.Tensor):
-    assert (isinstance(prob_dists, tuple) or isinstance(yhatss, list)),\
-        'Argument prob_dists must be a tuple like (model, xss) or a list'
-    assert (isinstance(prob_dists[0], nn.Module) and\
-        isinstance(prob_dists[1], torch.Tensor)), dedent("""\
-            If agrument prob_dists is an interable, then the first item
-            should be the model, and the second should be the tensor xss.""")
-    model = prob_dists[0].to(device)
-    with torch.no_grad():
-      prob_dists = model(prob_dists[1].to(device))
-  if classes is None:
-    classes = torch.arange(len(prob_dists[0]))
-  assert len(prob_dists) == len(yss),\
-      'Number of features ({}) must equal number of targets ({}).'\
-          .format(len(prob_dists), len(yss))
-  assert prob_dists.dim() == 2,\
-      'The prob_dists argument should be a 2-dim tensor not a {}-dim one.'\
-          .format(prob_dists.dim())
+  #check whether the device already lives on the device determined above
+  already_on = list(model.parameters())[0].device
+  if (str(device)[:3] !=  str(already_on)[:3] or str(device)[:3] != 'cpu')\
+     and device != already_on:
+    print(du.utils._markup('$warning$ (from class_accuracy):'), end=' ')
+    print(du.utils._markup(f'|model moved from {already_on} to {device}.|'))
+    model = model.to(device)
 
-  # compute the entries in the confusion matrix
-  cm_counts = torch.zeros(len(classes), len(classes))
-  for prob, ys in zip(prob_dists, yss):
-    cm_counts[torch.argmax(prob).item(), ys] += 1
-  cm_pcts = cm_counts/len(yss)
-  counts = torch.bincount(yss, minlength=len(classes))
+  with torch.no_grad():
+    # Check basic things and set stuff up including creating an appropriate,
+    # according to whether the user passed, as argument to probdists, some
+    # outputs of a model or a (model, outputs) tuple. And move to device.
+    assert isinstance(model, nn.Module)
+    if not isinstance(data, torch.utils.data.DataLoader):
+      # if user did not pass a DataLaoder then check stuff & wrap in _DataLoader
+      assert len(data[0]) == len(data[1]), dedent(f"""\
+          The number of features ({len(data[0])}) must be equal to the
+          number of targets ({len(data[1])}).""")
+      assert (isinstance(data, tuple) and len(data)==2),\
+          'If argument data is a tuple, it must have length 2 not {}'.format(
+              len(data))
+      loader = _DataLoader(data, batch_size=10)
+      num_classes =\
+          len(model(loader.dataset[0][0].to(device).unsqueeze(0)).squeeze(0))
+    else:  # the user passed a DataLaoder
+      loader = data
+      assert isinstance(loader.dataset[0], tuple) and len(loader.dataset[0])==2,\
+          'dataloader should yield 2-tuples'
+      num_classes =\
+          len(model(loader.dataset[0][0].to(device).unsqueeze(0)).squeeze(0))
+    if classes is None:
+      classes = torch.arange(num_classes)
+    else:
+      assert classes.dim() == 1,\
+          'The classes argument should be a 1-dim tensor not a {}-dim one.'\
+              .format(classes.dim())
 
-  # display the confusion matrix
-  if show:
-    cell_length = 5
-    print(((cell_length*len(classes))//2+1)*' '+"Actual")
-    print('     ',end='')
-    for class_ in classes:
-      print('{:{width}}'.format(class_.item(), width=cell_length),end='')
-    if class2name: print(' '*len(list(class2name.values())[0])+'   (correct)')
-    else: print(' (correct)')
-    print('     '+'-'*cell_length*len(classes))
-    for i, row in enumerate(cm_pcts):
-      print(str(i).rjust(3),end=' |')
-      for j, entry in enumerate(row):
-        if entry == 0.0:
-          print((cell_length-1)*' '+'0', end='')
-        elif entry == 100.0:
-          print((cell_length-3)*' '+'100', end='')
+    if not show: # just compute the accuracy
+      accuracy = _class_accuracy(model, loader, device)
+    else:
+      # compute the entries in the confusion matrix
+      cm_counts = torch.zeros(len(classes), len(classes))
+      counts = torch.zeros(len(classes))
+      num_examples = 0
+      for batch in loader:
+        for prob, ys in zip(model(batch[0].to(device)), batch[1].to(device)):
+          cm_counts[torch.argmax(prob).item(), ys] += 1
+        counts += torch.bincount(batch[1], minlength=len(classes))
+        num_examples += len(batch[0])
+      cm_pcts = cm_counts/num_examples
+
+      # display the confusion matrix
+      cell_length = 5
+      print(((cell_length*len(classes))//2+1)*' '+"Actual")
+      print('     ',end='')
+      for class_ in classes:
+        print('{:{width}}'.format(class_.item(), width=cell_length),end='')
+      if class2name: print(' '*len(list(class2name.values())[0])+'   (correct)')
+      else: print(' (correct)')
+      print('     '+'-'*cell_length*len(classes))
+      for i, row in enumerate(cm_pcts):
+        print(str(i).rjust(3),end=' |')
+        for j, entry in enumerate(row):
+          if entry == 0.0:
+            print((cell_length-1)*' '+'0', end='')
+          elif entry == 100.0:
+            print((cell_length-3)*' '+'100', end='')
+          else:
+            string = '{:.1f}'.format(100*entry).lstrip('0')
+            length = len(string)
+            if i==j:
+              string = du.utils._markup('~'+string+'~')
+            print(' '*(cell_length-length)+string, end='')
+        n_examples = cm_counts[:,i].sum()
+        pct = 100*(cm_counts[i,i]/n_examples) if n_examples != 0 else 0
+        if class2name:
+          print('  {} ({:.1f}% of {})'.format(class2name[i],pct,int(counts[i])))
         else:
-          string = '{:.1f}'.format(100*entry).lstrip('0')
-          length = len(string)
-          if i==j:
-            string = du.utils._markup('~'+string+'~')
-          print(' '*(cell_length-length)+string, end='')
-      n_examples = cm_counts[:,i].sum()
-      pct = 100*(cm_counts[i,i]/n_examples) if n_examples != 0 else 0
-      if class2name:
-        print('  {} ({:.1f}% of {})'.format(class2name[i],pct,int(counts[i])))
-      else:
-        print(' ({:.1f}% of {})'.format(pct, int(counts[i])))
-
-  if return_error:
-    return 1-torch.trace(cm_pcts).item()
-  else:
-    return torch.trace(cm_pcts).item()
+          print(' ({:.1f}% of {})'.format(pct, int(counts[i])))
+      accuracy = torch.trace(cm_pcts).item()
+  return accuracy
 
 def r_squared(yhatss, yss, **kwargs):
   """Compute r_squared.
@@ -1923,6 +1999,7 @@ def r_squared(yhatss, yss, **kwargs):
   >>> `r_squared(yhatss, yss)`
   0.09333...
   """
+  # this is r_squared
   du.utils._check_kwargs(kwargs,['return_error','gpu'])
   return_error = kwargs.get('return_error', False)
   gpu = kwargs.get('gpu', -1)
@@ -1992,3 +2069,32 @@ if __name__ == '__main__':
     from inspect import signature
     for name, ob in _local_functions:
       print(name,'\n  ', inspect.signature(ob))
+
+
+######## Stuff below is likely obsolete.
+
+#def _batcher(data_tuple, bs, data_dev, model_dev):
+#  """Helper function for the train function that returns a gen-
+#  erator which, after the data are coherently randomized, kicks
+#  out batches of the specified size.
+#
+#  Args:
+#    $data_tuple$ (`Tuple[tensor]`): The tensors to be coherent-
+#        ly batched.
+#    $bs$ (`int`): The batchsize.
+#    $data_dev$ (`Union[str, torch.device]`): The device on which
+#        to batch the tensors from.
+#    $model_dev$ (`Union[str, torch.device]`): The device to move
+#        the batches to just before yielding them.
+#
+#  Returns:
+#    `generator`. A generator that yields batches in the form of
+#        tuples of the same length as `data_tuple`.
+#  """
+#  num_examples = len(data_tuple[0])
+#  tuple([t.to(data_dev) for t in data_tuple])
+#  indices = torch.randperm(num_examples, device = data_dev)
+#  for idx in range(0, num_examples, bs):
+#    yield tuple([t.index_select(0,indices[idx: idx + bs]).to(model_dev)\
+#        for t in data_tuple])
+
