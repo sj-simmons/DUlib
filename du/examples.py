@@ -517,9 +517,9 @@ import du.utils
 import du.models
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.1'
+__version__ = '0.9.2.pre'
 __status__ = 'Development'
-__date__ = '09/07/20'
+__date__ = '10/20/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
