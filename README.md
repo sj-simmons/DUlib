@@ -35,7 +35,7 @@ pip3 install DUlib --user
 
 Or, install the latest development release with, e.g.:
 ```shell
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.1  --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.2  --user
 ```
 Notes
 * Safest practice is to replace **pip3** in the commands above (and below) with
@@ -381,7 +381,7 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.9.2pre** (Oct. 20, 2020)
+**Version 0.9.2** (Oct. 21, 2020)
   * API changes (please modify you code accordingly):
     * The function **du.lib.confusion_matrix** is now **du.lib.class_accuracy**;
       to print the confusion matrix pass **show_cm = True**.

@@ -27,9 +27,9 @@ can be found at The DL@DU Project.
 import du.utils
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.2.pre'
+__version__ = '0.9.2'
 __status__ = 'Development'
-__date__ = '10/20/20'
+__date__ = '10/21/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
