@@ -1191,13 +1191,20 @@ def train(model, crit, train_data, **kwargs):
   """
   # this is train
   # check and process kwargs
-  du.utils._check_kwargs( kwargs,
+  du.utils._check_kwargs(kwargs,
       ['valid_data', 'learn_params', 'bs', 'epochs', 'graph',
        'print_lines', 'verb', 'gpu', 'valid_crit', 'args'])
   valid_data = kwargs.get('valid_data', None)
   args = kwargs.get('args', None)
   if 'args' == None:
     class args: pass # a little finesse if args wasn't passed
+  else:
+    for kwarg in ['learn_params', 'bs', 'epochs', 'graph',
+        'print_lines', 'verb', 'gpu']:
+      if kwarg in kwargs and kwarg in vars(args).keys():
+        print(du.utils._markup('$warning$ (from train):'), end=' ')
+        print(dedent(du.utils._markup(f"""\
+  |argument passed via parameter| `{kwarg}` |overriding| `args.{kwarg}`.""")))
   bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
   verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
@@ -1881,7 +1888,7 @@ def class_accuracy(model, data, **kwargs):
   if (str(device)[:3] !=  str(already_on)[:3] or str(device)[:3] != 'cpu')\
      and device != already_on:
     print(du.utils._markup('$warning$ (from class_accuracy):'), end=' ')
-    print(du.utils._markup(f'|model moved from {already_on} to {device}.|'))
+    print(du.utils._markup(f'|model moved from| `{already_on}` to `{device}`.'))
     model = model.to(device)
 
   with torch.no_grad():
