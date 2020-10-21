@@ -1204,7 +1204,7 @@ def train(model, crit, train_data, **kwargs):
       if kwarg in kwargs and kwarg in vars(args).keys():
         print(du.utils._markup('$warning$ (from train):'), end=' ')
         print(dedent(du.utils._markup(f"""\
-  |argument passed via parameter| `{kwarg}` |overriding| `args.{kwarg}`.""")))
+  |argument passed via parameter| `{kwarg}` |overriding| `args.{kwarg}`""")))
   bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
   verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
@@ -1348,6 +1348,7 @@ def train(model, crit, train_data, **kwargs):
 
   # training loop
   for epoch in range(epochs):
+    model.train()
     accum_loss = 0
     #this breaks if not Dataloader
     #for batch in _batcher(train_data, bs, data_dev, model_dev):
@@ -1386,7 +1387,11 @@ def train(model, crit, train_data, **kwargs):
       #blue_fc = 'tab:blue'; red_fc = 'tab:red'  # primary
       #blue_fc = '#799FCB'; red_fc = '#F9665E'    # pastel
       #blue_fc = '#95B4CC'; red_fc = '#FEC9C9'    # more pastel
-      blue_fc = '#AFC7D0'; red_fc = '#EEF1E6'    # more
+      #blue_fc = '#AFC7D0'; red_fc = '#EEF1E6'    # more
+      #blue_fc = '#c4cfcf'; red_fc = '#cfc4c4'
+      blue_fc = '#c4cfcf'; red_fc = '#cfc4c4'
+
+      model.eval()
 
       with torch.no_grad():  # check that this is what you want
         losses.append(accum_loss*bs/num_examples)
@@ -1407,7 +1412,7 @@ def train(model, crit, train_data, **kwargs):
           losses_valid.append(loss_valid(model_copy))
           v_dations_valid.append(v_dation_valid(model_copy))
 
-        model.train()
+        # (re)draw the actual graphs
         if epoch > epochs - graph:
           xlim_start += 1
         ax1.clear()
@@ -1452,7 +1457,6 @@ def train(model, crit, train_data, **kwargs):
           plt.ioff()
           exit()
         fig.tight_layout()
-      model.train()
 
   end = time.time()
   if verb > 0: print ('trained in {:.2f} secs'.format(end-start))
@@ -1883,15 +1887,17 @@ def class_accuracy(model, data, **kwargs):
   gpu = kwargs.get('gpu', -1)
   device = gpu if isinstance(gpu,torch.device) else du.utils.get_device(gpu)
 
-  #check whether the device already lives on the device determined above
-  already_on = list(model.parameters())[0].device
-  if (str(device)[:3] !=  str(already_on)[:3] or str(device)[:3] != 'cpu')\
-     and device != already_on:
-    print(du.utils._markup('$warning$ (from class_accuracy):'), end=' ')
-    print(du.utils._markup(f'|model moved from| `{already_on}` to `{device}`.'))
-    model = model.to(device)
+  model.eval()
 
   with torch.no_grad():
+    #check whether the device already lives on the device determined above
+    already_on = list(model.parameters())[0].device
+    if (str(device)[:3] !=  str(already_on)[:3] or str(device)[:3] != 'cpu')\
+       and device != already_on:
+      print(du.utils._markup('$warning$ (from class_accuracy):'), end=' ')
+      print(du.utils._markup(f'|model moved from| `{already_on}` to `{device}`'))
+      model = model.to(device)
+
     # Check basic things and set stuff up including creating an appropriate,
     # according to whether the user passed, as argument to probdists, some
     # outputs of a model or a (model, outputs) tuple. And move to device.

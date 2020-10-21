@@ -381,7 +381,7 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.9.2pre** (Oct. 19, 2020)
+**Version 0.9.2pre** (Oct. 20, 2020)
   * API changes (please modify you code accordingly):
     * The function **du.lib.confusion_matrix** is now **du.lib.class_accuracy**;
       to print the confusion matrix pass **show_cm = True**.

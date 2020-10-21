@@ -385,7 +385,7 @@ def split_df(df, splits):
         returnlist.append(randomized)
   return tuple(returnlist)
 
-def args2string(args, keys, timestamp=True, maxlength=100):
+def args2string(args, keys, timestamp=True, maxlength=100, markup=True):
   """Return string with selected values from args namespace.
 
   E.g., if your `args.Namespace()` contains 'lr' and 'mo', and you
@@ -400,12 +400,14 @@ def args2string(args, keys, timestamp=True, maxlength=100):
         a timestamp. Default: `True`.
     $maxlength$ (`int`): Start wrapping the output string after
         this many characters. Default: `100`.
+    $markup$ (`bool`) Whether to highlight the string. Def.:`True`.
 
-  Return (`str`).
+  Returns:
+    `str`.
 
   >>> `parser = standard_args(epochs=10,lr=0.5,mo=0.9)`
   >>> `args = parser.parse_args()`
-  >>> `args2string(args, ['lr'], timestamp=False)`
+  >>> `args2string(args, ['lr'], timestamp=False, markup=False)`
   'lr:0.5'
   """
   length = 0
@@ -421,12 +423,12 @@ def args2string(args, keys, timestamp=True, maxlength=100):
   for kwarg in keys:
     assert kwarg in d.keys(), "{} is not in args.Namespace()".format(kwarg)
     if isinstance(d[kwarg],float):
-      string, length =\
-          add_info(string, kwarg+':'+str(format_num(d[kwarg]))+' ', length)
+      string, length = add_info(
+          string, '~'+kwarg+'~'+':'+'`'+str(format_num(d[kwarg]))+'` ', length)
     else:
-      string, length =\
-          add_info(string, kwarg+':'+str(d[kwarg]).replace(' ','')+' ', length)
-  return string[:-1]
+      string, length = add_info(
+          string, '~'+kwarg+'~'+':'+'`'+str(d[kwarg]).replace(' ','')+'` ', length)
+  return _markup(string[:-1], strip = not markup)
 
 def get_device(gpu = -1):
   """Get a device, among those available, on which to compute.
@@ -618,12 +620,18 @@ class _Markdown:
 
   def cyan(self, docstring, strip=False):
     """Makes blue words or phrases on one line surrounded by ~ symbols."""
-    return re.sub(self.cyan_pat, self.CYAN+r"\1"+ self.END, docstring)
+    if not strip:
+      return re.sub(self.cyan_pat, self.CYAN+r"\1"+ self.END, docstring)
+    else:
+      return docstring.translate(docstring.maketrans(dict.fromkeys('~')))
 
   def blue(self, docstring, strip=False):
     """Makes cyan words or phrases on one line surrounded by | symbols."""
-    return re.sub(
-        r'\|([^\|]+)\|', self.BOLD+self.BLUE+r'\1'+ self.END, docstring)
+    if not strip:
+      return re.sub(
+          r'\|([^\|]+)\|', self.BOLD+self.BLUE+r'\1'+ self.END, docstring)
+    else:
+      return docstring.translate(docstring.maketrans(dict.fromkeys('|')))
 
   def ellipses(self, docstring, strip=False):
     """colors >>> and ... ."""
@@ -645,12 +653,17 @@ def _markup(docstring, md_mappings = _Markdown(), strip = False):
   cape sequences, or strips away the markdown.
 
   Args:
-    docstring (str): The docstring to process.
+    docstring (str):The docstring to process.
     md_mappings (class): An instance of a class all of
         whose methods map str -> str by default.
-    strip (bool):  Whether or not to remove the markdown.
+    strip (bool): Whether or not to remove the markdown.
 
   >>> _markup('$Loren$ _lipsum_ |dolor|') # doctest: +SKIP
+  >>> print(_markup('$blah$',strip=True))
+  blah
+  >>> print(_markup('|blab|',strip=True))
+  blab
+
   """
   for _, f in inspect.getmembers(md_mappings, inspect.ismethod)[1:]:
     if docstring is not None:

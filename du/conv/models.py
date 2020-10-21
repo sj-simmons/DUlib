@@ -395,12 +395,14 @@ class ConvFFNet(FFNet_):
     nonlins = list(map(lambda mo: repr(mo)[repr(mo).rfind('.')+1:-2], nonlins))
     batchnorm = 'none' if len(batchnorm)==0 else batchnorm[0]
     convpart = functools.reduce(lambda x, y: x + ' ' + y,
-        ['Conv.: channels']+list(map(str, channels))+['with']+[nonlins[0]]+ \
-            ['and batchnorm:'+ str(batchnorm)])
+        ['Conv.: ~channels~'] + list(map(lambda x: '`'+str(x)+'`', channels)) \
+        + ['with'] + ['`'+nonlins[0]+'`'] \
+        + ['and ~batchnorm~:'+ '`'+str(batchnorm)+'`'])
     densepart = functools.reduce(lambda x, y: x + ' ' + y,
-        ['\nDense: widths'] + list(map(str, (n_inputs_dense,) + tuple(widths)+\
-            (n_out,))) + ['with'] + [nonlins[1]])
-    self.repr_ = convpart + densepart
+        ['\nDense: ~widths~'] \
+        + list(map(lambda x: '`'+str(x)+'`', (n_inputs_dense,) \
+        + tuple(widths) + (n_out,))) + ['with'] + ['`'+nonlins[1]+'`'])
+    self.repr_ = du.utils._markup(convpart + densepart)
 
   def forward(self, xss):
     """Forward inputs.
