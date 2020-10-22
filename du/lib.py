@@ -1863,8 +1863,6 @@ def class_accuracy(model, data, **kwargs):
         which leads to `classes=torch.arange(num_classes)` where
         `num_classes` is the length of the output of `model` on the
         features of a single example.
-    $show_cm$ (`bool`): If `True`, then display an ascii confusion
-        matrix. Default: `False`.
     $class2name$ (`Dict[int, str]`): A dictionary mapping each num-
         erical class to its classname. (The classnames are only
         used when displaying the confusion matrix.) Def.: `None`.
@@ -1874,17 +1872,22 @@ def class_accuracy(model, data, **kwargs):
         -2 to override using any found GPU and instead use the
         CPU. Alternatively, one can set this to an instance of
         `torch.device`. Default: `-1`.
+    $show_cm$ (`bool`): If `True`, then display an ascii confusion
+        matrix. Default: `False`.
+    $color$ (`bool`): Whether to colorize the confusion matrix.
+        Default: `True`.
 
   Returns:
     `float`. The proportion of correct predictions.
   """
   #this is class_accuracy
   #check and get kwargs
-  du.utils._check_kwargs(kwargs,['classes','show_cm','class2name', 'gpu'])
+  du.utils._check_kwargs(kwargs,['classes','show_cm','class2name','gpu','color'])
   classes = kwargs.get('classes', None)
   show = kwargs.get('show_cm', False)
   class2name = kwargs.get('class2name', None)
   gpu = kwargs.get('gpu', -1)
+  color = kwargs.get('color',True)
   device = gpu if isinstance(gpu,torch.device) else du.utils.get_device(gpu)
 
   model.eval()
@@ -1960,7 +1963,7 @@ def class_accuracy(model, data, **kwargs):
             string = '{:.1f}'.format(100*entry).lstrip('0')
             length = len(string)
             if i==j:
-              string = du.utils._markup('~'+string+'~')
+              string = du.utils._markup('~'+string+'~', strip = not color)
             print(' '*(cell_length-length)+string, end='')
         n_examples = cm_counts[:,i].sum()
         pct = 100*(cm_counts[i,i]/n_examples) if n_examples != 0 else 0

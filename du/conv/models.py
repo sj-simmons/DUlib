@@ -358,12 +358,12 @@ class ConvFFNet(FFNet_):
     >>> `yhatss.size()`
     torch.Size([100, 8])
 
-    >>> `print(model.extra_repr())`
+    >>> `print(model.extra_repr(color=False))`
     Conv.: channels 1 16 with ReLU and batchnorm:before
     Dense: widths 3136 100 8 with ReLU
 
     >>> `model=ConvFFNet((28,28),8,(1,16),(),batchnorm=bn)`
-    >>> `print(model.extra_repr())`
+    >>> `print(model.extra_repr(color=False))`
     Conv.: channels 1 16 with ReLU and batchnorm:before
     Dense: widths 3136 8 with ReLU
     """
@@ -402,7 +402,7 @@ class ConvFFNet(FFNet_):
         ['\nDense: ~widths~'] \
         + list(map(lambda x: '`'+str(x)+'`', (n_inputs_dense,) \
         + tuple(widths) + (n_out,))) + ['with'] + ['`'+nonlins[1]+'`'])
-    self.repr_ = du.utils._markup(convpart + densepart)
+    self.repr_ = convpart + densepart
 
   def forward(self, xss):
     """Forward inputs.
@@ -422,9 +422,9 @@ class ConvFFNet(FFNet_):
     if self.outfn: xss = self.outfn(xss)
     return xss
 
-  def extra_repr(self):
+  def extra_repr(self, color=True):
     """Return concise representaton string."""
-    return du.utils._markup(self.repr_)
+    return du.utils._markup(self.repr_, strip = not color)
 
 class OneMetaCNN(FFNet_):
   """One meta-layer CNN with a two fully-connected layers.

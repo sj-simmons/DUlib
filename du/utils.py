@@ -385,7 +385,7 @@ def split_df(df, splits):
         returnlist.append(randomized)
   return tuple(returnlist)
 
-def args2string(args, keys, timestamp=True, maxlength=100, markup=True):
+def args2string(args, keys, timestamp=True, maxlength=100, color=True):
   """Return string with selected values from args namespace.
 
   E.g., if your `args.Namespace()` contains 'lr' and 'mo', and you
@@ -400,14 +400,14 @@ def args2string(args, keys, timestamp=True, maxlength=100, markup=True):
         a timestamp. Default: `True`.
     $maxlength$ (`int`): Start wrapping the output string after
         this many characters. Default: `100`.
-    $markup$ (`bool`) Whether to highlight the string. Def.:`True`.
+    $color$ (`bool`) Whether to highlight the string. Def.:`True`.
 
   Returns:
     `str`.
 
   >>> `parser = standard_args(epochs=10,lr=0.5,mo=0.9)`
   >>> `args = parser.parse_args()`
-  >>> `args2string(args, ['lr'], timestamp=False, markup=False)`
+  >>> `args2string(args, ['lr'], timestamp=False, color=False)`
   'lr:0.5'
   """
   length = 0
@@ -428,7 +428,7 @@ def args2string(args, keys, timestamp=True, maxlength=100, markup=True):
     else:
       string, length = add_info(
           string, '~'+kwarg+'~'+':'+'`'+str(d[kwarg]).replace(' ','')+'` ', length)
-  return _markup(string[:-1], strip = not markup)
+  return _markup(string[:-1], strip = not color)
 
 def get_device(gpu = -1):
   """Get a device, among those available, on which to compute.
