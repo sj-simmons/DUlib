@@ -1196,7 +1196,7 @@ def train(model, crit, train_data, **kwargs):
        'print_lines', 'verb', 'gpu', 'valid_crit', 'args'])
   valid_data = kwargs.get('valid_data', None)
   args = kwargs.get('args', None)
-  if 'args' == None:
+  if args == None:
     class args: pass # a little finesse if args wasn't passed
   else:
     for kwarg in ['learn_params', 'bs', 'epochs', 'graph',
@@ -1321,21 +1321,21 @@ def train(model, crit, train_data, **kwargs):
     if valid_crit: v_dations = []
 
     if valid_data and valid_crit:
-      if len(valid_data.dataset) == 0: valid_data = None
+      # parse the validation data
+      if isinstance(valid_data, torch.utils.data.DataLoader):
+        if len(valid_data.dataset) == 0: valid_data = None
+        assert len(valid_data.dataset[0]) == len(train_data.dataset[0])
       else:
-        # parse the validation data
-        if isinstance(valid_data, torch.utils.data.DataLoader):
-          assert len(valid_data.dataset[0]) == len(train_data.dataset[0])
-        else:
-          assert len(valid_data) == 3 if has_lengths else 2
-          assert all([isinstance(x, torch.Tensor) for x in valid_data])
-          #just use the same batchsize as with training data
-          valid_data = _DataLoader(valid_data, bs, shuffle = False)
+        if len(valid_data[0]) == 0: valid_data = None
+        assert len(valid_data) == 3 if has_lengths else 2
+        assert all([isinstance(x, torch.Tensor) for x in valid_data])
+        #just use the same batchsize as with training data
+        valid_data = _DataLoader(valid_data, bs, shuffle = False)
 
-        v_dation_valid=functools.partial(  # this maps:  model -> float
-          valid_crit, dataloader=valid_data, device=valid_dev)
-        loss_valid = functools.partial(    # also maps:  model -> float
-          _evaluate, dataloader=valid_data, crit=crit, device=valid_dev)
+      v_dation_valid=functools.partial(  # this maps:  model -> float
+        valid_crit, dataloader=valid_data, device=valid_dev)
+      loss_valid = functools.partial(    # also maps:  model -> float
+        _evaluate, dataloader=valid_data, crit=crit, device=valid_dev)
 
       losses_valid=[] # this will hold the losses for test data
       v_dations_valid = [] # this will hold the validations for test data

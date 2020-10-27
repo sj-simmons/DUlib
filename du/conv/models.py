@@ -422,7 +422,7 @@ class ConvFFNet(FFNet_):
     if self.outfn: xss = self.outfn(xss)
     return xss
 
-  def extra_repr(self, color=True):
+  def short_repr(self, color=True):
     """Return concise representaton string."""
     return du.utils._markup(self.repr_, strip = not color)
 
