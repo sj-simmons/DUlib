@@ -689,27 +689,27 @@ def coh_split(prop, *args, **kwargs):
   return tuple(return_args)
 
 def copy_parameters(model):
-  """Copy a models parameters.
+    """Copy a models parameters.
 
-  This is a helper function to copy a model's parameters and
-  initialize each copied tensor so as to hold all zeros. The
-  returned tensors reside on the same device as that of the
-  corresponding tensor in model.parameters().
+    This is a helper function to copy a model's parameters and
+    initialize each copied tensor so as to hold all zeros. The
+    returned tensors reside on the same device as that of the
+    corresponding tensor in model.parameters().
 
-   Args:
-     $model$ (`nn.Module`): The model whose parameters to copy.
+    Args:
+      $model$ (`nn.Module`): The model whose parameters to copy.
 
-   Returns:
-     `List[tensor]`: A list with the structure that matches exac-
-         tly that of `model.parameters()` (except that it's a list
-         instead of a generator) but with its tensors initiali-
-         zed to be all zeros.
-  """
-  params = []
-  for param in model.parameters():
-    params.append(param.data.clone())
-  for param in params: param.zero_()
-  return params
+    Returns:
+      `List[tensor]`: A list with the structure that matches exac-
+          tly that of `model.parameters()` (except that it's a
+          list instead of a generator) but with its tensors ini-
+          tialized to be all zeros.
+    """
+    params = []
+    for param in model.parameters():
+        params.append(param.data.clone())
+    for param in params: param.zero_()
+    return params
 
 class LearnParams_:
   """The base class for adaptive learning schemes.
@@ -753,71 +753,51 @@ class LearnParams_:
       param.data.sub_(self.lr * param.grad.data)
 
 class Momentum(LearnParams_):
-  """Add momentum to gradient descent.
+    """Add momentum to gradient descent.
 
-  If an instance of this is passed to `du.lib.train` then, during
-  training, the update rule in SGD incorporates momentum.
-  """
-  def __init__(self, model, lr = 0.01, mo = 0.9):
-    """Constructor.
-
-    Set instance variables `lr` and `mo` and create an instance
-    variable `z_params` which is essentially a zeroed out (in-
-    itially) clone of `model.parameters()`.
-
-    Args:
-      $lr$ (`float`): The learning rate during training.
-      $mo$ (`float`): The momentum during training.
+    An instance of this can be passed to `du.lib.train` via the
+    parameter `learn_params`.
     """
-    super().__init__(lr)
-    self.mo = mo
-    self.z_params = copy_parameters(model)
+    def __init__(self, model, lr = 0.01, mo = 0.9):
+        """Constructor.
 
-  def __str__(self):
-    """Append momentum info to string rep of the base class."""
-    return super().__str__() + ', momentum: ' + du.utils.format_num(self.mo)
+        Set instance variables `lr` and `mo` and create an instance
+        variable `z_params` which is essentially a zeroed out clone
+        of `model.parameters()`.
 
-  def set_device(self, device):
-    """Send `z_params` to live on device."""
-    for param in self.z_params:
-      param = param.to(device)
+        Args:
+          $lr$ (`float`): The learning rate during training.
+          $mo$ (`float`): The momentum during training.
+        """
+        super().__init__(lr)
+        self.mo = mo
+        self.z_params = copy_parameters(model)
 
-  def update(self, params):
-    """Update the learning hyper-parameters.
+    def __str__(self):
+        """Append momentum info to string rep of the base class.
 
-    The learning hyper-parameters now include momentum so
-    the update rule here is accordingly enhanced.
+        """
+        return super().__str__() + ', momentum: ' + du.utils.format_num(self.mo)
 
-    Args:
-      $parameters$ (`generator`): The parameters (in the form of
-          an iterator of tensors) to be updated.
-    """
-    for z_param, param in zip(self.z_params, params):
-      z_param = z_param.mul_(self.mo).add_(param.grad.data)
-      param.data.sub_(z_param * self.lr)
+    def set_device(self, device):
+        """Send `z_params` to live on device.
 
-def _parse_data(data_tuple, device = 'cpu'):
-  """Simple helper function for the train function.
+        """
+        for param in self.z_params:
+            param = param.to(device)
 
-  Args:
-    $data_tuple$ (`Tuple[tensor]`): Length either 2 or 3.
+    def update(self, params):
+        """Update the learning hyper-parameters.
 
-  Returns:
-    `Tuple[tensor]`.
-  """
-  feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
-  if len(data_tuple) == 3:
-    feats_lengths = data_tuple[1].to(device)
-    assert len(feats_lengths) == len(feats),\
-        "No. of feats lengths ({}) must equal no. of feats ({}).".\
-            format(len(feats_lengths), len(feats))
-  else:
-    assert len(data_tuple) == 2, 'data_tuple must have len 2 or 3'
-    feats_lengths = None
-  assert len(feats) == len(targs),\
-      "Number of features ({}) must equal number of targets ({}).".\
-          format(len(feats), len(targs))
-  return feats, feats_lengths, targs
+        Update the parameters using momentum.
+
+        Args:
+          $parameters$ (`generator`): The parameters (in the form of
+              an iterator of tensors) to be updated.
+        """
+        for z_param, param in zip(self.z_params, params):
+            z_param = z_param.mul_(self.mo).add_(param.grad.data)
+            param.data.sub_(z_param * self.lr)
 
 def _tuple2dataset(tup):
   """Return instance of Dataset.
@@ -2114,3 +2094,25 @@ if __name__ == '__main__':
 #    yield tuple([t.index_select(0,indices[idx: idx + bs]).to(model_dev)\
 #        for t in data_tuple])
 
+#def _parse_data(data_tuple, device = 'cpu'):
+#  """Simple helper function for the train function.
+#
+#  Args:
+#    $data_tuple$ (`Tuple[tensor]`): Length either 2 or 3.
+#
+#  Returns:
+#    `Tuple[tensor]`.
+#  """
+#  feats = data_tuple[0].to(device); targs = data_tuple[-1].to(device)
+#  if len(data_tuple) == 3:
+#    feats_lengths = data_tuple[1].to(device)
+#    assert len(feats_lengths) == len(feats),\
+#        "No. of feats lengths ({}) must equal no. of feats ({}).".\
+#            format(len(feats_lengths), len(feats))
+#  else:
+#    assert len(data_tuple) == 2, 'data_tuple must have len 2 or 3'
+#    feats_lengths = None
+#  assert len(feats) == len(targs),\
+#      "Number of features ({}) must equal number of targets ({}).".\
+#          format(len(feats), len(targs))
+#  return feats, feats_lengths, targs
