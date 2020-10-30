@@ -1,15 +1,14 @@
+<a id="top"></a>
 # DUlib
-
-<a id="dldu"></a>
 <p align="right"> <b> <a href="https://sj-simmons.github.io/dl"> The DL@DU Project</a> </b> </p>
 
 ### Contents
-* [Quickstart](https://github.com/sj-simmons/DUlib#quickstart)
-* [Detailed installation notes](https://github.com/sj-simmons/DUlib#detailed-installation-notes)
-* [Release history](https://github.com/sj-simmons/DUlib#release-history)
-  * [latest](https://github.com/sj-simmons/DUlib#latest)
-* [Modifying](https://github.com/sj-simmons/DUlib#modifying-dulib)
-* [Todo](https://github.com/sj-simmons/DUlib#todo)
+* [Quickstart](#quickstart)
+* [Detailed installation notes](#detailed-installation-notes)
+* [Release history](#release-history)
+  * [latest](#latest)
+* [Modifying](#modifying-dulib)
+* [Todo](#todo)
 * [Dev notes](#development-notes)
 
 ## Quickstart
@@ -73,16 +72,16 @@ You can now
   pd du
   ```
   If, instead of seeing readable text with color highlighting
-  (something like [this](https://github.com/sj-simmons/DUlib#highlight)), you see
+  (something like [this](#highlight)), you see
   escape sequences scattered all over, then see the detailed installation
-  notes below ([here](https://github.com/sj-simmons/DUlib#char_esc_hell)).
+  notes below ([here](#char_esc_hell)).
 
 * work through some demonstrations that illustrate basic usage:
   ```shell
   pd du.examples
   ```
 
-### Detailed installation notes
+## Detailed installation notes
 
 By now you are likely aware of [python environment
 hell](https://imgs.xkcd.com/comics/python_environment.png).  We recommend simply
@@ -122,8 +121,10 @@ Notes
   interpreter and type `import du`. If you see no errors, then you are good.
 
 <a id="here1"></a>
-Assuming that you installed using **--user**, various DUlib related executables should
-now be installed in a certain subdirectory below your home directory. We want
+####
+
+Assuming that you installed DUlib using **--user**, various DUlib related executables should
+now be living in a certain subdirectory below your home directory. We want
 that subdirectory to be in your PATH.
 
 Type `which pd` at the command line. If you see something
@@ -151,12 +152,14 @@ Notes
   to your **.profile** file. If you've run that command more
   than once, you may want to edit **.profile** and delete any duplicate lines.
 
+<a id="here2"></a>
+####
+
 Now check, as in the Quickstart section above, that you can run one of the
 pre-installed executables; for example:
 ```shell
 dulib_polyreg_anim
 ```
-<a id="here2"></a>
 This command should train a model in your console for 2500 epochs then
 throw up a gui window and train for another 2500 epochs while showing
 an animation.  If the gui never pops up or if it pops up and is static,
@@ -202,7 +205,7 @@ It's also possible that you are missing some shared **tk** system library.
 ####
 
 If, while you were working through the
-[Quickstart](https://github.com/sj-simmons/DUlib#quickstart)
+[Quickstart](#quickstart)
 guide, the output of command `pd du` was littered with escape sequences,
 then you should try setting your TERM and/or PAGER environment variables.
 
@@ -337,6 +340,7 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     command line.
 
     <a id="highlight"></a>
+
     <p align="center">
       <img height="550" src="images/screenshot1.png">
     </p>
