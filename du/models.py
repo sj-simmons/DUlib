@@ -64,7 +64,7 @@ import du.utils
 __author__ = 'Scott Simmons'
 __version__ = '0.9.2'
 __status__ = 'Development'
-__date__ = '10/29/20'
+__date__ = '11/08/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -99,6 +99,8 @@ def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
     $nonlins$ (`Tuple[nn.Module]`): The nonlinearities for each
         layer. If this has length 1, then use that nonlinearity
         for each hidden layer. Default: `(nn.ReLU(),)`.
+    $dropout$ (`float`): If greater than zero, add a dropout layer
+        with this probablity before each nonlinearity. Def: `0`.
 
   Returns:
     `nn.ModuleDict`.
@@ -118,8 +120,9 @@ def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
     (lin1): Linear(in_features=8, out_features=1, bias=True)
   )
   """
-  du.utils._check_kwargs(kwargs, ['nonlins'])
+  du.utils._check_kwargs(kwargs, ['nonlins','dropout'])
   nonlins = kwargs.get('nonlins', tuple([nn.ReLU()]))
+  dropout = kwargs.get('dropout', 0)
   assert isinstance(nonlins, (tuple, list)), dedent("""\
       'nonlins should be a tuple or a list. not a {}
   """.format(type(nonlins)))
@@ -133,6 +136,8 @@ def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
   widths = list(widths) + [n_outputs]
   block = nn.Sequential(nn.Linear(n_inputs, widths[0]))
   for layer in range(len(widths)-1):
+    if dropout > 0:
+      block.add_module('dropout', nn.Dropout2d(p=dropout))
     block.add_module('act'+str(layer),nonlins[layer])
     block.add_module(
         'lin'+str(layer+1),
@@ -249,6 +254,9 @@ class DenseFFNet(FFNet_):
           each hidden layer. If this has length 1, then use
           that nonlinearity for each hidden layer.  Default:
           `(nn.ReLU(),)`.
+      $dropout$ (`float`): If greater than zero, add a dropout
+          layer with this probablity before each nonlinear-
+          ity. Default: `0`.
       $outfn$ (`nn.Module`): a function to pipe out through
           lastly in the `forward` method; e.g.,
               `lambda xss: log_softmax(xss, dim=1)`.
@@ -261,10 +269,11 @@ class DenseFFNet(FFNet_):
           the standard deviations of the training data. Def-
           ault: `None`.
     """
-    du.utils._check_kwargs(kwargs,['nonlins','outfn','means','stdevs'])
+    du.utils._check_kwargs(kwargs,['nonlins','outfn','means','stdevs','dropout'])
     means=kwargs.get('means',None); stdevs=kwargs.get('stdevs',None)
     super().__init__(means = means, stdevs = stdevs)
     nonlins = kwargs.get('nonlins', tuple([nn.ReLU()]))
+    dropout = kwargs.get('dropout', 0)
     self.outfn = kwargs.get('outfn', None)
     assert isinstance(widths, (tuple, list)), dedent("""\
         widths should be a tuple or a list, not a {}
@@ -282,7 +291,8 @@ class DenseFFNet(FFNet_):
         len(nonlins) (which is {}) must be 1 or must have length
         equal to len(widths) (which is {})
     """.format(len(widths),len(nonlins)))
-    self.model = denseFFhidden(n_inputs, n_outputs, widths, nonlins=nonlins)
+    self.model = denseFFhidden(
+        n_inputs, n_outputs, widths, nonlins=nonlins, dropout=dropout)
 
   def forward(self, xss):
     """Forward pass tensor through the model.

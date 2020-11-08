@@ -385,7 +385,7 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.9.2** (Oct. 21, 2020)
+**Version 0.9.2** (Nov. 8, 2020)
   * API changes (please modify you code accordingly):
     * The function **du.lib.confusion_matrix** is now **du.lib.class_accuracy**;
       to print the confusion matrix pass **show_cm = True**.
@@ -401,6 +401,7 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
   * Several new helper functions (whose names begin with an underscore) were
     added to **lib.py** but, generally, users should use the non-helper functions.
   * Documentation was vastly extended/improved.
+  * Factory classes (e.g., **du.models.conv.ConvFFNet**) now include a dropout layer.
 
 ## Modifying DUlib
 

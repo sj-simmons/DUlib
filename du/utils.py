@@ -27,7 +27,7 @@ import inspect
 __author__ = 'Scott Simmons'
 __version__ = '0.9.2'
 __status__ = 'Development'
-__date__ = '10/29/20'
+__date__ = '11/08/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -133,6 +133,8 @@ def standard_args(desc = '', **kwargs):
     $props$ (`Union[bool,Tuple[float]]`): Similar to above, but
         for the proportions on which to train, validate, and/or
         validate. Default: `False`.
+    $dropout$ ('float'): As above, useful for controlling dropout
+        layer in your model. Default: `False`.
     $gpu$ (`Union[bool,Tuple[int]]`): Add a `gpu` switch. with a note
         in the help string to the effect:   ~which gpu (int or~
         ~ints separated by whitespace) for training/validating;~
@@ -187,8 +189,8 @@ def standard_args(desc = '', **kwargs):
     (`argparse.ArgumentParser`). The parser object to which the
         calling program can add more names.
   """
-  _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','props', 'gpu',\
-      'graph','ser','pred','widths','channels','verb','cm','print_lines'])
+  _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','props','gpu','graph',
+      'ser','pred','widths','channels','verb','cm','print_lines','dropout'])
   lr = kwargs.get('lr', False)
   mo = kwargs.get('mo', False)
   bs = kwargs.get('bs', False)
@@ -204,6 +206,7 @@ def standard_args(desc = '', **kwargs):
   channels = kwargs.get('channels',False)
   verb = kwargs.get('verb',False)
   print_lines = kwargs.get('print_lines',False)
+  dropout = kwargs.get('dropout',False)
 
   parser = argparse.ArgumentParser( description = desc, formatter_class =\
       argparse.ArgumentDefaultsHelpFormatter)
@@ -218,6 +221,13 @@ def standard_args(desc = '', **kwargs):
     parser.add_argument('-mo', type=float, help='momentum', default=mo)
   elif lr:
     parser.add_argument('-mo', type=float, help='momentum',required=True)
+
+  if isinstance(dropout, float):
+    parser.add_argument('-dropout', type=float, help='dropout proportion',
+        default=dropout)
+  elif dropout:
+    parser.add_argument('-dropout', type=float, help='dropout proportion',
+        required=True)
 
   hstr='the mini-batch size; set to -1 for (full) batch gradient descent'
   if not isinstance(bs, bool) and isinstance(bs, int):

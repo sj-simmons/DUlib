@@ -42,7 +42,7 @@ from du.models import FFNet_, denseFFhidden
 __author__ = 'Scott Simmons'
 __version__ = '0.9.2'
 __status__ = 'Development'
-__date__ = '10/29/20'
+__date__ = '11/08/20'
 __copyright__ = """
   Copyright 2019-2020 Scott Simmons
 
@@ -175,6 +175,8 @@ def metalayer(channels, kernels, nonlin, **kwargs):
         the nonlinearity. Keyword arguments for `torch.nn.Batch`
         `Norm2d` can also be supplied in the form of a `dict`.
         Default: `('before',)`.
+    $dropout$ (`float`): If greater than zero, add a dropout layer
+        with this probablity before each nonlinearity.  Def: `0`.
 
   >>> `bn = ('before',{'momentum':.99})
   >>> `ml,_= metalayer((1,16), (7,3), nn.ReLU(), batchnorm=bn)`
@@ -186,43 +188,81 @@ def metalayer(channels, kernels, nonlin, **kwargs):
         tion that mapps `H_in, W_in` to `H_out, W_out`.
   """
   # this is metalayer
-  du.utils._check_kwargs(kwargs,['strides','paddings','batchnorm'])
+  du.utils._check_kwargs(kwargs,['strides','paddings','batchnorm','dropout'])
   strides = kwargs.get('strides',(1,kernels[1]))
   paddings = kwargs.get('paddings',(int(kernels[0]/2),0))
   batchnorm = kwargs.get('batchnorm', ('before',))
-  if batchnorm:
-    if len(batchnorm) == 1: bn_kwargs = {} # batchnorm kwargs
+  dropout = kwargs.get('dropout', 0)
+  if dropout > 0:
+    if batchnorm:
+      if len(batchnorm) == 1: bn_kwargs = {} # batchnorm kwargs
+      else:
+        bn_kwargs = batchnorm[1]
+        assert isinstance(bn_kwargs,dict),\
+           'second element of batchnorm must be a dict'
+      if kernels[1] > 1:
+        ml=nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
+            nn.Dropout(dropout),
+            nonlin,
+            nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
+            padding=paddings[1]))
+      else:
+        ml = nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
+            nonlin)
     else:
-      bn_kwargs = batchnorm[1]
-      assert isinstance(bn_kwargs,dict),\
-         'second element of batchnorm must be a dict'
-    if kernels[1] > 1:
-      ml=nn.Sequential(
-          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
-              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
-          nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
-          nonlin,
-          nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
-          padding=paddings[1]))
-    else:
-      ml = nn.Sequential(
-          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
-              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
-          nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
-          nonlin)
+      if kernels[1] > 1:
+        ml=nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nn.Dropout(dropout),
+            nonlin,
+            nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
+            padding=paddings[1]))
+      else:
+        ml = nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nonlin)
   else:
-    if kernels[1] > 1:
-      ml=nn.Sequential(
-          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
-              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
-          nonlin,
-          nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
-          padding=paddings[1]))
+    if batchnorm:
+      if len(batchnorm) == 1: bn_kwargs = {} # batchnorm kwargs
+      else:
+        bn_kwargs = batchnorm[1]
+        assert isinstance(bn_kwargs,dict),\
+           'second element of batchnorm must be a dict'
+      if kernels[1] > 1:
+        ml=nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
+            nonlin,
+            nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
+            padding=paddings[1]))
+      else:
+        ml = nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nn.BatchNorm2d(num_features=channels[1], **bn_kwargs),
+            nonlin)
     else:
-      ml = nn.Sequential(
-          nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
-              kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
-          nonlin)
+      if kernels[1] > 1:
+        ml=nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nonlin,
+            nn.MaxPool2d(kernel_size=kernels[1], stride=strides[1],
+            padding=paddings[1]))
+      else:
+        ml = nn.Sequential(
+            nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                kernel_size=kernels[0], stride=strides[0], padding=paddings[0]),
+            nonlin)
   def out_size(height, width):
     return tuple(ml(torch.randn(1,channels[0],height,width)).size()[2:])
     #return int((height + (kernels[0] + 1) % 2) / kernels[1]),\
@@ -263,6 +303,8 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
         `dict` and included as the second element of this tuple;
         those will be applied in each convolutional metalayer's
         batch normalization layer. Default: `('before',)`.
+    $dropout$ (`float`): If greater than zero, add a dropout layer
+        with this probablity before each nonlinearity.  Def: `0`.
 
   Returns:
     `(nn.Sequential, function)`. The block consisting of the com-
@@ -285,13 +327,16 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
     )
   ), ...)
   """
-  du.utils._check_kwargs(kwargs,['nonlins','batchnorm'])
+  du.utils._check_kwargs(kwargs,['nonlins','batchnorm','dropout'])
   nonlins = kwargs.get('nonlin',nn.ReLU())
+  dropout = kwargs.get('dropout', 0)
   batchnorm = kwargs.get('batchnorm', ('before',))
   assert len(channels)-1 == len(conv_kernels) == len(pool_kernels)
-  layers,funcs=list(zip(*[metalayer(chans,kerns,nonlins,batchnorm=batchnorm) for\
-      chans, kerns in zip(
-          zip(channels[:-1],channels[1:]), zip(conv_kernels, pool_kernels))]))
+  layers,funcs=list(
+      zip(*[metalayer(chans,kerns,nonlins,batchnorm=batchnorm,dropout=dropout)
+          for chans, kerns in zip(
+              zip(channels[:-1],channels[1:]),
+                  zip(conv_kernels, pool_kernels))]))
   return nn.Sequential(*layers), functools.reduce(
       lambda f,g: lambda x,y:g(*f(x,y)), funcs, lambda x,y:(x,y))
 
@@ -337,6 +382,9 @@ class ConvFFNet(FFNet_):
           second element of this tuple; those will be applied
           in each convolutional metalayer's batch normalizat-
           ion layer. Default: `('before',)`.
+      $dropout$ (`float`): If greater than zero, add a dropout
+          layer with this probablity before each nonlinearity.
+          Default: `0`.
       $outfn$ (`nn.Module`): A function to pipe out though lastly
           in the `forward` method; The default is `log_softmax`.
           For regression, you likely want to put `None`.
@@ -358,17 +406,17 @@ class ConvFFNet(FFNet_):
     >>> `yhatss.size()`
     torch.Size([100, 8])
 
-    >>> `print(model.extra_repr(color=False))`
-    Conv.: channels 1 16 with ReLU and batchnorm:before
-    Dense: widths 3136 100 8 with ReLU
+    >>> `print(model.short_repr(color=False))`
+    Conv.: channels 1 16 ReLU batchnorm:before dropout:0
+    Dense: widths 3136 100 8 ReLU dropout:0
 
     >>> `model=ConvFFNet((28,28),8,(1,16),(),batchnorm=bn)`
-    >>> `print(model.extra_repr(color=False))`
-    Conv.: channels 1 16 with ReLU and batchnorm:before
-    Dense: widths 3136 8 with ReLU
+    >>> `print(model.short_repr(color=False))`
+    Conv.: channels 1 16 ReLU batchnorm:before dropout:0
+    Dense: widths 3136 8 ReLU dropout:0
     """
     du.utils._check_kwargs(kwargs, ['conv_kernels','pool_kernels','means',
-        'stdevs','outfn','nonlins','batchnorm'])
+        'stdevs','outfn','nonlins','batchnorm','dropout'])
     means = kwargs.get('means', None)
     stdevs = kwargs.get('stdevs', None)
     assert len(in_size) == 2,\
@@ -379,29 +427,31 @@ class ConvFFNet(FFNet_):
     conv_kernels = kwargs.get('conv_kernels',(len(channels)-1)*[5])
     pool_kernels = kwargs.get('pool_kernels',(len(channels)-1)*[2])
     nonlins = kwargs.get('nonlins', (nn.ReLU(), nn.ReLU()))
+    dropout = kwargs.get('dropout', 0)
     batchnorm = kwargs.get('batchnorm', ('before',))
 
     # build the convolutional part:
     self.conv, out_size = convFFhidden(
-        channels, conv_kernels, pool_kernels,
-        nonlins = nonlins[0], batchnorm = batchnorm)
+        channels, conv_kernels, pool_kernels, nonlins = nonlins[0],
+        batchnorm = batchnorm, dropout = dropout)
     # build the dense part
     n_inputs_dense = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size))
     self.dense = denseFFhidden(
-        n_inputs = n_inputs_dense,
-        n_outputs = n_out, widths = widths, nonlins = (nonlins[1],))
+        n_inputs = n_inputs_dense, n_outputs = n_out, widths = widths,
+        nonlins = (nonlins[1],), dropout = dropout)
 
     # build a short representation string
     nonlins = list(map(lambda mo: repr(mo)[repr(mo).rfind('.')+1:-2], nonlins))
     batchnorm = 'none' if len(batchnorm)==0 else batchnorm[0]
     convpart = functools.reduce(lambda x, y: x + ' ' + y,
         ['Conv.: ~channels~'] + list(map(lambda x: '`'+str(x)+'`', channels)) \
-        + ['with'] + ['`'+nonlins[0]+'`'] \
-        + ['and ~batchnorm~:'+ '`'+str(batchnorm)+'`'])
+        + ['`'+nonlins[0]+'`'] + ['~batchnorm~:'+ '`'+str(batchnorm)+'`']\
+        + ['~dropout~:'+'`'+str(dropout)+'`'])
     densepart = functools.reduce(lambda x, y: x + ' ' + y,
         ['\nDense: ~widths~'] \
         + list(map(lambda x: '`'+str(x)+'`', (n_inputs_dense,) \
-        + tuple(widths) + (n_out,))) + ['with'] + ['`'+nonlins[1]+'`'])
+        + tuple(widths) + (n_out,))) + ['`'+nonlins[1]+'`']\
+        + ['~dropout~:'+'`'+str(dropout)+'`'])
     self.repr_ = convpart + densepart
 
   def forward(self, xss):
