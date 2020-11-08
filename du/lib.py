@@ -1567,12 +1567,12 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
     model = train(
         model=model,
         crit=crit,
-        train_data=(xss_train, yss_train),
+        train_data = (xss_train, yss_train),
         learn_params = learn_params,
         bs=bs,
         epochs=epochs,
         verb=verb-1,
-        gpu=gpu)
+        gpu=(gpu,))
 
     if cent_feats: xss_test.sub_(xss_train_means)
     if norm_feats: xss_test.div_(xss_train_stdevs)

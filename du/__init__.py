@@ -17,7 +17,7 @@ $classes$ are, as of this release,
   │  ├─ $normalize$       normalize data
   │  ├─ $standardize$     mean-center and normalize
   │  ├─ $online_means_stdevs$
-  │  │                    compute these in an online fashion
+  │  │                  online compute means and st devs
   │  ├─ $coh_split$       split out testing data
   │  ├─ $train$           train a model
   │  ├─ $cross_validate$  cross-validate train a model

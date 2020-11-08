@@ -1,29 +1,29 @@
 '''display/debug documentation highlighting.
 
-If below the word "underline" is underlined, the word "bold" is
-bolded, the word "red" is red, and so on, then highlighting is
-working. At your command-line, issue the command
+If, in the table below, the word "underline" is underlined, the
+word "bold" is bolded, "red" is red, and so on, then highlight-
+ing is working. At your command-line, issue the following for a
+brief introduction to DUlib and its usage:
 
   pd du
 
-for a brief introduction to DUlib and its usage.
-
-If those are hard to read because they are wrapped in escape
-sequences, then skip down to the technical note below the bar.
+But if, below, the words "underline", "bold", "red", etc. are
+hard to read because they are wrapped in escape sequences, then
+skip down to the technical note below the bar.
 
 Surrounding a phrase, all on one line, with the specified char-
 acter leads to the listed effect.
 
-  exclamation point     !underline!
-  a single backquote    `bold`
-  a dollar sign         $red$
-  bar                   |blue|
-  tilde                 ~cyan~
+            exclamation point             !underline!
+            a single backquote            `bold`
+            a dollar sign                 $red$
+            bar                           |blue|
+            tilde                         ~cyan~
 
 Also, the following may be highlighted.
 
-  three greater-thans   >>>
-  three periods         ...
+            three greater-thans           >>>
+            three periods                 ...
 
                     _____________________
 
@@ -42,13 +42,13 @@ are a number of ways around such rendering issues.
 
 There is a good chance that the problems you are experiencing
 are due to your being in IDLE (which is the IDE that ships with
-Python) or some other IDE that doesn't play nice with `ansi` es-
+Python) or some other IDE that doesn't play nice with ansi es-
 cape sequences.
 
 Recommendation: consume the documentation for DUlib by using
-the pd command at the command-line. That way you can enjoy a
+the pd command at your command-line. That way you can enjoy a
 few enhancements like bolding and colorizing of certain words.
-This aids in quickly and easily finding apis for this library.
+This aids in quickly and easily finding APIs for this library.
 
 Instead of reading this in an IDE, try issuing the following at
 your command-line:
@@ -60,21 +60,21 @@ still experiencing char escape hell, then try manually setting
 the PAGER and/or the TERM environment variables.
 
 A great value for PAGER is the value: less -r. You can set the
-PAGER environment variable on Linux-like systems (including
-macOS and WSL) with the bash command:
+PAGER environment variable on Linux-like systems (and this in-
+cludes macOS and WSL) with the bash command:
 
   export PAGER='less -r'
 
 which you can add to the end of your .bashrc (which lives in
 your home directory) if you wish. But be sure to either reboot
-exit and restart your shell session after editing .bashrc or to
-run the command
+or exit and restart your shell session after editing .bashrc;
+or to run the command
 
-  cd; source .bashrc
+  source ~/.bashrc
 
 Viable values for TERM are, for example, any one of:
 
-        screen-256color, xterm-256color, or ansi.
+          screen-256color, xterm-256color, or ansi.
 
 You can set TERM in your .bashrc with, e.g.,
 
