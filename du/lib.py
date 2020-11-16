@@ -1439,7 +1439,11 @@ def train(model, crit, train_data, **kwargs):
         fig.tight_layout()
 
   end = time.time()
-  if verb > 0: print ('trained in {:.2f} secs'.format(end-start))
+  if verb > 0:
+    if end - start < 60:
+      print(f'trained in {(end-start):.1f} sec')
+    if end - start > 60:
+      print(f'trained in {int((end-start)//60)} min {(end-start)%60:.1f} sec')
 
   if graph:
     plt.ioff()
