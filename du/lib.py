@@ -564,6 +564,13 @@ def online_means_stdevs(data, batchsize=1, *transforms_):
         you really want to, you can include transformations via
         this parameter.
 
+  Returns:
+    `Tuple[torch.Tensor]`. A tuple the first tensor of which is
+        means (over the first dim. of `data`) and the second of
+        which is the standard deviations.
+
+  Examples:
+
   >>> data = torch.arange(100.).view(100,1)
   >>> means, stdevs = online_means_stdevs(data)
   >>> means.item(), stdevs.item()
@@ -906,18 +913,20 @@ class _DataLoader:
     return minibatch
 
 def _evaluate(model, dataloader, crit, device):
-  """Return loss.
+  """Return average loss.
 
-  This uses `crit` to evaluate `model` on data wrapped in `dataloa`
-  `der`; on 'device' it computes, and then returns, the loss. Here
-  `dataloader` can be an instance of `torch.utils.data.DataLoader`
-  or `du.lib._DataLoader`.
+  This uses the metric `crit` (which assumed to return a number
+  that is an average per example) to evaluate `model` on data
+  wrapped in `dataloader`; on 'device' it accumulates and then ret-
+  urns the loss. `dataloader` can be an instance of `torch.utils.`
+  `data.DataLoader` or `du.lib._DataLoader`.
 
   Args:
     $model$ (`nn.Module`): The model to applied.
     $dataloader$ (`Union[DataLoader, _DataLoader]`)
     $crit$ (`function`): A function that maps a mini-batch output
-        by `dataloader` to a float.
+        by `dataloader` to a float representing an average (per
+        example) value.
     $device$ (`Tuple[int,torch.device]`): The model should already
         be on this device. The mini-batches are moved to this
         device just before passing them through the model and
@@ -926,7 +935,7 @@ def _evaluate(model, dataloader, crit, device):
         -2 force use of the CPU.
 
   Returns:
-    `float`. The total loss over one epoch of `dataloader`.
+    `float`. The average loss over one epoch of `dataloader`.
   """
   device = du.utils.get_device(device) if isinstance(device,int) else device
   accum_loss = 0.0
@@ -969,21 +978,32 @@ def _batch2class_accuracy(probdists, yss):
       accum += 1
   return accum/len(probdists)
 
-def _class_accuracy(model, dataloader, device=-2):
-  """Return proportion correct.
+def _batch2r2(yhats, yss, device=-2):
+  assert len(yhats) == len(yss)
+  return torch.square(yhats-yss)
 
-  """
+def _r2(model, dataloader, ysss_means=None, device=-2):
+  pass
+
+def r2(yss_means, device=-2):
+  pass
+
+def _mse(model, dataloader, device=-2):
+  return _evaluate(model, dataloader, crit=nn.functional.mse_loss, device=device)
+
+def _rmse(model, dataloader, device=-2):
   return _evaluate(
-      model=model,dataloader=dataloader,crit=_batch2class_accuracy,device=device)
-  #device = du.utils.get_device(device) if isinstance(device,int) else device
-  #correct = 0
-  #num_examples = 0
-  #for batch in dataloader:
-  #    correct += _class_accuracy_count(
-  #        model(batch[0].to(device)), batch[1].to(device).to('cpu'))
-  #    num_examples += len(batch[0])
-  #return correct / num_examples
+      model,
+      dataloader,
+      crit= lambda xss, yss: torch.sqrt(nn.functional.mse_loss(xss, yss)),
+      device=device)
 
+# can be removed now
+#def _class_accuracy(model, dataloader, device=-2):
+#  """Return proportion correct.
+#
+#  """
+#  return _evaluate(model, dataloader, crit=_batch2class_accuracy, device=device)
 
 def train(model, crit, train_data, **kwargs):
   """Train a model.
@@ -1096,6 +1116,30 @@ def train(model, crit, train_data, **kwargs):
         The loss on validation data is computed each epoch; but
         `valid_data` is not shown to the model as part of back-
         propagation. Default: `None`.
+    $valid_crit$ (`Union(bool, function)`): If this is set to `True`
+        and `graph` is positive, then the model is validated for
+        accuracy on training data and the result is displayed
+        on the graph. If the targets are tensors of integers,
+        then we assume a classification problem and the accur-
+        acy is the proportion correct; with float targets, the
+        accuracy gauge is automatically set to r-squared.
+        Alternatively, one can set this to, for example,
+          `torch.nn.functional.l1_loss`,
+          `torch.nn.functional.mse_loss`, or
+          `du.lib._rmse_loss`.
+        The last option is equivalent to
+          `valid_crit=lambda xss, yss: torch.sqrt(`
+               `torch.nn.functional.mse_loss(xss, yss))`
+        More generally, this can be any function that maps `xss`,
+        `yss` to a float; though, if `valid_data` as a dataloader,
+        then the function should be an average loss on batches.
+        If `valid_data` is present, then model accuracy on it is
+        also gauged and displayed. Default: `True`.
+        Notes:
+        - To simply train the model as efficiently as possible,
+          set `graph = 0` which disables all validation.
+        - Or, set this to `False`, to disable all validation and
+          just graph (if, e.g., `graph = 1`) the loss.
     $learn_params$
         (`Union[dict,LearnParam_, torch.optim.Optimizer]`): The
         training, or 'learning', hyperparameters in the form of
@@ -1139,23 +1183,6 @@ def train(model, crit, train_data, **kwargs):
         to -1 to use the last GPU found (and to use the CPU if
         no GPU is found), or to -2 to override using a found
         GPU and instead use the CPU. Default: `(-1, -1)`.
-    $valid_crit$ (`Union(bool, function)`): If this is set to `True`
-        and `graph` is positive, then the model is validated for
-        accuracy on training data and the result is diplayed
-        on the graph. If the targets are tensors of integers,
-        then we assume a classification problem and the accur-
-        acy is the proportion correct; with float targets, the
-        accuracy gauge is r-squared.
-        A custom accuracy gauge can be provided in the form a
-        function that maps a model, a dataloader, and a device
-        to a number; e.g., `du.lib._class_accuracy`.
-        If `valid_data` is present, then model accuracy on it is
-        also gauged and displayed. Default: `True`.
-        Notes:
-        - To simply train the model as efficiently as possible,
-          set `graph = 0` which disables all validation.
-        - Or, set this to `False`, to disable all validation and
-          just graph (so put, e.g., `graph = 1`) the loss.
     $args$ (`argparse.Namespace`): With the exception of `valid_data`
         `valid_crit`, and this argument, all `kwargs` can be passed
         in via attributes (of the same name) of an instance of
@@ -1272,14 +1299,17 @@ def train(model, crit, train_data, **kwargs):
       # or a classification problem.
       for minibatch in train_data:
         if isinstance(minibatch[-1][0], FloatTensor):
-          valid_crit = lambda yhatss, yss: r_squared(yhatss,yss,gpu=valid_dev)
+          #online_means_stdevs(train_data)
+          #valid_crit = lambda xss, yss: 
+          valid_crit = _rmse
         elif isinstance(minibatch[-1][0], IntTensor):
-          valid_crit = _class_accuracy
+          valid_crit = _batch2class_accuracy
         else:
           raise RuntimeError('please specify a function to use for validation')
         break
-  else:
-    assert isinstance(valid_crit, FunctionType)
+  #else:
+  #  #assert isinstance(valid_crit, FunctionType)
+  #  valid_crit = _evaluate(model, dataloader, crit=valid_crit , device=device)
 
   if graph:
     import matplotlib.pyplot as plt # Don't import these until now in case
@@ -1294,7 +1324,8 @@ def train(model, crit, train_data, **kwargs):
 
     if valid_crit:
       v_dation_train=functools.partial(  # this maps: model -> float
-          valid_crit, dataloader=train_data, device=valid_dev)
+          _evaluate, dataloader=train_data, crit=valid_crit, device=valid_dev)
+          #valid_crit, dataloader=train_data, device=valid_dev)
 
     # these will hold the losses and validations for train data
     losses = []
@@ -1313,7 +1344,7 @@ def train(model, crit, train_data, **kwargs):
         valid_data = _DataLoader(valid_data, bs, shuffle = False)
 
       v_dation_valid=functools.partial(  # this maps:  model -> float
-        valid_crit, dataloader=valid_data, device=valid_dev)
+        _evaluate, dataloader=valid_data, crit=valid_crit,  device=valid_dev)
       loss_valid = functools.partial(    # also maps:  model -> float
         _evaluate, dataloader=valid_data, crit=crit, device=valid_dev)
 
@@ -1398,7 +1429,10 @@ def train(model, crit, train_data, **kwargs):
         ax1.clear()
         ax2.clear()
         ax1.set_xlabel('epoch', size='larger')
-        ax1.set_ylabel('average loss',size='larger')
+        if valid_data:
+          ax1.set_ylabel('average loss (stipled)',size='larger')
+        else:
+          ax1.set_ylabel('average loss',size='larger')
         ax2.set_ylabel('validation',size='larger')
         xlim = range(xlim_start,len(losses)+1)
         loss_ys = np.array(losses[xlim_start-1:], dtype=float)
@@ -1409,9 +1443,9 @@ def train(model, crit, train_data, **kwargs):
           v_dationtest_ys = np.array(v_dations_valid[xlim_start-1:], dtype=float)
           ax1.plot(xlim,losstest_ys,xlim,loss_ys,color='black',lw=.5)
           ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys >=loss_ys,
-              facecolor=red_fc,interpolate=True, alpha=.8)
+              facecolor=red_fc,interpolate=True, alpha=.8, hatch=5*'.')
           ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys <=loss_ys,
-              facecolor=blue_fc,interpolate=True, alpha=.8)
+              facecolor=blue_fc,interpolate=True, alpha=.8,hatch=5*'.')
           ax2.plot(xlim,v_dationtest_ys,xlim,v_dation_ys,color='black',lw=.5)
           ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
               where = v_dationtest_ys >=v_dation_ys, facecolor=red_fc,
@@ -1914,7 +1948,7 @@ def class_accuracy(model, data, **kwargs):
               .format(classes.dim())
 
     if not show: # just compute the accuracy
-      accuracy = _class_accuracy(model, loader, device)
+      accuracy = _evaluate(model, loader, crit=_batch2class_accuracy, device=device)
     else:
       # compute the entries in the confusion matrix
       cm_counts = torch.zeros(len(classes), len(classes))
@@ -1964,7 +1998,7 @@ def r_squared(yhatss, yss, **kwargs):
   Returns the coefficient of determination of two 2-d tensors
   (where the first dimension in each indexes the examples), one
   holding the `yhatss` (the predicted outputs) and the other hol-
-  ding the actual outputs, `yss`.
+  ding the true outputs, `yss`.
 
   Note: `yhatss` and `yss` - or `model`, `xss`, and `yss` if the second
   option (see below) is used - are each moved in place to the

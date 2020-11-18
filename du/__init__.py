@@ -18,11 +18,12 @@ $classes$ are, as of this release,
   │  ├─ $standardize$     mean-center and normalize
   │  ├─ $online_means_stdevs$
   │  │                  online compute means and st devs
-  │  ├─ $coh_split$       split out testing data
+  │  ├─ $coh_split$       split data
   │  ├─ $train$           train a model
   │  ├─ $cross_validate$  cross-validate train a model
-  │  ├─ $class_accuracy$  compute accuracy for classification
-  │  ├─ $r-squared$
+  │  ├─ $class_accuracy$  compute accuracy of classification
+  │  │                  (optionally, displays confusion mat.)
+  │  ├─ $r-squared$       compute coeff. of determination
   │  ├─ $optimize_ols$    optimize learning rate and momentum
   │  ├─ $LearnParams_$    class to add training hyper-params
   │  └─ $Momentum$        add momentum to SGD
