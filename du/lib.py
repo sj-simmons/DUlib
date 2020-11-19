@@ -913,7 +913,7 @@ class _DataLoader:
     return minibatch
 
 def _evaluate(model, dataloader, crit, device):
-  """Return average loss.
+  """Return ave. value of a metric on a model and a dataloader.
 
   This uses the metric `crit` (which assumed to return a number
   that is an average per example) to evaluate `model` on data
@@ -939,11 +939,11 @@ def _evaluate(model, dataloader, crit, device):
   """
   device = du.utils.get_device(device) if isinstance(device,int) else device
   accum_loss = 0.0
-  num_examples = 0
+  #num_examples = 0
   for minibatch in dataloader:
     accum_loss += crit(model(
         *map(lambda x: x.to(device), minibatch[:-1])), minibatch[-1].to(device))
-    num_examples += len(minibatch[0])
+    #num_examples += len(minibatch[0])
   return accum_loss/len(dataloader)
 
 def _batch2class_accuracy(probdists, yss):
@@ -978,25 +978,21 @@ def _batch2class_accuracy(probdists, yss):
       accum += 1
   return accum/len(probdists)
 
-def _batch2r2(yhats, yss, device=-2):
-  assert len(yhats) == len(yss)
-  return torch.square(yhats-yss)
+#def _batch2r2(yhats, yss, device=-2):
+#  assert len(yhats) == len(yss)
+#  return torch.square(yhats-yss)
 
-def _r2(model, dataloader, ysss_means=None, device=-2):
-  pass
+#def _mse(model, dataloader, device=-2):
+#  return _evaluate(model, dataloader, crit=nn.functional.mse_loss, device=device)
 
-def r2(yss_means, device=-2):
-  pass
+#def _rmse(model, dataloader, device=-2):
+#  return _evaluate(
+#      model,
+#      dataloader,
+#      crit= lambda xss, yss: torch.sqrt(nn.functional.mse_loss(xss, yss)),
+#      device=device)
 
-def _mse(model, dataloader, device=-2):
-  return _evaluate(model, dataloader, crit=nn.functional.mse_loss, device=device)
-
-def _rmse(model, dataloader, device=-2):
-  return _evaluate(
-      model,
-      dataloader,
-      crit= lambda xss, yss: torch.sqrt(nn.functional.mse_loss(xss, yss)),
-      device=device)
+_rmse = lambda xss, yss: torch.sqrt(nn.functional.mse_loss(xss, yss))
 
 # can be removed now
 #def _class_accuracy(model, dataloader, device=-2):
@@ -1300,8 +1296,8 @@ def train(model, crit, train_data, **kwargs):
       for minibatch in train_data:
         if isinstance(minibatch[-1][0], FloatTensor):
           #online_means_stdevs(train_data)
-          #valid_crit = lambda xss, yss: 
-          valid_crit = _rmse
+          #valid_crit = lambda xss, yss:
+          valid_crit = nn.functional.l1_loss
         elif isinstance(minibatch[-1][0], IntTensor):
           valid_crit = _batch2class_accuracy
         else:
@@ -1323,9 +1319,14 @@ def train(model, crit, train_data, **kwargs):
     xlim_start = 1
 
     if valid_crit:
-      v_dation_train=functools.partial(  # this maps: model -> float
-          _evaluate, dataloader=train_data, crit=valid_crit, device=valid_dev)
-          #valid_crit, dataloader=train_data, device=valid_dev)
+      if isinstance(valid_crit, FunctionType):
+        v_dation_train=functools.partial(  # this maps: model -> float
+            _evaluate, dataloader=train_data, crit=valid_crit, device=valid_dev)
+            #valid_crit, dataloader=train_data, device=valid_dev)
+      else: # then valid_crit is _explained_var
+        # this alos maps: model -> float
+        v_dation_train = lambda model: len(train_data)*_evaluate(
+            model, dataloader=train_data, crit=valid_crit[0], device=valid_dev)
 
     # these will hold the losses and validations for train data
     losses = []
@@ -1343,8 +1344,12 @@ def train(model, crit, train_data, **kwargs):
         #just use the same batchsize as with training data
         valid_data = _DataLoader(valid_data, bs, shuffle = False)
 
-      v_dation_valid=functools.partial(  # this maps:  model -> float
-        _evaluate, dataloader=valid_data, crit=valid_crit,  device=valid_dev)
+      if isinstance(valid_crit, FunctionType):
+        v_dation_valid=functools.partial(  # this maps:  model -> float
+            _evaluate, dataloader=valid_data, crit=valid_crit, device=valid_dev)
+      else:  # then valid_crit is _explained_var
+        v_dation_valid = lambda model: len(valid_data)*_evaluate(
+            model, dataloader=valid_data, crit=valid_crit[1], device=valid_dev)
       loss_valid = functools.partial(    # also maps:  model -> float
         _evaluate, dataloader=valid_data, crit=crit, device=valid_dev)
 
@@ -1852,27 +1857,26 @@ def optimize_ols(feats, **kwargs):
     return_dict = {'lr': learning_rate, 'mo': momentum}
   else:
     return_dict = {'lr': learning_rate}
-
   return return_dict
 
 def class_accuracy(model, data, **kwargs):
   """Return the classification accuracy.
 
   By default, this returns the proportion correct when using
-  `model` to classify the features in `test_data`; optionally,
-  the confusion 'matrix' is displayed as a table - where the
-  columns correspond to the correct target class; the rows are
-  the class predicted by `model`.
+  `model` to classify the features in `data` using the targets in
+  `data` as ground truth; optionally, the confusion 'matrix' is
+  displayed as a table - where the columns correspond to ground
+  truch and the rows are the class predicted by `model`.
 
   Args:
     $model$ (`nn.Module`): The trained model.
     $data$ (`Union[Tuple[Tensor], DataLoader`): Either a tuple of
         tensors `(xss, yss)` where `xss` holds the features of the
-        test data (and whose first dimension indexes the examp-
-        les to be tested) and `yss` is a tensor of dimension 1
-        holding the corresponding correct classes (as `int`s),
-        or an instance of `torch.utils.data.DataLoader` which
-        yields mini-batches of such 2-tuples.
+        data on which to access accuracy (and whose first dim-
+        ension indexes the examples to be tested) and `yss` is a
+        tensor of dimension 1 holding the corresponding correct
+        classes (as `int`s), or an instance of `torch.utils.data`
+        .DataLoader` which yields mini-batches of such 2-tuples.
 
   Kwargs:
     $classes$ (`IntTensor`): A 1-dimensional tensor holding the nu-
@@ -1992,6 +1996,58 @@ def class_accuracy(model, data, **kwargs):
       accuracy = torch.trace(cm_pcts).item()
   return accuracy
 
+def _sum_square_div(yhatss, yss, denom=1.0):
+  """Return sum_squared diffs divided by denom.
+
+  Args:
+    $yhatss$ (`Tensor`).
+    $yss$ (`Tensor`).
+    $denom$ (`float`). Default: `1.0`.
+
+  Returns:
+    `float`.
+
+  Examples:
+  >>> _sum_square_div(torch.arange(4.),2*torch.arange(4))
+  tensor(14.)
+
+  >>> yhatss = torch.arange(5.).view(5,1)
+  >>> _sum_square_div(yhatss, yhatss.mean(0))
+  tensor(10.)
+
+  """
+  diffs = yhatss - yss
+  return (diffs * diffs).sum() / denom
+
+def _explained_var(yss_train, yss_test=None):
+  """help compute explained variation (variance, actually).
+
+  Something like this is necessary if one wants to compute the
+  coefficient of determination (r_squared) on dataloaders (so
+  batchwise).
+
+  Note: this is not that useful as a metric.
+
+  But, if you really want to look at this, then call the `train`
+  function like this:
+  `model = train(`
+      ...
+      valid_crit = _explained_var(yss_train, yss_test),
+      ...
+  `)`
+
+  """
+  train_r2 = lambda yhatss, _: _sum_square_div(
+      yhatss, yss_train.mean(0), _sum_square_div(yss_train, yss_train.mean(0)))
+  #train_r2 = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_train*yss_train).sum()
+  if yss_test is not None:
+    test_r2 = lambda yhatss, _: _sum_square_div(
+        yhatss, yss_train.mean(0), _sum_square_div(yss_test, yss_train.mean(0)))
+    #test_r2 = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_test*yss_test).sum()
+  else:
+    test_r2 = None
+  return train_r2, test_r2
+
 def r_squared(yhatss, yss, **kwargs):
   """Compute r_squared.
 
@@ -2005,6 +2061,9 @@ def r_squared(yhatss, yss, **kwargs):
   to the device determined by `gpu`.
 
   Args:
+    $model$ (`nn.Module`): The trained model.
+    $data$ (`Union(Tuple[Tensor]), DataLoader): Either a tuple of
+        tensors
     $yhatss$ (`torch.Tensor`): Either the predicted outputs (assum-
         ed to be of shape `(len(yhatss), 1)` (which is often just
         `model(xss)`) or a tuple of the form `(model, xss)`; use
@@ -2018,7 +2077,7 @@ def r_squared(yhatss, yss, **kwargs):
         return 1 minus that proportion. Default: `False`.
     $gpu$ (`Union[torch.device, int]`): The GPU to use if there are
         any available. Set this to -1 to use the last GPU found
-        or, if none GPUs are found, use the (first) CPU; set to
+        or to, if no GPU is found, use the (first) CPU; set to
         -2 to override using any found GPU and instead use the
         CPU. Alternatively, one can set this to an instance of
         `torch.device`. Default: `-1`.
