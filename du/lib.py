@@ -38,9 +38,14 @@ trained models.
                   `(train_feats, train_lengths, train_targs)`;
                   passing `train_lengths` or, below, `test_lengths`
                   is likely only relevant for recurrent nets.
-     $test_data$ = `None`,
+     $valid_data$ = `None`,
                  -either `(test_feats, test_targs)` or
                   `(test_feats, test_lengths, train_targs)`
+     $valid_metric$ = `True`)
+                 -function determining how the model is valida-
+                  ted w/r to `valid_data`. The default results in
+                  using `r_squared` for regression and `class_accu`
+                  `racy` for classification.
      $learn_params$ = `{'lr': 0.1}`,
                  -a `dict` of the form `{'lr': 0.1,'mo': 0.9}` or
                   `{'lr': 0.1}`, or an instance of `LearnParams_`,
@@ -57,11 +62,6 @@ trained models.
                   the last gpu if multiple ones found; put -2
                   to override found gpu(s) and use the cpu.
                   Consider just accepting the default here.
-     $valid_crit$ = `True`)
-                 -function determining how the model is valida-
-                  ted w/r to test data. The default results in
-                  using `r_squared` for regression and `class_accu`
-                  `racy` for classification.
 
   |cross_validate_train|
     ($model$, $crit$, $train_data$, $k$, $**kwargs$)
@@ -81,7 +81,7 @@ trained models.
      $k$ = `10`,    -the number of folds when cross-validating
      $bail_after$ = `5`,
                 -bail after this many steps if no improvement
-     $valid_crit$ = `None`,
+     $valid_metric$ = `None`,
                 -the criterion to use when validating on test
                  data during cross validate training and on any
                  final testing data. Default `None` leads to us-
@@ -551,9 +551,9 @@ def online_means_stdevs(data, batchsize=1, *transforms_):
 
   Args:
     $data$ (`Union[tensor, DataLoader]`): Either a tensor whose 1st
-        dimension indexes examples or an instance of PyTorch's
-        `DataLoader` class that yields (mini-batches) of examples
-        which are wrapped in a tuple (of length 1).
+        dimension indexes the examples of the data or an inst-
+        ance of `torch.utils.data.DataLoader` that yields mini-
+        batches of examples.
     $batchsize$ (`int`): If `data` is a tensor, then an instance of
         `DataLoader` is created with this `batchsize`. If `data` is
         already an instance of `DataLoader`, this argument is ig-
@@ -571,32 +571,34 @@ def online_means_stdevs(data, batchsize=1, *transforms_):
 
   Examples:
 
-  >>> data = torch.arange(100.).view(100,1)
-  >>> means, stdevs = online_means_stdevs(data)
-  >>> means.item(), stdevs.item()
-  (49.5, 28.86...
+  >>> data = torch.arange(100.).view(50,2)
+  >>> online_means_stdevs(data)
+  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
 
   >>> dataset = torch.utils.data.TensorDataset(data)
   >>> loader = torch.utils.data.DataLoader(dataset, batch_size=25)
-  >>> means, stdevs = online_means_stdevs(loader)
-  >>> means.item(), stdevs.item()
-  (49.5, 28.86...
+  >>> online_means_stdevs(loader)
+  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
 
-  >>> dataset = torch.utils.data.TensorDataset(data)
   >>> loader = torch.utils.data.DataLoader(dataset, batch_size=37)
-  >>> means, stdevs = online_means_stdevs(loader)
-  >>> means.item(), stdevs.item()
-  (49.5, 28.86...
+  >>> online_means_stdevs(loader)
+  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
 
-  >>> dataset = torch.utils.data.TensorDataset(data)
   >>> loader = torch.utils.data.DataLoader(dataset, batch_size=1)
-  >>> means, stdevs = online_means_stdevs(loader)
-  >>> means.item(), stdevs.item()
-  (49.5, 28.86...
+  >>> online_means_stdevs(loader)
+  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
+
+  >>> feats = (torch.arange(100.).view(50,2)
+  >>> targs = torch.arange(50.).view(50,1)
+  >>> feats_stats, targs_stats = online_means_stdevs((feats, targs))
+  >>> feats_stats
+  (tensor([49., 50.],), tensor([28.8617, 28.8617]),
+  >>> targs_stats
+  (tensor([28.8617, 28.8617]))
 
   """
   #Notes:
-  #  - This works on one channel data (image) data
+  #  - This works on one channel (image) data
   #Todo:
   #  - Generalize this to work on multichannel and calls this?
   #    On say 3 channel images, try passing a transform that flattens
@@ -1108,34 +1110,51 @@ def train(model, crit, train_data, **kwargs):
         (Optional) data on which to validate the model in the
         form of a tuple of length 2 or 3 (that is, matching the
         length of `train_data`) or an instance of `torch.data.util`
-        `s.data.DataLoader` yielding such tensors.
+        `s.data.DataLoader` yielding such tensors. See also the
+        documentation below for `valid_metric`.
         The loss on validation data is computed each epoch; but
         `valid_data` is not shown to the model as part of back-
         propagation. Default: `None`.
-    $valid_crit$ (`Union(bool, function)`): If this is set to `True`
-        and `graph` is positive, then the model is validated for
-        accuracy on training data and the result is displayed
-        on the graph. If the targets are tensors of integers,
-        then we assume a classification problem and the accur-
-        acy is the proportion correct; with float targets, the
-        accuracy gauge is automatically set to r-squared.
-        Alternatively, one can set this to, for example,
-          `torch.nn.functional.l1_loss`,
-          `torch.nn.functional.mse_loss`, or
-          `du.lib._rmse_loss`.
+    $valid_metric$ (`Union[bool, function]`): If this is not `False`
+        and `graph` is positive then, using a metric, `model` is
+        validated, during training, on any data that is passed
+        via `valid_data` with the results displayed in real time
+        on a graph. The model is also validated on `train_data`;
+        and those results are also diplayed. If `valid_data` is
+        `None`, then `model` is only validated on training data
+        and only those results are diplayed.
+        The metric used for validation can be specified by pro-
+        viding it here; however, if the argument here is simply
+        `True`, then the metric is automatically `L1_loss` (i.e.,
+        mean absolute error) in the case that the targets of
+        `train_data` are floats (as in, for example, a regression
+        problem) or to the proportion of correct predictions if
+        those targets are integers (as in, e.g., a classifica-
+        tion problem).
+        Alternatively, `valid_metric` can be a function that maps
+        tuples of the form `(model(xss), yss)` to floats; though,
+        if `valid_data` as a dataloader, then the function should
+        output an average per example on batches.
+        For a regression problem, one could put
+          `valid_metric=torch.nn.functional.mse_loss`, or
+          `valid_metric=du.lib._rmse_loss`.
         The last option is equivalent to
-          `valid_crit=lambda xss, yss: torch.sqrt(`
-               `torch.nn.functional.mse_loss(xss, yss))`
-        More generally, this can be any function that maps `xss`,
-        `yss` to a float; though, if `valid_data` as a dataloader,
-        then the function should be an average loss on batches.
-        If `valid_data` is present, then model accuracy on it is
-        also gauged and displayed. Default: `True`.
-        Notes:
-        - To simply train the model as efficiently as possible,
-          set `graph = 0` which disables all validation.
-        - Or, set this to `False`, to disable all validation and
-          just graph (if, e.g., `graph = 1`) the loss.
+          `valid_metric=lambda xss, yss: torch.sqrt(`
+               `torch.nn.functional.mse_loss(xss, yss))`.
+        To use ~explained variance~ (r-squared) as the metric in
+        a regression problem, put
+          `valid_metric=_explained variance(yss_train, yss_test)`
+        where `yss_train` and `yss_test` are the targets of the
+        training and testing data.
+        Note that:
+        - r-squared may not be the best choice here for a var-
+          iety of reasons.
+        Also note that:
+        - to simply train the model as efficiently as possible,
+          set `graph = 0` which disables all validation;
+        - or, set `valid_metric=False`, to disable all validation
+          and just graph (if, e.g., `graph = 1`) the loss.
+        Default: `True`.
     $learn_params$
         (`Union[dict,LearnParam_, torch.optim.Optimizer]`): The
         training, or 'learning', hyperparameters in the form of
@@ -1180,9 +1199,9 @@ def train(model, crit, train_data, **kwargs):
         no GPU is found), or to -2 to override using a found
         GPU and instead use the CPU. Default: `(-1, -1)`.
     $args$ (`argparse.Namespace`): With the exception of `valid_data`
-        `valid_crit`, and this argument, all `kwargs` can be passed
-        in via attributes (of the same name) of an instance of
-        `argparse.Namespace`. Default: None.
+        `valid_metric`, and this argument, all `kwargs` can be
+        passed to `train` via attributes (of the same name) of an
+        instance of `argparse.Namespace`. Default: None.
 
         Note: arguments that are passed explicitly via their
         parameter above |override| any of those values passed via
@@ -1196,7 +1215,7 @@ def train(model, crit, train_data, **kwargs):
   # check and process kwargs
   du.utils._check_kwargs(kwargs,
       ['valid_data', 'learn_params', 'bs', 'epochs', 'graph',
-       'print_lines', 'verb', 'gpu', 'valid_crit', 'args'])
+       'print_lines', 'verb', 'gpu', 'valid_metric', 'args'])
   valid_data = kwargs.get('valid_data', None)
   args = kwargs.get('args', None)
   if args == None:
@@ -1212,7 +1231,7 @@ def train(model, crit, train_data, **kwargs):
   verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
   epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
-  valid_crit = kwargs.get('valid_crit', True)
+  valid_metric = kwargs.get('valid_metric', True)
   learn_params = kwargs.get( 'learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
           'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
@@ -1238,7 +1257,7 @@ def train(model, crit, train_data, **kwargs):
   data_dev = torch.device('cpu',0) # where the data lives
   if verb > 1:
     print(f'training on {model_dev} (data is on {data_dev})',end='')
-    if valid_crit and graph > 0: print(f'; validating on {valid_dev}')
+    if valid_metric and graph > 0: print(f'; validating on {valid_dev}')
     else: print()
 
   # is this what you want and where you want it
@@ -1289,23 +1308,21 @@ def train(model, crit, train_data, **kwargs):
     #if verb > 1: print(learn_params, end=', ')
     #if verb > 1: print('batchsize:', bs)
 
-  if isinstance(valid_crit, bool):
-    if valid_crit:
-      # Setup valid_crit according to whether this looks like a regression
+  if isinstance(valid_metric, bool):
+    if valid_metric:
+      # Setup valid_metric according to whether this looks like a regression
       # or a classification problem.
       for minibatch in train_data:
         if isinstance(minibatch[-1][0], FloatTensor):
-          #online_means_stdevs(train_data)
-          #valid_crit = lambda xss, yss:
-          valid_crit = nn.functional.l1_loss
+          valid_metric = nn.functional.l1_loss
         elif isinstance(minibatch[-1][0], IntTensor):
-          valid_crit = _batch2class_accuracy
+          valid_metric = _batch2class_accuracy
         else:
           raise RuntimeError('please specify a function to use for validation')
         break
   #else:
-  #  #assert isinstance(valid_crit, FunctionType)
-  #  valid_crit = _evaluate(model, dataloader, crit=valid_crit , device=device)
+  #  #assert isinstance(valid_metric, FunctionType)
+  #  valid_metric = _evaluate(model, dataloader, crit=valid_metric , device=device)
 
   if graph:
     import matplotlib.pyplot as plt # Don't import these until now in case
@@ -1318,21 +1335,21 @@ def train(model, crit, train_data, **kwargs):
     ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
 
-    if valid_crit:
-      if isinstance(valid_crit, FunctionType):
+    if valid_metric:
+      if isinstance(valid_metric, FunctionType):
         v_dation_train=functools.partial(  # this maps: model -> float
-            _evaluate, dataloader=train_data, crit=valid_crit, device=valid_dev)
-            #valid_crit, dataloader=train_data, device=valid_dev)
-      else: # then valid_crit is _explained_var
+            _evaluate, dataloader=train_data, crit=valid_metric, device=valid_dev)
+            #valid_metric, dataloader=train_data, device=valid_dev)
+      else: # then valid_metric is _explained_var
         # this alos maps: model -> float
-        v_dation_train = lambda model: len(train_data)*_evaluate(
-            model, dataloader=train_data, crit=valid_crit[0], device=valid_dev)
+        v_dation_train = lambda model:  1-len(train_data)*_evaluate(
+            model, dataloader=train_data, crit=valid_metric[0], device=valid_dev)
 
     # these will hold the losses and validations for train data
     losses = []
-    if valid_crit: v_dations = []
+    if valid_metric: v_dations = []
 
-    if valid_data and valid_crit:
+    if valid_data and valid_metric:
       # parse the validation data
       if isinstance(valid_data, torch.utils.data.DataLoader):
         if len(valid_data.dataset) == 0: valid_data = None
@@ -1344,12 +1361,12 @@ def train(model, crit, train_data, **kwargs):
         #just use the same batchsize as with training data
         valid_data = _DataLoader(valid_data, bs, shuffle = False)
 
-      if isinstance(valid_crit, FunctionType):
+      if isinstance(valid_metric, FunctionType):
         v_dation_valid=functools.partial(  # this maps:  model -> float
-            _evaluate, dataloader=valid_data, crit=valid_crit, device=valid_dev)
-      else:  # then valid_crit is _explained_var
-        v_dation_valid = lambda model: len(valid_data)*_evaluate(
-            model, dataloader=valid_data, crit=valid_crit[1], device=valid_dev)
+            _evaluate, dataloader=valid_data, crit=valid_metric, device=valid_dev)
+      else:  # then valid_metric is _explained_var
+        v_dation_valid = lambda model: 1-len(valid_data)*_evaluate(
+            model, dataloader=valid_data, crit=valid_metric[1], device=valid_dev)
       loss_valid = functools.partial(    # also maps:  model -> float
         _evaluate, dataloader=valid_data, crit=crit, device=valid_dev)
 
@@ -1417,7 +1434,7 @@ def train(model, crit, train_data, **kwargs):
             copy.deepcopy(model).to(valid_dev)
         model_copy.eval() # and check that this is what you want
 
-        if valid_crit:
+        if valid_metric:
           v_dations.append(v_dation_train(model_copy))
         # validate on valid_data
         if valid_data is not None:
@@ -1435,13 +1452,13 @@ def train(model, crit, train_data, **kwargs):
         ax2.clear()
         ax1.set_xlabel('epoch', size='larger')
         if valid_data:
-          ax1.set_ylabel('average loss (stipled)',size='larger')
+          ax1.set_ylabel('average loss (stippled)',size='larger')
         else:
           ax1.set_ylabel('average loss',size='larger')
         ax2.set_ylabel('validation',size='larger')
         xlim = range(xlim_start,len(losses)+1)
         loss_ys = np.array(losses[xlim_start-1:], dtype=float)
-        if valid_crit:
+        if valid_metric:
           v_dation_ys = np.array(v_dations[xlim_start-1:], dtype=float)
         if valid_data:
           losstest_ys = np.array(losses_valid[xlim_start-1:], dtype=float)
@@ -1462,7 +1479,7 @@ def train(model, crit, train_data, **kwargs):
         else:
           ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
           ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
-          if valid_crit:
+          if valid_metric:
             ax2.plot(xlim,v_dation_ys,color=blue_fc,lw=1.2,label='validation')
             ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
         len_valid_data = len(valid_data.dataset) if valid_data is not None else 0
@@ -1528,9 +1545,9 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         Default: `10`.
 
   Kwargs:
-    $valid_crit$ (`nn.Module`): The validation criterion to use
-        when gauging the accuracy of the model on test data.
-        If `None`, this is set to `crit`, the training criterion.
+    $valid_metric$ (`nn.Module`): The validation metric to use when
+        gauging the accuracy of the model on test data. If this is
+        `None`, then `crit`, the training criterion, is used.
         Default: `None`.
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the features; and the sec-
@@ -1563,10 +1580,10 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         its `k` validations.
   """
   #_this is cross_validate_train
-  du.utils._check_kwargs(kwargs,['k','valid_crit','cent_norm_feats',\
+  du.utils._check_kwargs(kwargs,['k','valid_metric','cent_norm_feats',\
       'cent_norm_targs','learn_params','bs','epochs','gpu','verb'])
   du.utils._catch_sigint()
-  valid_crit = kwargs.get('valid_crit', None)
+  valid_metric = kwargs.get('valid_metric', None)
   assert 2 <= len(train_data) <= 3, dedent("""\
       Argument train_data tuple must have length 2 or 3, not {}
   """.format(len(train_data)))
@@ -1588,7 +1605,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
   valids = torch.zeros(k) # this will hold the k validations
   chunklength = len(feats) // k
 
-  if not valid_crit: valid_crit = crit
+  if not valid_metric: valid_metric = crit
 
   # randomize
   indices = torch.randperm(len(feats))
@@ -1622,7 +1639,7 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
     if cent_targs: yss_test.sub_(yss_train_means)
     if norm_targs: yss_test.div_(yss_train_stdevs)
 
-    valids[idx//chunklength] = valid_crit(model(xss_test), yss_test)
+    valids[idx//chunklength] = valid_metric(model(xss_test), yss_test)
 
   return model, valids
 
@@ -1658,7 +1675,7 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         Default: `10`.
 
   Kwargs:
-    $valid_crit$ (`nn.Module`): The validation criterion to use
+    $valid_metric$ (`nn.Module`): The validation criterion to use
         when gauging the accuracy of the model on test data. If
         `None`, this is set to `crit`; i.e., the training criter-
         ion. Default: `None`.
@@ -1692,10 +1709,10 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         average of that model's `k` validations.
   """
   #_this is cross_validate
-  du.utils._check_kwargs(kwargs,['k','bail_after','valid_crit',\
+  du.utils._check_kwargs(kwargs,['k','bail_after','valid_metric',\
       'cent_norm_feats','cent_norm_targs','learn_params','bs',\
       'epochs','verb','gpu'])
-  valid_crit = kwargs.get('valid_crit', None)
+  valid_metric = kwargs.get('valid_metric', None)
   k = kwargs.get('k', 10)
   bail_after = kwargs.get('bail_after', 5)
   assert 2 <= len(train_data) <= 3, dedent("""\
@@ -1725,7 +1742,7 @@ def cross_validate(model, crit, train_data, k, **kwargs):
     print("warning: the first",k-1,"chunks have size",chunklength,\
         "but the last one has size",str(len(feats) % chunklength)+".")
 
-  if not valid_crit: valid_crit = crit
+  if not valid_metric: valid_metric = crit
 
   while no_improvement < bail_after:
 
@@ -1734,7 +1751,7 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         crit = crit,
         train_data = train_data,
         k = k,
-        valid_crit = valid_crit,
+        valid_metric = valid_metric,
         cent_norm_feats = cent_norm_feats,
         cent_norm_targs = cent_norm_targs,
         epochs = epochs,
@@ -1764,100 +1781,6 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         format(best_valids.mean().item(),best_valids.std().item()))
 
   return best_model, best_valids.mean()
-
-def optimize_ols(feats, **kwargs):
-  """Compute the optimal learning rate and, optionally, momen-
-  tum.
-
-  The returned values are only optimal (or even relevant) for
-  linear regression models; i.e. for linear models with MSE
-  loss.
-
-  Consider setting the verbosity to 1 so as to see the reports
-  on the following during opitmization:
-    - The condition number of A = X^T*X where X is the design
-      matrix.
-    - Check for sparseness of A when appropriate.
-
-  Args:
-    $feats$ (`torch.Tensor`): The features of the training data.
-
-  Kwargs:
-    $with_mo$ (`bool`): Optimize both the learning rate and the
-        momentum. Default: `True`.
-    $verb$ (`int`): Verbosity; 0 for silent, 1 to print details
-        of the optimization process including warnings concern-
-        ing numerical integrity. Put 2, to actually print out
-        X^T*X. Default: `0`.
-
-  Returns:
-    `dict`: A dictionary mapping either 'lr' to a float or, if
-        `with_mo` is `True`, so mapping both 'lr' and 'mo'.
-  """
-  du.utils._check_kwargs(kwargs,['with_mo','verb'])
-
-  #from scipy.linalg import eigh
-  from scipy.sparse.linalg import eigsh
-  from scipy.sparse import issparse
-
-  with_mo = kwargs.get('with_mo', True)
-  verb = kwargs.get('verb', 0)
-
-  problematic = False
-  if verb: print("optimizing:")
-
-  feats = torch.cat((torch.ones(len(feats),1), feats.to("cpu")), 1)
-
-  design_mat = feats.transpose(0,1).mm(feats)
-  if verb > 1: print(design_mat)
-  eigs, _ = torch.symeig(design_mat)
-  if not all(map(lambda x: x >= 0.0, eigs.tolist())):
-    if verb:
-      print('  warning: negative eigenvalues (most negative is {:.3g})'.\
-          format(min([x for x in eigs])))
-    problematic = True
-
-  if problematic:
-    from importlib.utils import find_spec
-    spec = find_spec('scipy.sparse')
-    if spec is None:
-      if verb: print('  warning: scipy.sparse not installed.')
-    else:
-      from scipy.sparse.linalg import eigsh
-      from scipy.sparse import issparse
-      if verb: print("  checking for sparseness ... ",end='')
-      feats = feats.numpy().astype('float64')
-      design_mat = feats.transpose() @ feats
-      is_sparse = issparse(design_mat)
-      if verb: print(is_sparse)
-      largest = eigsh(design_mat,1,which='LM',return_eigenvectors=False).item()
-      smallest=eigsh(design_mat,1,which='SA',return_eigenvectors=False,
-          sigma=1.0).item()
-  else:
-    eigs = eigs.tolist()
-    eigs_ = [0.0 if x < 0.0 else x for x in eigs]
-    if len(eigs_) < len(eigs) and verb:
-      print('lopped off non-positive eig. vals.')
-    largest = max(eigs_)
-    smallest = min(eigs_)
-
-  if (smallest != 0):
-    if verb: print("condition number: {:.3g}".format(largest/smallest))
-  else:
-    if verb: print("condition number: infinite")
-
-  if not with_mo:
-    learning_rate = 2/(smallest + largest)
-    momentum = 0.0
-  else:
-    learning_rate = (2/(smallest**0.5+largest**0.5))**2
-    momentum = ((largest**0.5-smallest**0.5)/(largest**0.5+smallest**0.5))**2
-
-  if with_mo:
-    return_dict = {'lr': learning_rate, 'mo': momentum}
-  else:
-    return_dict = {'lr': learning_rate}
-  return return_dict
 
 def class_accuracy(model, data, **kwargs):
   """Return the classification accuracy.
@@ -2019,34 +1942,41 @@ def _sum_square_div(yhatss, yss, denom=1.0):
   diffs = yhatss - yss
   return (diffs * diffs).sum() / denom
 
-def _explained_var(yss_train, yss_test=None):
-  """help compute explained variation (variance, actually).
+def _explained_var(yss_train, yss_test=None, gpu = (-1,)):
+  """helper to compute explained variation (i.e., variance).
 
   Something like this is necessary if one wants to compute the
   coefficient of determination (r_squared) on dataloaders (so
-  batchwise).
+  batchwise, in an online fashion).
 
   Note: this is not that useful as a metric.
 
   But, if you really want to look at this, then call the `train`
   function like this:
+
   `model = train(`
       ...
-      valid_crit = _explained_var(yss_train, yss_test),
+      `valid_metric = _explained_var(yss_train, yss_test),`
       ...
   `)`
-
   """
-  train_r2 = lambda yhatss, _: _sum_square_div(
-      yhatss, yss_train.mean(0), _sum_square_div(yss_train, yss_train.mean(0)))
+  yss_train = yss_train.to(du.utils.get_device(gpu[0]))
+  yss_test = yss_test.to(du.utils.get_device(gpu[-1]))
+  train_r2 = lambda yhatss, yss: _sum_square_div(
+      yhatss, yss, _sum_square_div(yss_train, yss_train.mean(0)))
   #train_r2 = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_train*yss_train).sum()
   if yss_test is not None:
-    test_r2 = lambda yhatss, _: _sum_square_div(
-        yhatss, yss_train.mean(0), _sum_square_div(yss_test, yss_train.mean(0)))
+    test_r2 = lambda yhatss, yss: _sum_square_div(
+        yhatss, yss, _sum_square_div(yss_test, yss_test.mean(0)))
     #test_r2 = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_test*yss_test).sum()
   else:
     test_r2 = None
   return train_r2, test_r2
+
+def loader2r_squared(model, loader):
+  """Return the expected varaition.
+
+  """
 
 def r_squared(yhatss, yss, **kwargs):
   """Compute r_squared.
@@ -2056,14 +1986,14 @@ def r_squared(yhatss, yss, **kwargs):
   holding the `yhatss` (the predicted outputs) and the other hol-
   ding the true outputs, `yss`.
 
-  Note: `yhatss` and `yss` - or `model`, `xss`, and `yss` if the second
-  option (see below) is used - are each moved in place to the
-  to the device determined by `gpu`.
-
   Args:
     $model$ (`nn.Module`): The trained model.
-    $data$ (`Union(Tuple[Tensor]), DataLoader): Either a tuple of
-        tensors
+    $data$ (`Union(Tuple[Tensor], DataLoader)`): Either a tuple of
+        tensors `(xss, yss)` where `xss` are the features of the
+        data and `yss` (assumed to be of shape len(yss) by 1) are
+        the targets or an instance of `torch.data.utils.DataLoad`
+        `er` that yields such tuples.
+
     $yhatss$ (`torch.Tensor`): Either the predicted outputs (assum-
         ed to be of shape `(len(yhatss), 1)` (which is often just
         `model(xss)`) or a tuple of the form `(model, xss)`; use
@@ -2126,6 +2056,100 @@ def r_squared(yhatss, yss, **kwargs):
   SS_T=len(yss)*ave_sum_squares(yss,yss.mean(0)*torch.ones(len(yss)).to(device))
   if return_error: return (SS_E/SS_T).item()
   else: return 1.0-(SS_E/SS_T).item()
+
+def optimize_ols(feats, **kwargs):
+  """Compute the optimal learning rate and, optionally, momen-
+  tum.
+
+  The returned values are only optimal (or even relevant) for
+  linear regression models; i.e. for linear models with MSE
+  loss.
+
+  Consider setting the verbosity to 1 so as to see the reports
+  on the following during opitmization:
+    - The condition number of A = X^T*X where X is the design
+      matrix.
+    - Check for sparseness of A when appropriate.
+
+  Args:
+    $feats$ (`torch.Tensor`): The features of the training data.
+
+  Kwargs:
+    $with_mo$ (`bool`): Optimize both the learning rate and the
+        momentum. Default: `True`.
+    $verb$ (`int`): Verbosity; 0 for silent, 1 to print details
+        of the optimization process including warnings concern-
+        ing numerical integrity. Put 2, to actually print out
+        X^T*X. Default: `0`.
+
+  Returns:
+    `dict`: A dictionary mapping either 'lr' to a float or, if
+        `with_mo` is `True`, so mapping both 'lr' and 'mo'.
+  """
+  du.utils._check_kwargs(kwargs,['with_mo','verb'])
+
+  #from scipy.linalg import eigh
+  from scipy.sparse.linalg import eigsh
+  from scipy.sparse import issparse
+
+  with_mo = kwargs.get('with_mo', True)
+  verb = kwargs.get('verb', 0)
+
+  problematic = False
+  if verb: print("optimizing:")
+
+  feats = torch.cat((torch.ones(len(feats),1), feats.to("cpu")), 1)
+
+  design_mat = feats.transpose(0,1).mm(feats)
+  if verb > 1: print(design_mat)
+  eigs, _ = torch.symeig(design_mat)
+  if not all(map(lambda x: x >= 0.0, eigs.tolist())):
+    if verb:
+      print('  warning: negative eigenvalues (most negative is {:.3g})'.\
+          format(min([x for x in eigs])))
+    problematic = True
+
+  if problematic:
+    from importlib.util import find_spec
+    spec = find_spec('scipy.sparse')
+    if spec is None:
+      if verb: print('  warning: scipy.sparse not installed.')
+    else:
+      from scipy.sparse.linalg import eigsh
+      from scipy.sparse import issparse
+      if verb: print("  checking for sparseness ... ",end='')
+      feats = feats.numpy().astype('float64')
+      design_mat = feats.transpose() @ feats
+      is_sparse = issparse(design_mat)
+      if verb: print(is_sparse)
+      largest = eigsh(design_mat,1,which='LM',return_eigenvectors=False).item()
+      smallest=eigsh(design_mat,1,which='SA',return_eigenvectors=False,
+          sigma=1.0).item()
+  else:
+    eigs = eigs.tolist()
+    eigs_ = [0.0 if x < 0.0 else x for x in eigs]
+    if len(eigs_) < len(eigs) and verb:
+      print('lopped off non-positive eig. vals.')
+    largest = max(eigs_)
+    smallest = min(eigs_)
+
+  if (smallest != 0):
+    if verb: print("condition number: {:.3g}".format(largest/smallest))
+  else:
+    if verb: print("condition number: infinite")
+
+  if not with_mo:
+    learning_rate = 2/(smallest + largest)
+    momentum = 0.0
+  else:
+    learning_rate = (2/(smallest**0.5+largest**0.5))**2
+    momentum = ((largest**0.5-smallest**0.5)/(largest**0.5+smallest**0.5))**2
+
+  if with_mo:
+    return_dict = {'lr': learning_rate, 'mo': momentum}
+  else:
+    return_dict = {'lr': learning_rate}
+  return return_dict
 
 if __name__ == '__main__':
   import inspect
