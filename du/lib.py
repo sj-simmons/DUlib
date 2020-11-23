@@ -546,56 +546,79 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   else:
     return xss
 
-def online_means_stdevs(data, batchsize=1, *transforms_):
+def online_means_stdevs(data, *transforms_, batchsize=1):
   """Online compute the means and standard deviations of data.
 
   Args:
-    $data$ (`Union[tensor, DataLoader]`): Either a tensor whose 1st
-        dimension indexes the examples of the data or an inst-
-        ance of `torch.utils.data.DataLoader` that yields mini-
-        batches of examples.
+    $data$ (`Union[Tuple[tensor], DataLoader]`): Either a tuple of
+        tensors each of whose first dimension indexes the exam-
+        ples of the data or an instance of `torch.utils.data.`
+        `DataLoader` that yields minibatches of such tuples.
     $batchsize$ (`int`): If `data` is a tensor, then an instance of
         `DataLoader` is created with this `batchsize`. If `data` is
         already an instance of `DataLoader`, this argument is ig-
         nored. Default: `1`.
     $transforms$ (`Tuple[torchvision.transforms]`): If you wish to
         compute means and stdevs of augmented data, consider
-        defining an apropriate instance of `DataLoader`. But, if
-        you really want to, you can include transformations via
-        this parameter.
+        defining an appropriate instance of `DataLoader` and add-
+        ing your transformation to that; but, you can include
+        as many transformations as you wish so long as data is
+        a tuple of length 1 or a dataloader yielding those.
 
   Returns:
-    `Tuple[torch.Tensor]`. A tuple the first tensor of which is
-        means (over the first dim. of `data`) and the second of
-        which is the standard deviations.
+    `Tuple[Tuple[torch.Tensor]]`. A tuple the first tuple of
+        which is (means, stdevs) of the first tensor in `data`,
+        the second tuple of which is (means, stdevs) of second
+        tensor, etc.
 
   Examples:
 
+  Pass just a tensor:
   >>> data = torch.arange(100.).view(50,2)
-  >>> online_means_stdevs(data)
+  >>> stats, = online_means_stdevs((data,))
+  >>> means, stdevs = stats
+  >>> means, stdevs
   (tensor([49., 50.]), tensor([28.8617, 28.8617]))
 
+  Add a simple transformation:
+  >>> import torchvision.transforms as T
+  >>> online_means_stdevs((data,), T.Lambda(lambda xss: xss+100))
+  ((tensor([ 99., 100.]), tensor([57.7321, 57.7321])),)
+
+  Now wrap the tensor in a DataLoader instance:
   >>> dataset = torch.utils.data.TensorDataset(data)
   >>> loader = torch.utils.data.DataLoader(dataset, batch_size=25)
-  >>> online_means_stdevs(loader)
+  >>> (means, stdevs), = online_means_stdevs(loader)
+  >>> means, stdevs
   (tensor([49., 50.]), tensor([28.8617, 28.8617]))
 
+  With a batchsize that doesn't divide the no. of examples:
   >>> loader = torch.utils.data.DataLoader(dataset, batch_size=37)
   >>> online_means_stdevs(loader)
-  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
+  ((tensor([49., 50.]), tensor([28.8617, 28.8617])),)
 
+  With batchsize=1:
   >>> loader = torch.utils.data.DataLoader(dataset, batch_size=1)
   >>> online_means_stdevs(loader)
-  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
+  ((tensor([49., 50.]), tensor([28.8617, 28.8617])),)
 
-  >>> feats = (torch.arange(100.).view(50,2)
+  With two tensors simultaneously:
+  >>> feats = torch.arange(100.).view(50,2)
   >>> targs = torch.arange(50.).view(50,1)
   >>> feats_stats, targs_stats = online_means_stdevs((feats, targs))
   >>> feats_stats
-  (tensor([49., 50.],), tensor([28.8617, 28.8617]),
+  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
   >>> targs_stats
-  (tensor([28.8617, 28.8617]))
+  (tensor([24.5000]), tensor([14.4309]))
 
+  Using a dataloader
+  >>> dataset = torch.utils.data.TensorDataset(feats, targs)
+  >>> loader = torch.utils.data.DataLoader(dataset, batch_size=17)
+  >>> feats_stats, targs_stats = online_means_stdevs(loader)
+  >>> feats_stats
+  (tensor([49., 50.]), tensor([28.8617, 28.8617]))
+  >>> targs_stats
+  (tensor([24.5000]), tensor([14.4309]))
   """
   #Notes:
   #  - This works on one channel (image) data
@@ -609,38 +632,68 @@ def online_means_stdevs(data, batchsize=1, *transforms_):
   #  - a passed loader batchsize overrides arg batchsize
   #  - adjust so last batch can be smaller ... DONE
 
-  if isinstance(data, torch.Tensor):
+  if isinstance(data, tuple) and all(isinstance(x, torch.Tensor) for x in data):
     loader = torch.utils.data.DataLoader(
-        dataset = torch.utils.data.TensorDataset(data),
+        dataset = torch.utils.data.TensorDataset(*data),
         batch_size = batchsize,
         num_workers = 0)
   else:
-    assert isinstance(data, torch.utils.data.DataLoader),'data must be a ten'+\
-        'sor or an instance of torch.utils.data.DataLoader yielding (minibat'+\
-        'ches of) tensors'
-    if transforms_!=():\
-        'Warning: best practice is to put transforms in your dataloader'
+    assert isinstance(data, torch.utils.data.DataLoader),\
+        du.utils._markup(dedent("""
+            `data` must be a tuple of tensors or an instance of
+            torch.utils.data.DataLoader yielding mini-batches of
+            such tuples."""))
+    if transforms_!=():
+      print(du.utils._markup('$warning$ (from online_means_stdevs):'), end=' ')
+      print(du.utils._markup(
+          '|best practice is to put transforms in a dataloader|'))
     loader = data
     batchsize = loader.batch_size
 
-  transforms_ = [torchvision.transforms.Lambda(lambda xs: xs)]+list(transforms_)
-
-  # batch update the means and variances
-  means = torch.zeros(loader.dataset[0][0].size()) # BxHxW
-  variances = torch.zeros(loader.dataset[0][0].size()) # BxHxW
-  m = 0
-  for transform in transforms_:
-    for xss in loader: # loader kicks out tuples; so do
-      batch = transform(xss[0])  # <-- this; xs is now a BxHxW tensor
-      batchsize = len(batch)
-      prev_means = means
-      batch_means = batch.mean(0)
-      denom = m+batchsize
-      means = (m*means + batchsize*batch_means)/denom
-      variances = m*variances/denom + batchsize*batch.var(0,False)/denom+\
-          m*batchsize/(denom**2)*(prev_means - batch_means)**2
+  # initialize all the means and variances
+  statss = []
+  for batch in loader:
+    for tensor in batch:
+      means = torch.zeros(tensor[0].size()) # BxHxW
+      variances = torch.zeros(tensor[0].size()) # BxHxW
+      statss.append([means, variances])
+    break
+  if transforms_ != ():
+    assert len(loader.dataset[0]) == 1, du.utils._markup(dedent("""
+        If `data` is a tuple of tensors, transforms can only be used when `data`
+        is a tuple consisting of a single tensor. Consider breaking up your
+        data and calling this on individual pieces or use a dataloader that
+        that includes your transforms."""))
+    transforms_ = [torchvision.transforms.Lambda(lambda xs: xs)]+list(transforms_)
+    # batch update the means and variances
+    m = 0
+    for transform in transforms_:
+      for xss in loader: # loader kicks out tuples; so do
+        xss = transform(xss[0])  # <-- this; xs is now a BxHxW tensor
+        batchsize = len(xss)
+        prev_means = statss[0][0]
+        batch_means = xss.mean(0)
+        denom = m + batchsize
+        statss[0][0] = (m*statss[0][0] + batchsize*batch_means)/denom
+        statss[0][1] = m*statss[0][1]/denom + batchsize*xss.var(0,False)/denom \
+            + m*batchsize/(denom**2)*(prev_means - batch_means)**2
+        m += batchsize
+    statss[0][1].pow_(0.5)
+  else:
+    m = 0
+    for minibatch in loader:
+      batchsize = len(minibatch[0])
+      prev_means = [item[0] for item in statss]
+      batch_means = [xss.mean(0) for xss in minibatch]
+      denom = m + batchsize
+      for stats, xss, prev_mean, batch_mean in \
+          zip(statss, minibatch, prev_means, batch_means):
+        stats[0] = (m*stats[0] + batchsize*batch_mean)/denom
+        stats[1] = m*stats[1]/denom + batchsize*xss.var(0,False)/denom \
+            + m*batchsize/(denom**2)*(prev_mean - batch_mean)**2
       m += batchsize
-  return means, variances.pow(0.5)
+    [stats[1].pow_(0.5) for stats in statss]
+  return tuple(tuple(x) for x in statss)
 
 def coh_split(prop, *args, **kwargs):
   """Coherently randomize and split tensors.
