@@ -7,61 +7,84 @@ trained models.
 
 `QUICK SIGNATURES`
 
-  |center|       mean-center `xss`; returns `(tensor, tensor)`
-    ($xss$,        -tensor to center w/r to its 1st dimension
-     $shift_by$ = `None`)
-                 -first returned tensor has column means `new_`
-                  `centers`; default is `new_centers` being zeros.
-
-  |normalize|    normalize `xss`; returns `(tensor, tensor)`
-    ($xss$,        -tensor to normalize w/r to its 1st dimension
-     $scale_by$ = `None`,
-                 -first tensor returned will now have columns
-                  with st. devs `new_widths`; default is `new_`
-                  `widths` being all ones.
-     $unbiased$ = `True`)
-                 -use n-1 instead of n in the denominator when
-                  computing the standard deviation.
+  ~data related tools:~
 
   |coh_split|    randomize and coherently split each tensor in
-                 `*args`; returns `Tuple[tensor]`
+               `*args`; returns `Tuple[tensor]`
     ($prop$,       -split like `prop`, 1 - `prop`
      $*args$,      -each of these tensors are split into two
      $randomize$ = `True`)
                  -whether to randomize before splitting.
 
+  |center|       mean-center `xss`; returns `(tensor, tensor)`
+    ($xss$,        -tensor to center w/r to its 1st dimension
+     $shift_by$ = `None`)
+                 -the first returned tensor is `xss` with its
+                  columns shifted according to `shift_by`; the
+                  default leads to `shift_by` = `xss.means(0)`;
+                  i.e. mean-centering `xss`.
+
+  |normalize|    normalize `xss`; returns `(tensor, tensor)`
+    ($xss$,        -tensor to normalize w/r to its 1st dimension
+     $scale_by$ = `None`,
+                 -first tensor returned will now have columns
+                  scaled according to `scale_by`; default leads
+                  to dividing each entry in a column by that
+                  columns st. dev. but leaving unchanged any
+                  column with st. deviation close to 0.
+     $unbiased$ = `True`)
+                 -use n-1 instead of n in the denominator when
+                  computing the standard deviation.
+
+  |online_means_stdevs|
+                 -compute the means and stdevs of large or aug-
+                  mented datasets; returns a tuple of tupled
+                  pairs of tensors.
+    ($data$,       -a pair `(xss, yss)` of tensors or a dataloader
+     $transforms_$,-any number of augmentations of the data
+     $batchsize=1$)-the online computation is done this many exa-
+                  mples at a time.
+
+  ~tools for training:~
+
   |train|        return `model` trained using SGD;
     ($model$,      -the instance of `nn.Module` to be trained
      $crit$,       -the criterion for assessing the loss
-     $train_data$,
-                 -either a tuple `(train_feats, train_targs)` or
+     $train_data$, -either a tuple `(train_feats, train_targs)` or
                   `(train_feats, train_lengths, train_targs)`;
                   passing `train_lengths` or, below, `test_lengths`
-                  is likely only relevant for recurrent nets.
+                  is only relevant for certain recurrent nets.
+                  This can also be a dataloader yielding tuples
+                  as above.
      $valid_data$ = `None`,
-                 -either `(test_feats, test_targs)` or
-                  `(test_feats, test_lengths, train_targs)`
-     $valid_metric$ = `True`)
+                 -either `(valid_feats, valid_targs)` or
+                  `(valid_feats, valid_lengths, valid_targs)`;
+                  or a dataloader yielding such tuples.
+     $valid_metric$ = `True`,
                  -function determining how the model is valida-
-                  ted w/r to `valid_data`. The default results in
-                  using `r_squared` for regression and `class_accu`
-                  `racy` for classification.
+                  ted w/r to `valid_data`. The default, `True`, re-
+                  sults in using `explained_var` for regression
+                  and `class_accuracy` for classification.
      $learn_params$ = `{'lr': 0.1}`,
                  -a `dict` of the form `{'lr': 0.1,'mo': 0.9}` or
                   `{'lr': 0.1}`, or an instance of `LearnParams_`,
                   or an instance of `torch.optim.Optimizer`.
      $bs$ = `-1`,    -the mini-batch size; -1 is (full) batch
      $epochs$ = `10`,-train for this many epochs
-     $graph$ = `0`,  -put 1 (or more) to show graph when training
+     $graph$ = `0`,  -put 1 or greater to show graph when training
      $print_lines$ = `(7,8)`,
                  -print 7 beginning lines and 8 ending lines;
                   put -1 to disable compressed printing.
      $verb$ = `2`,   -verbosity; 3 for more, 1 for less, 0 silent
-     $gpu$ = `-1`,   -the gpu to run on, if any are available; if
+     $gpu$ = `(-1,)`,-the gpu to run on, if any are available; if
                   none available, use the cpu; put -1 to use
                   the last gpu if multiple ones found; put -2
                   to override found gpu(s) and use the cpu.
                   Consider just accepting the default here.
+     $args$ = `None`)-an instance of `argparse.Namespace` by which one
+                  pass in arguments for most of the parameters
+                  above. This argument is typically created us-
+                  ing `du.utils.standard_args`.
 
   |cross_validate_train|
     ($model$, $crit$, $train_data$, $k$, $**kwargs$)
@@ -69,8 +92,8 @@ trained models.
      it iterates fold-wise, validating on the `k` possible test
      sets, and returns the partially trained (for 1 epoch, by
      default) model; consider using `cross_validate` instead of
-     calling this directly; the arguments are the same as those
-     for `cross_validate`, but without `bail_after`.
+     calling this directly; the parameters are the same as for
+     `cross_validate` but without `bail_after`.
 
   |cross_validate| return `model` cross-validate trained tupled
                  with the mean (`float`) of `model`'s validations
@@ -104,23 +127,45 @@ trained models.
                  erride found gpu(s) and use the cpu.  Consider
                  just accepting the default here.
 
+  |optimize_ols|  find optimal training hyper-parameters; returns
+                a dict with keys 'lr' and 'mo'
+    ($feats$,     -the `xss` for the data set
+     $with_mo$ = `True`
+                -if `False` just returns optimal learning rate
+     $verb$ = `0`)  -default is silence; put 1 to include warnings,
+                 and 2 to actually print out X^T*X where X is
+                 the design matrix
+
+  |LearnParams_|  base class for defining learning parameters
+    ($lr$ = `0.1`)  -we need at least a learning rate
+
+  |Momentum|      subclass of `LearnParams_`, an instance of which
+                adds momentum to gradient descent
+    ($model$,     -model instance to which to add momentum
+     $lr$ = `0.01`, -the desired learning rate
+     $mo$ = `0.9`)  -the desired momentum
+
+  |copy_parameters| helper for sub-classing `LearnParams_`
+    ($model$)     -copy the parameters of `model`
+
+  ~evaluation metrics:~
+
   |class_accuracy| compute the proportion correct for a classifi-
                  cation problem; returns `float`.
-    ($prob_dists$,-these are the predictions of the model in the
-                 form of a tensor (of shape `(n,m)`) of discrete
-                 probability dists; this is normally just `mod-`
-                 `el(test_feats)` or `model(train_feats)`
-     $yss$        -a tensor of shape `(n)` holding the correct
-                 classes
-     $classes$,   -a tensor of shape `(n)` holding the possible
-                 classes; normally this is `torch.arange(10)`, if
-                 there are say 10 things being classified
-     $class2name$ = `None`)
+    ($model$,     -a (partially) trained model.
+     $data$,      -either a tuple `(xss, yss)` or a dataloader.
+     $classes$ = `None`,
+                -a tensor of shape `(n)` holding the possible
+                 classes; normally this is `torch.arange(10)`
+                 if there are say 10 things being classified.
+     $class2name$ = `None`,
                 -a dict mapping `int`s representing the classes
                  to the corresponing descriptive name (`str`)
      $show_cm$ = `False`,
                 -display the confusion matrix       -
-     $gpu$ = `-1`,  -run on the fastest device, by default
+     $gpu$ = `-1`,  -run on the fastest device, by default.
+     $color$ = `True`)
+                -whether to colorize the confusion matrix.
 
   |r_squared|     return (`float`) the coefficient of determination
     ($yhatss$,    -either a trained model's best guesses (so of-
@@ -131,27 +176,6 @@ trained models.
      $yss$,       -the actual targets
      $gpu$ = `-1`,  -run on the fastest device, by default
      $return_error$ = `False`)
-
-  |optimize_ols|  find optimal training hyper-parameters; returns
-                a dict with keys 'lr' and 'mo'
-    ($feats$,     -the `xss` for the data set
-     $with_mo$ = `True`
-                -if `False` just returns optimal learning rate
-     $verb$ = `0`)  -default is silence; put 1 to include warnings,
-                 and 2 to actually print out X^T*X where X is
-                 the design matrix
-
-  |copy_parameters| helper for sub-classing `LearnParams_`
-    ($model$)     -copy the parameters of `model`
-
-  |LearnParams_|  base class for defining learning parameters
-    ($lr$ = `0.1`)  -we need at least a learning rate
-
-  |Momentum|      subclass of `LearnParams_`, an instance of which
-                adds momentum to gradient descent
-    ($model$,     -model instance to which to add momentum
-     $lr$ = `0.01`, -the desired learning rate
-     $mo$ = `0.9`)  -the desired momentum
 
                     _____________________
 """
@@ -280,22 +304,24 @@ def center(xss, shift_by = None):
 
   With this you can rigidly translate data. The first dimen-
   sion of `xss` should be the index parameterizing the examples
-  in the data. Suppose, for example, that we wish to translate
-  a random point cloud in the plane so that it is centered at
-  the origin:
+  in the data.
 
-  A point cloud indexed by dim 0:
+  Suppose, for example, that we wish to translate a point-cloud
+  in the plane so that it is centered at the origin:
+
+  A randomly generated point-cloud indexed by dim 0:
   >>> `xss = torch.rand(100,2)`
 
-  Let's center it:
+  Let us now center it:
   >>> `xss, _ = center(xss)`
 
-  And check that it is centered:
+  And check that it is centered (at the origin):
   >>> `torch.all(torch.lt(torch.abs(xss.mean(0)),1e-5)).item()`
   1
 
   If `new_centers` is `None`, then `center` simply mean-centers the
-  data:
+  data (i.e., rigidly translates the data so that it is 'balan-
+  ced' with repect to the origin):
 
   >>> `xss = torch.arange(2400.).view(100, 2, 3, 4)`
   >>> `means = center(xss)[0].mean(0)`
@@ -315,7 +341,7 @@ def center(xss, shift_by = None):
         sions of which is one less than that of `xss` and whose
         shape is in fact `(d_1,`...`,d_n)` where `xss` has as its
         shape `(d_0, d_1,`...`,d_n)`. The default is `None` which is
-        equivalent to `shift_by` being the `xss.mean(0)`.
+        equivalent to `shift_by` being `xss.mean(0)`.
         The first returned tensor is `xss` with the `(i_1,`...`,i_n)`
         entry of `shift_by` subtracted from the `(j, i_1,`...`,i_n)`
 	entry of `xss`, `0 <= j < d_0`.
@@ -328,7 +354,7 @@ def center(xss, shift_by = None):
         the means of the original data `xss` with respect to the
         first dimension.
 
-  More Examples:
+  More examples and tests:
   >>> `xss = torch.arange(12.).view(3,4)`
   >>> `xss`
   tensor([[ 0.,  1.,  2.,  3.],
@@ -343,8 +369,6 @@ def center(xss, shift_by = None):
   >>> `int(torch.all(torch.eq(xss, xss_)).item())`
   1
 
-  You can shift the center of the data arbitrary by specifying
-  `shift_by` appropriately.
   >>> `xss = torch.arange(12.).view(3,2,2)`
   >>> `xss_, xss_means = center(xss)`
   >>> `xss_means.shape`
@@ -359,7 +383,7 @@ def center(xss, shift_by = None):
   else:
     return xss - shift_by, xss.mean(0)
 
-def normalize(xss, scale_by = None, unbiased = True):
+def normalize(xss, scale_by = None, **kwargs):
   """Normalize data without dividing by zero.
 
   See the documentation for the function `center`. This function
@@ -369,21 +393,29 @@ def normalize(xss, scale_by = None, unbiased = True):
   More precisely, let `(d0, d1,`...`, dn)` denote the shape of `xss`.
   In case `scale_by` is not `None`, then the `(i0, i1,` ..., `in)` ent-
   ry of `xss` is divided by the `(i1, i2,`..., `in)` entry of `scale_`
-  `by` unless that entry `scale_by` is (nearly) 0, in which case
-  the `(i0, i1,` ...`, in)` of `xss` is left unchanged.
+  `by` unless that entry of `scale_by` is (nearly) 0, in which case
+  the `(i0, i1,` ...`, in)` entry of `xss` is left unchanged. In oth-
+  er words, column of `xss` whose standard deviation is essent-
+  ially zero are left alone; the others are normalized so that
+  their standard deviation is 1.0.
 
   The default, `scale_by=None` is equivalent to setting `scale_by=`
   `xss.std(0)` and leads to the first returned tensor being `xss`
-  scaled so that its 'columns' have standard deviation 1.
+  scaled so that its 'columns' have standard deviation 1 (or left
+  alone, if that column has tiny standard deviation).
 
   Args:
-    $xss$ (`torch.Tensor`) A tensor whose entries, when thought of
+    $xss$ (`torch.Tensor`) A tensor whose columns, when thought of
         as being indexed by its first dimension, is to be norm-
         alized.
     $scale_by$ (`torch.Tensor`) A tensor of shape `xss.shape[1:]`.
+  Kwargs:
     $unbiased$ (`bool`): If unbiased is `False`, divide by `n` instead
         of `n-1` when computing the standard deviation. Default:
         `True`.
+    $threshold$ (`float`): Threshold within which the st. dev. of
+        a column is considered too close to zero to divide by.
+        Default: `1e-6`.
 
   Returns:
     `(torch.Tensor, torch.Tensor)`. A tuple of tensors the first
@@ -404,7 +436,7 @@ def normalize(xss, scale_by = None, unbiased = True):
   tensor([[0.4000, 0.8000, 1.2000],
           [2.4000, 2.8000, 3.2000]])
 
-  The stand. devs the original columns:
+  The stand. devs of the original columns:
   >>> `xss_stdevs`
   tensor([2.5000, 2.5000, 2.5000])
 
@@ -413,7 +445,7 @@ def normalize(xss, scale_by = None, unbiased = True):
   >>> `xss_stdevs`
   tensor([1., 1., 1.])
 
-  More examples:
+  More tests and examples:
   >>> `xss = torch.tensor([[1.,2,3], [6,100,-11]])`
   >>> `xss.std(0)`
   tensor([ 3.5355, 69.2965,  9.8995])
@@ -427,9 +459,11 @@ def normalize(xss, scale_by = None, unbiased = True):
   tensor([ 1.2500, 24.5000,  3.5000])
 
   >>> `xss = torch.tensor([[1., 2, 3], [1, 7, 3]])`
-  >>> `xss, _ = normalize(xss, unbiased = False)`
+  >>> `xss, stdevs = normalize(xss, unbiased = False)`
   >>> `xss`
   tensor([[1.0...
+  >>> `stdevs`
+  tensor([0.0...
   """
   # add and assert checking that scale_by is right dim.
   #xss_stdevs = xss.std(0, unbiased)
@@ -442,6 +476,9 @@ def normalize(xss, scale_by = None, unbiased = True):
   #else:
   #  new_xss = xss.div(xss_stdevs_no_zeros)
   #return new_xss, xss_stdevs
+  du.utils._check_kwargs(kwargs,['unbiased', 'threshold'])
+  unbiased = kwargs.get('unbiased',True)
+  threshold = kwargs.get('unbiased',1e-6)
   if scale_by is None:
     xss_stdevs = xss.std(0, unbiased)
     xss_stdevs_no_zeros = xss_stdevs.clone()
@@ -538,32 +575,38 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   #      stdevs.shape == torch.Size([1]) + xss.shape[1:]
   if isinstance(means,torch.Tensor):
     if  isinstance(stdevs,torch.Tensor):
-      return normalize(center(xss, means)[0], stdevs, unbiased)[0]
+      return normalize(center(xss, means)[0], stdevs, unbiased=unbiased)[0]
     elif stdevs is None:
       return center(xss, means)[0]
   elif isinstance(stdevs, torch.Tensor):
-    return normalize(xss, stdevs, unbiased)[0]
+    return normalize(xss, stdevs, unbiased=unbiased)[0]
   else:
     return xss
 
 def online_means_stdevs(data, *transforms_, batchsize=1):
   """Online compute the means and standard deviations of data.
 
+  Here 'online' means that the examples housed in `data` are tak-
+  en `batchsize` at time when computing the means and standard
+  deviations. Hence, the `data` need not fit in memory; likewise,
+  examples augmented by `transforms_` need not be pre-written to
+  the filesystem.
+
   Args:
     $data$ (`Union[Tuple[tensor], DataLoader]`): Either a tuple of
         tensors each of whose first dimension indexes the exam-
         ples of the data or an instance of `torch.utils.data.`
         `DataLoader` that yields minibatches of such tuples.
-    $batchsize$ (`int`): If `data` is a tensor, then an instance of
-        `DataLoader` is created with this `batchsize`. If `data` is
-        already an instance of `DataLoader`, this argument is ig-
-        nored. Default: `1`.
-    $transforms$ (`Tuple[torchvision.transforms]`): If you wish to
+    $transforms_$ (`Tuple[torchvision.transforms]`): If you wish to
         compute means and stdevs of augmented data, consider
         defining an appropriate instance of `DataLoader` and add-
         ing your transformation to that; but, you can include
         as many transformations as you wish so long as data is
         a tuple of length 1 or a dataloader yielding those.
+    $batchsize$ (`int`): If `data` is a tensor, then an instance of
+        `DataLoader` is created with this `batchsize`. If `data` is
+        already an instance of `DataLoader`, this argument is ig-
+        nored. Default: `1`.
 
   Returns:
     `Tuple[Tuple[torch.Tensor]]`. A tuple the first tuple of
@@ -1000,38 +1043,6 @@ def _evaluate(model, dataloader, crit, device):
         *map(lambda x: x.to(device), minibatch[:-1])), minibatch[-1].to(device))
     #num_examples += len(minibatch[0])
   return accum_loss/len(dataloader)
-
-def _batch2class_accuracy(probdists, yss):
-  """Return the proportion correctly classified.
-
-  Args:
-    $prob_dists$ (`torch.Tensor`): A tensor of dimension 2 holding,
-        for each example, the probability distribution predict-
-        ing the correct class. The first dimension must index
-        the examples. This argument is, then, the predictions,
-        in the form of probability distributions, made by a mo-
-        del when fed the features of some set of examples. This
-        should often be just `model(xss)`, for example.
-    $yss$ (`IntTensor`): A 1-dimensional tensor holding the cor-
-        rect class (as some flavor of an `int`) for each example.
-
-  Returns:
-    `float`. The proportion of examples correctly predicted.
-
-  Todo:
-    - See if moving moving probdists and yss back to CPU
-      improves speed (likely not).
-  """
-  assert len(probdists) == len(yss), dedent(f"""\
-      Lengths must be equal, but len(probdists)={len(probdists)}
-      and len(yss)={len(yss)}.""")
-  assert isinstance(yss, IntTensor), dedent(f"""\
-      Argument yss must be a Long-, Int-, or ShortTensor, not {type(yss)}.""")
-  accum = 0
-  for probdist, ys in zip(probdists, yss):
-    if torch.argmax(probdist).item() == ys:
-      accum += 1
-  return accum/len(probdists)
 
 #def _batch2r2(yhats, yss, device=-2):
 #  assert len(yhats) == len(yss)
@@ -1835,6 +1846,38 @@ def cross_validate(model, crit, train_data, k, **kwargs):
 
   return best_model, best_valids.mean()
 
+def _batch2class_accuracy(probdists, yss):
+  """Return the proportion correctly classified.
+
+  Args:
+    $prob_dists$ (`torch.Tensor`): A tensor of dimension 2 holding,
+        for each example, the probability distribution predict-
+        ing the correct class. The first dimension must index
+        the examples. This argument is, then, the predictions,
+        in the form of probability distributions, made by a mo-
+        del when fed the features of some set of examples. This
+        should often be just `model(xss)`, for example.
+    $yss$ (`IntTensor`): A 1-dimensional tensor holding the cor-
+        rect class (as some flavor of an `int`) for each example.
+
+  Returns:
+    `float`. The proportion of examples correctly predicted.
+
+  Todo:
+    - See if moving moving probdists and yss back to CPU
+      improves speed (likely not).
+  """
+  assert len(probdists) == len(yss), dedent(f"""\
+      Lengths must be equal, but len(probdists)={len(probdists)}
+      and len(yss)={len(yss)}.""")
+  assert isinstance(yss, IntTensor), dedent(f"""\
+      Argument yss must be a Long-, Int-, or ShortTensor, not {type(yss)}.""")
+  accum = 0
+  for probdist, ys in zip(probdists, yss):
+    if torch.argmax(probdist).item() == ys:
+      accum += 1
+  return accum/len(probdists)
+
 def class_accuracy(model, data, **kwargs):
   """Return the classification accuracy.
 
@@ -1852,7 +1895,7 @@ def class_accuracy(model, data, **kwargs):
         ension indexes the examples to be tested) and `yss` is a
         tensor of dimension 1 holding the corresponding correct
         classes (as `int`s), or an instance of `torch.utils.data`
-        .DataLoader` which yields mini-batches of such 2-tuples.
+        `.DataLoader` which yields mini-batches of such 2-tuples.
 
   Kwargs:
     $classes$ (`IntTensor`): A 1-dimensional tensor holding the nu-
@@ -1998,6 +2041,8 @@ def _sum_square_div(yhatss, yss, denom=1.0):
 def _explained_var(yss_train, yss_test=None, gpu = (-1,)):
   """helper to compute explained variation (i.e., variance).
 
+  This returns two functions.
+
   Something like this is necessary if one wants to compute the
   coefficient of determination (r_squared) on dataloaders (so
   batchwise, in an online fashion).
@@ -2025,11 +2070,6 @@ def _explained_var(yss_train, yss_test=None, gpu = (-1,)):
   else:
     test_r2 = None
   return train_r2, test_r2
-
-def loader2r_squared(model, loader):
-  """Return the expected varaition.
-
-  """
 
 def r_squared(yhatss, yss, **kwargs):
   """Compute r_squared.

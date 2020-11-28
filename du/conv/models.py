@@ -479,7 +479,7 @@ class ConvFFNet(FFNet_):
 class OneMetaCNN(FFNet_):
   """One meta-layer CNN with a two fully-connected layers.
 
-  Note: Consider using `DenseFFNet` which generalizes this.
+  Note: Consider using `ConvFFNet` which generalizes this.
   """
   def __init__(self, in_size, n_out, channels, **kwargs):
     """Constructor.

@@ -403,6 +403,14 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
   * Documentation was vastly extended/improved.
   * Factory classes (e.g., **du.models.conv.ConvFFNet**) now include a dropout layer.
 
+**Version 0.9.3** (Nov. 20, 2020)
+  * The parameter **valid_crit** to the **train** function is now **valid_metric**.
+  * The transition to handling dataloaders is now complete.
+  * **du.lib.online_means_stdevs** now handles, simultaneously, data consisting of
+    more than one tensor; e.g., dataloaders yielding both targs and feats (where you
+    want means and stdevs for both of those).  As a result, the api has changed.
+    For example, the return value is a tuple of tuples of tensors.
+
 ## Modifying DUlib
 
 If you want to experiment with the code in the libraries, then you can clone
