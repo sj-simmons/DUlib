@@ -13,21 +13,26 @@ Installation
 Notes
 -----
 
-* DUlib assumes that you have installed your desired version (e.g., cpu vs. gpu)
-  of the `torch <https://pypi.org/project/torch/>`_ package as well as the `torchvision <https://pypi.org/project/torchvision/>`_ package.
+DUlib assumes that you have installed your desired version (e.g., cpu vs. gpu)
+of the `torch <https://pypi.org/project/torch/>`_ package as well as the `torchvision <https://pypi.org/project/torchvision/>`_ package.
 
-* Similarly, a modern version of `matplotlib <https://pypi.org/project/matplotlib/>`_ is
-  assumed to have been installed on your system.  Matplotlib is required solely for (optional) display
-  of a real-time graph while training and for various demos; additionally, a running X server is required.
+Similarly, a modern version of `matplotlib <https://pypi.org/project/matplotlib/>`_ is
+assumed to have been installed on your system.  Matplotlib is required solely for (optional) display
+of a real-time graph while training and for various demos; additionally, a running X server is required.
 
-* To upgrade to the newest release of DUlib in the presence of a previously installed one, issue the
-  command: ``pip3 install -U DUlib --user``
+To upgrade to the newest release of DUlib in the presence of a previously installed one, issue the command::
 
-* DUlib's documentation is read via a retooling of pydoc3 that includes custom
-  highlighting. Issue the following command to check syntax highlighting and, if
-  necessary, read notes on troubleshooting.
-  command: ``pd du.highlight``
-  If all is well, read introductory usage remarks with:
-  command: ``pd du``
+    pip3 install -U DUlib --user
 
-* See the `upstream repo <https://github.com/sj-simmons/DUlib>`_ for release information.
+DUlib's documentation is read via a retooling of pydoc3 that includes custom highlighting. Issue the
+following command to check that your terminal accepts escape sequences compatible with DUlib's syntax
+highlighting and, if necessary, read notes on troubleshooting::
+
+    pd du.highlight
+
+If all is well, read introductory usage remarks with the command::
+
+    pd du
+
+See the `upstream repo <https://github.com/sj-simmons/DUlib>`_ for detailed installation and trouble-shooting
+notes as well as release information.
