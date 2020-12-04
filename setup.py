@@ -26,7 +26,7 @@ setup(
   #the appropriate verion of torch (e.gl, cpu vs. gpu) for their machine.
   #Do the same for matplotlib
   #install_requires=['matplotlib<3.1'],
-  python_requires='>=3.5',
+  python_requires='>=3.6',
   install_requires=[],
   version='0.9.3',
   license='Apache 2.0',
