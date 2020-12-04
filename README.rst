@@ -3,13 +3,15 @@ DUlib
 
 Machine and Deep Learning tools.
 
+============
 Installation
-------------
+============
 
 .. code-block::
 
     pip3 install DUlib --user
 
+-----
 Notes
 -----
 
