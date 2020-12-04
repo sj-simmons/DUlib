@@ -15,6 +15,7 @@ $classes$ are, as of this release,
   ├─ |lib| !the core library!
   │  │  ~data:~
   │  ├─ $coh_split$       split data
+  │  ├─ $split_df$        split a dataframe
   │  ├─ $center$          mean-center some data
   │  ├─ $normalize$       normalize data
   │  ├─ $standardize$     mean-center and normalize
@@ -26,7 +27,7 @@ $classes$ are, as of this release,
   │  ├─ $Momentum$        add momentum to SGD
   │  ├─ $optimize_ols$    optimize learning rate and momentum
   │  │  ~metrics:~
-  │  ├─ $r-squared$       compute coeff. of determination
+  │  ├─ $explained_var$   compute the explained variance
   │  └─ $class_accuracy$  compute accuracy of classification
   │                     (optionally, displays confusion mat.)
   ├─ |models| !functions and classes for feed-forward nets!
@@ -53,7 +54,6 @@ $classes$ are, as of this release,
   │  └─ |examples|
   ├─ |utils| !potentially helpful utilites!
   │   ├─ $standard_args$  easily set command-line options
-  │   ├─ $split_df$       split a dataframe
   │   └─ $args2string$    easily make a logging string
   └─ |highlight|       highlighting conventions for docs
 

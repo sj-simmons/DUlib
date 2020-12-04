@@ -11,10 +11,16 @@ trained models.
 
   |coh_split|    randomize and coherently split each tensor in
                `*args`; returns `Tuple[tensor]`
-    ($prop$,       -split like `prop`, 1 - `prop`
+    ($prop$,       -split like `prop`, 1-`prop`
      $*args$,      -each of these tensors are split into two
      $randomize$ = `True`)
-                 -whether to randomize before splitting.
+                 -whether to randomize before splitting
+
+  |split_df|     split a dataframe into disjoint subframes; ret-
+               urns `Tuple[dataframe]`
+    ($df$,         -the dataframe to be split
+     $splits$)     -a tuple of positive floats which sum to 1
+                  or less
 
   |center|       mean-center `xss`; returns `(tensor, tensor)`
     ($xss$,        -tensor to center w/r to its 1st dimension
@@ -32,9 +38,22 @@ trained models.
                   to dividing each entry in a column by that
                   columns st. dev. but leaving unchanged any
                   column with st. deviation close to 0.
-     $unbiased$ = `True`)
+     $unbiased$ = `True`,
                  -use n-1 instead of n in the denominator when
-                  computing the standard deviation.
+                  computing the standard deviation
+     $threshold$ = `1e-6`)
+                 -do not divide by a number smaller than this
+
+  |standardize|  standardize data; returns `tensor`
+    ($xss$,      -the data to be standardized, where the first
+                  dimension indexes the examples
+     $means$ = `None`,
+                 -subtract these means, columnwise, from `xss`
+     $stdevs$ = `None`,
+                 -divide by these, columnwise, but do not div-
+                  ide by zero
+     $threshold$ = `1e-6`)
+                 -do not divide by a number smaller than this
 
   |online_means_stdevs|
                  -compute the means and stdevs of large or aug-
@@ -75,7 +94,7 @@ trained models.
      $print_lines$ = `(7,8)`,
                  -print 7 beginning lines and 8 ending lines;
                   put -1 to disable compressed printing.
-     $verb$ = `2`,   -verbosity; 3 for more, 1 for less, 0 silent
+     $verb$ = `2`,   -verbosity; 3, for verbose; 0 silent
      $gpu$ = `(-1,)`,-the gpu to run on, if any are available; if
                   none available, use the cpu; put -1 to use
                   the last gpu if multiple ones found; put -2
@@ -127,15 +146,6 @@ trained models.
                  erride found gpu(s) and use the cpu.  Consider
                  just accepting the default here.
 
-  |optimize_ols|  find optimal training hyper-parameters; returns
-                a dict with keys 'lr' and 'mo'
-    ($feats$,     -the `xss` for the data set
-     $with_mo$ = `True`
-                -if `False` just returns optimal learning rate
-     $verb$ = `0`)  -default is silence; put 1 to include warnings,
-                 and 2 to actually print out X^T*X where X is
-                 the design matrix
-
   |LearnParams_|  base class for defining learning parameters
     ($lr$ = `0.1`)  -we need at least a learning rate
 
@@ -148,35 +158,40 @@ trained models.
   |copy_parameters| helper for sub-classing `LearnParams_`
     ($model$)     -copy the parameters of `model`
 
+  |optimize_ols|  find optimal training hyper-parameters; returns
+                a dict with keys 'lr' and 'mo'
+    ($feats$,     -the `xss` for the data set
+     $with_mo$ = `True`
+                -if `False` just returns optimal learning rate
+     $verb$ = `0`)  -default is silence; put 1 to include warnings,
+                 and 2 to actually print out X^T*X where X is
+                 the design matrix
+
   ~evaluation metrics:~
 
   |class_accuracy| compute the proportion correct for a classifi-
-                 cation problem; returns `float`.
-    ($model$,     -a (partially) trained model.
-     $data$,      -either a tuple `(xss, yss)` or a dataloader.
+                 cation problem; returns `float`
+    ($model$,     -a (partially) trained model
+     $data$,      -either a tuple `(xss, yss)` or a dataloader
      $classes$ = `None`,
                 -a tensor of shape `(n)` holding the possible
                  classes; normally this is `torch.arange(10)`
-                 if there are say 10 things being classified.
+                 if there are say 10 things being classified
      $class2name$ = `None`,
                 -a dict mapping `int`s representing the classes
                  to the corresponing descriptive name (`str`)
      $show_cm$ = `False`,
                 -display the confusion matrix       -
-     $gpu$ = `-1`,  -run on the fastest device, by default.
-     $color$ = `True`)
-                -whether to colorize the confusion matrix.
-
-  |r_squared|     return (`float`) the coefficient of determination
-    ($yhatss$,    -either a trained model's best guesses (so of-
-                 ten just `model(xss)`); or, a tuple of the form
-                 `(model, xss)`. (Use the second form to execute
-                 the model evaluation on the fastest device av-
-                 ailable.)
-     $yss$,       -the actual targets
      $gpu$ = `-1`,  -run on the fastest device, by default
-     $return_error$ = `False`)
+     $color$ = `True`)
+                -whether to colorize the confusion matrix
 
+  |explained_var| return (`float`) the explained variance
+    ($model$,     -a (partially) trained model
+     $data$,      -a tuple of tensors or a dataloader
+     $return_error$ = `False`,
+                -return the 1-explained_var if True
+     $gpu$ = `-1`)  -run on the fastest device, by default
                     _____________________
 """
 #Todo:
@@ -250,8 +265,6 @@ trained models.
 #  - Build a graphing class
 #  - Finish colorizing the confusion matrix
 #  - use '\r' where possible in train printing (doesn't matter??)
-#  - add option to confusion matrix to push through on gpu, like
-#    you did for r_squared
 # Done or didn't do:
 #  - Add percentage or loss to ascii output in the presence of
 #    testing data. DON"T DO THIS so that training without graph
@@ -259,10 +272,8 @@ trained models.
 
 import time
 import math
-import functools
 import tkinter
 import copy
-import functools
 import torch
 import torch.nn as nn
 import torch.utils.data
@@ -298,6 +309,81 @@ IntTensor = (torch.ShortTensor, torch.IntTensor, torch.LongTensor,
     torch.cuda.ShortTensor, torch.cuda.IntTensor, torch.cuda.LongTensor)
 FloatTensor = (torch.HalfTensor, torch.FloatTensor, torch.DoubleTensor,
     torch.cuda.HalfTensor, torch.cuda.FloatTensor, torch.cuda.DoubleTensor)
+
+def split_df(df, splits):
+  """Randomize and/or split a dataframe.
+
+  If `splits` is `()`, return a tuple of length one consisting of
+  `df` randomized. If `splits` is a nonempty tuple of proportions,
+  then return a tuple (the same length as `splits`) of disjoint
+  dataframes of those proportions randomly sampled from `df`.
+
+  If the !sum! of the splits is 1, then the returned dataframes'
+  union is `df`; otherwise, the returned dataframes proportion-
+  ately and disjointly partition 100*!sum! percent of the data.
+  E.g., if `df` consists of 500 entries and `splits=(.7,.15,.15)`,
+  then the returned tuple containing dataframes of sizes 350,
+  75, and 75; but, if `splits=(.4,.1,.1)`, then dataframes are
+  of sizes 120, 50, and 50.
+
+  Args:
+    $df$ (`pandas.Dataframe`): The dataframe to be split.
+    $splits$ (`Tuple`): A tuple of non-negative floats whose sum is
+        less than or equal to 1.0, or the empty tuple `()`.
+
+  Returns:
+    `Tuple[pandas.Dataframe]`. A tuple of disjoint dataframes.
+
+  >>> `import pandas`
+  >>> `df = pandas.DataFrame({'x':list(range(10))})`
+  >>> `train_df, test_df = split_df(df, (0.6,0.4))`
+  >>> `print(len(train_df), len(test_df))`
+  6 4
+  >>> `df = pandas.DataFrame({'x':list(range(500))})`
+  >>> `train_df, valid_df, test_df = split_df(df, (.7,.15,.15))`
+  >>> `print(len(train_df), len(valid_df), len(test_df))`
+  350 75 75
+  >>> `df = pandas.DataFrame({'x':list(range(11))})`
+  >>> `train_df, valid_df, test_df = split_df(df, (.4,.3,.3))`
+  >>> `print(len(train_df), len(valid_df), len(test_df))`
+  4 4 3
+  >>> `df = pandas.DataFrame({'x':list(range(500))})`
+  >>> `dfs = split_df(df, (0.4,0.1,0.1))`
+  >>> `print(len(dfs[0]), len(dfs[1]), len(dfs[2]))`
+  200 50 50
+  >>> `df = pandas.DataFrame({'x':list(range(100))})`
+  >>> `dfs = split_df(df, (0.3,0.3,0.2,0.2))`
+  >>> `print(len(dfs[0]), len(dfs[1]), len(dfs[2]), len(dfs[3]))`
+  30 30 20 20
+  >>> `df = pandas.DataFrame({'x':list(range(100))})`
+  >>> `df_ = split_df(df, ())`
+  >>> `print(len(df_[0]))`
+  100
+  """
+  assert isinstance(splits, tuple), _markup('Arg. $splits$ should be a tuple.')
+  randomized = df.sample(frac = 1.0)
+  returnlist = []
+  if len(splits) == 0:
+    returnlist.append(randomized.copy())
+    return tuple(returnlist)
+  else:
+    sum_ = sum(splits)
+    assert sum_ <= 1.0, _markup('sum of entries in arg. $splits$ must be <= 1.0')
+    frac = .5; splits = [1.0] + list(splits)
+    for idx in range(len(splits)-1):
+      frac = (frac / (1-frac)) * (splits[idx+1] / splits[idx])
+      if idx < len(splits) or sum_ < 1:
+        # no real need to randomly sample here but ... whatever
+        #splitout = randomized.sample(frac = 1 if frac > 1 else frac)
+        #randomized = randomized.drop(splitout.index).copy()
+        # nevermind, just do this
+        cutoff = round(frac*len(randomized))
+        splitout = randomized.head(cutoff)
+        randomized = randomized.tail(-cutoff)
+        returnlist.append(splitout.copy())
+      else:
+        returnlist.append(randomized)
+  return tuple(returnlist)
 
 def center(xss, shift_by = None):
   """Re-center data.
@@ -395,20 +481,22 @@ def normalize(xss, scale_by = None, **kwargs):
   ry of `xss` is divided by the `(i1, i2,`..., `in)` entry of `scale_`
   `by` unless that entry of `scale_by` is (nearly) 0, in which case
   the `(i0, i1,` ...`, in)` entry of `xss` is left unchanged. In oth-
-  er words, column of `xss` whose standard deviation is essent-
+  er words, columns of `xss` whose standard deviation is essent-
   ially zero are left alone; the others are normalized so that
   their standard deviation is 1.0.
 
   The default, `scale_by=None` is equivalent to setting `scale_by=`
   `xss.std(0)` and leads to the first returned tensor being `xss`
-  scaled so that its 'columns' have standard deviation 1 (or left
-  alone, if that column has tiny standard deviation).
+  scaled so that each of its 'columns' have standard deviation 1
+  (or were left alone, if that column has essentially no stand-
+  ard deviation).
 
   Args:
     $xss$ (`torch.Tensor`) A tensor whose columns, when thought of
         as being indexed by its first dimension, is to be norm-
         alized.
     $scale_by$ (`torch.Tensor`) A tensor of shape `xss.shape[1:]`.
+        Default: `None`.
   Kwargs:
     $unbiased$ (`bool`): If unbiased is `False`, divide by `n` instead
         of `n-1` when computing the standard deviation. Default:
@@ -476,6 +564,10 @@ def normalize(xss, scale_by = None, **kwargs):
   #else:
   #  new_xss = xss.div(xss_stdevs_no_zeros)
   #return new_xss, xss_stdevs
+  assert isinstance(xss, torch.Tensor),du.utils._markup(
+      f'`xss` must have type tensor not {type(xss)}')
+  assert isinstance(scale_by, torch.Tensor) or scale_by is None,du.utils._markup(
+      f'`scale_by` must be None or have type tensor not {type(scale_by)}')
   du.utils._check_kwargs(kwargs,['unbiased', 'threshold'])
   unbiased = kwargs.get('unbiased',True)
   threshold = kwargs.get('unbiased',1e-6)
@@ -490,16 +582,16 @@ def normalize(xss, scale_by = None, **kwargs):
     newxss = xss.div(scale_by_no_zeros)
     return xss.div(scale_by_no_zeros), newxss.std(0, unbiased)
 
-def standardize(xss, means=None, stdevs=None, unbiased=True):
+def standardize(xss, means=None, stdevs=None, **kwargs):
   """Standardize (a minibatch of) data w/r to `means` and `stdevs`.
 
   Think of the tensor `xss` as holding examples of data where the
   the first dimension of `xss` indexes the examples. Suppose that
   both tensors `means` and `stdevs` are provided, each of size `xss`
   `.shape[1:]`. Then `standardize` returns a tensor of shape `xss.sh`
-  `ape` whose `(i_1, i_2,`...`, i_n)`th entry is
+  `ape` whose `(i_0, i_2,`...`, i_n)`th entry is
 
-  `(xss_(i_1,`...`,i_n)-means_(i_1,`...`,i_n))/stdevs_(i_1,`...`,i_n).`
+  `(xss_(i_0,`...`,i_n)-means_(i_1,`...`,i_n))/stdevs_(i_1,`...`,i_n).`
 
   As a simple example, if `xss` is a 100x1 tensor consisting of
   normal data centered at 7 and of width 3 then `standardize` can
@@ -548,17 +640,22 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   tensor([1.5000, 2.0000, 5.0000])
 
   Args:
-    `xss` (`tensor`): If we denote the size of `xss` by `(d_0, d_1,...`
+    $xss$ (`tensor`): If we denote the size of `xss` by `(d_0, d_1,...`
         `, d_n)`, then we regard `xss` as `d_0` examples of data. For
         a single example, `(1, d_1,` ...`, d_n)` and `(d_1,` ...`, d_n)`
         are treated equivalently.
-    `means` (`tensor`): Tensor of shape `(d_1, d_2,` ...`, d_n)` or `(1,`
+    $means$ (`tensor`): Tensor of shape `(d_1, d_2,` ...`, d_n)` or `(1,`
         `d_1, d_2,` ...`, d_n)`. Default: `None`, which is equivalent
         to `means=torch.zeros(xss.shape[1:])`.
-    `stdevs` (`tensor`): Same shape restriction as that of `means`.
+    $stdevs$ (`tensor`): Same shape restriction as that of `means`.
         Entries within a threshold of 0.0 are effectively repl-
         aced with 1.0 so as not to divide by zero. The default,
         `None` is equivalent to `stdevs=torch.ones(xss.shape[1:])`.
+
+  Kwargs:
+    $threshold$ (`float`): Threshold within which the st. dev. of
+        a column is considered too close to zero to divide by.
+        Default: `1e-6`.
 
   Returns:
     `torch.tensor`. A tensor of the same shape as `xss`.
@@ -573,13 +670,15 @@ def standardize(xss, means=None, stdevs=None, unbiased=True):
   #if stdevs is not None:
   #  assert stdevs.shape == xss.shape[1:] or \
   #      stdevs.shape == torch.Size([1]) + xss.shape[1:]
-  if isinstance(means,torch.Tensor):
-    if  isinstance(stdevs,torch.Tensor):
-      return normalize(center(xss, means)[0], stdevs, unbiased=unbiased)[0]
+  du.utils._check_kwargs(kwargs,['threshold'])
+  threshold = kwargs.get('unbiased',1e-6)
+  if isinstance(means, torch.Tensor):
+    if isinstance(stdevs, torch.Tensor):
+      return normalize(center(xss, means)[0], stdevs, threshold=threshold)[0]
     elif stdevs is None:
       return center(xss, means)[0]
   elif isinstance(stdevs, torch.Tensor):
-    return normalize(xss, stdevs, unbiased=unbiased)[0]
+    return normalize(xss, stdevs, threshold=threshold)[0]
   else:
     return xss
 
@@ -681,14 +780,13 @@ def online_means_stdevs(data, *transforms_, batchsize=1):
         batch_size = batchsize,
         num_workers = 0)
   else:
-    assert isinstance(data, torch.utils.data.DataLoader),\
-        du.utils._markup(dedent("""
-            `data` must be a tuple of tensors or an instance of
-            torch.utils.data.DataLoader yielding mini-batches of
-            such tuples."""))
+    assert isinstance(data, (torch.utils.data.DataLoader,_DataLoader)),\
+        du.utils._markup(
+            '`data` must be a tuple of tensors or an instance of either `torch.`'
+            '`utils.data.DataLoader` or `du.lib._DataLoader` yielding such mini`'
+            '-batches of such tuples.')
     if transforms_!=():
-      print(du.utils._markup('$warning$ (from online_means_stdevs):'), end=' ')
-      print(du.utils._markup(
+      print(du.utils._markup('$warning$ (from online_means_stdevs):'
           '|best practice is to put transforms in a dataloader|'))
     loader = data
     batchsize = loader.batch_size
@@ -942,8 +1040,8 @@ class _DataLoader:
     """
     Args:
       $data_tuple$ (Tuple[`torch.Tensor`]).
-      $batchsize$ (`Int`).
-      $shuffle$ (`bool`).
+      $batch_size$ (`Int`).
+      $shuffle$ (`bool`). Default: `False`.
 
     Examples:
     >>> `xss = torch.rand(144).view(12,3,4)`
@@ -1147,7 +1245,7 @@ def train(model, crit, train_data, **kwargs):
     $crit$ (`nn.modules.loss`): The loss function when training.
     $train_data$ (`Union[Tuple[torch.Tensor],DataLoader]`) Either a
         tuple consisting of 2 or 3 tensors (as described below)
-        or an instance of `torch.data.utils.DataLoader` yielding
+        or an instance of `torch.utils.data.DataLoader` yielding
         such tuples.
         Passing a length 3 tensor is only necessary when train-
         ing a recurrent net on variable length inputs. In that
@@ -1188,11 +1286,11 @@ def train(model, crit, train_data, **kwargs):
         `None`, then `model` is only validated on training data
         and only those results are diplayed.
         The metric used for validation can be specified by pro-
-        viding it here; however, if the argument here is simply
-        `True`, then the metric is automatically `L1_loss` (i.e.,
-        mean absolute error) in the case that the targets of
-        `train_data` are floats (as in, for example, a regression
-        problem) or to the proportion of correct predictions if
+        viding it as an argument here; however, if the argument
+        here is simply `True`, then the metric used automatically
+        becomes explained variance in the case that the targets
+        of `train_data` are floats (as in, for example, a regres-
+        sion problem) or proportion of correct predictions if
         those targets are integers (as in, e.g., a classifica-
         tion problem).
         Alternatively, `valid_metric` can be a function that maps
@@ -1205,15 +1303,11 @@ def train(model, crit, train_data, **kwargs):
         The last option is equivalent to
           `valid_metric=lambda xss, yss: torch.sqrt(`
                `torch.nn.functional.mse_loss(xss, yss))`.
-        To use ~explained variance~ (r-squared) as the metric in
-        a regression problem, put
-          `valid_metric=_explained variance(yss_train, yss_test)`
-        where `yss_train` and `yss_test` are the targets of the
-        training and testing data.
         Note that:
-        - r-squared may not be the best choice here for a var-
-          iety of reasons.
-        Also note that:
+        - ~expected variation~ (the automatic metric for a reg-
+          ression problem) may not be the best choice though,
+          for an OLS model it is ~r-squared~, the coefficient of
+          determination.
         - to simply train the model as efficiently as possible,
           set `graph = 0` which disables all validation;
         - or, set `valid_metric=False`, to disable all validation
@@ -1288,9 +1382,9 @@ def train(model, crit, train_data, **kwargs):
     for kwarg in ['learn_params', 'bs', 'epochs', 'graph',
         'print_lines', 'verb', 'gpu']:
       if kwarg in kwargs and kwarg in vars(args).keys():
-        print(du.utils._markup('$warning$ (from train):'), end=' ')
-        print(dedent(du.utils._markup(f"""\
-  |argument passed via parameter| `{kwarg}` |overriding| `args.{kwarg}`""")))
+        print(du.utils._markup('$warning$ (from train):'
+            f'|argument passed via parameter| `{kwarg}`'
+            f' |overriding| `args.{kwarg}`'))
   bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
   verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
@@ -1306,19 +1400,21 @@ def train(model, crit, train_data, **kwargs):
   else: print_init, print_last = print_lines[0], print_lines[0]
   graph = kwargs.get('graph', 0 if not hasattr(args,'graph') else args.graph)
   graph = 1 if graph is True else graph
-  assert isinstance(graph,int) and graph >= 0,\
-      f'graph must be a non-negative integer, not {graph}.'
+  assert isinstance(graph, int) and graph >= 0,\
+      du.utils._markup(f'`graph` must be a non-negative integer, not {graph}.')
 
   start = time.time() # start (naive) timing here
 
   # get devices determined by the gpu argument
-  if isinstance(gpu, (tuple,list)) and len(gpu) == 1: gpu = (gpu[0], gpu[0])
-  else: assert isinstance(gpu, (tuple,list)) and len(gpu) > 1
-  # The training happens on the model device; training minibatches are moved
-  # just before being forwarded throught the model.
+  if isinstance(gpu, (tuple,list)) and len(gpu) == 1:
+    gpu = (gpu[0], gpu[0])
+  else:
+    assert isinstance(gpu, (tuple,list)) and len(gpu) > 1
+  # The training happens on the model device; training mini-batches are moved
+  # just before being forwarded through the model.
   model_dev = du.utils.get_device(gpu[0])
-  valid_dev = du.utils.get_device(gpu[1])  # where validation happens
-  data_dev = torch.device('cpu',0) # where the data lives
+  valid_dev = du.utils.get_device(gpu[1])  # this is where validation happens
+  data_dev = torch.device('cpu',0) # this is where the data lives
   if verb > 1:
     print(f'training on {model_dev} (data is on {data_dev})',end='')
     if valid_metric and graph > 0: print(f'; validating on {valid_dev}')
@@ -1372,18 +1468,6 @@ def train(model, crit, train_data, **kwargs):
     #if verb > 1: print(learn_params, end=', ')
     #if verb > 1: print('batchsize:', bs)
 
-  if isinstance(valid_metric, bool):
-    if valid_metric:
-      # Setup valid_metric according to whether this looks like a regression
-      # or a classification problem.
-      for minibatch in train_data:
-        if isinstance(minibatch[-1][0], FloatTensor):
-          valid_metric = nn.functional.l1_loss
-        elif isinstance(minibatch[-1][0], IntTensor):
-          valid_metric = _batch2class_accuracy
-        else:
-          raise RuntimeError('please specify a function to use for validation')
-        break
   #else:
   #  #assert isinstance(valid_metric, FunctionType)
   #  valid_metric = _evaluate(model, dataloader, crit=valid_metric , device=device)
@@ -1399,22 +1483,41 @@ def train(model, crit, train_data, **kwargs):
     ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
 
-    if valid_metric:
-      if isinstance(valid_metric, FunctionType):
-        v_dation_train=functools.partial(  # this maps: model -> float
-            _evaluate, dataloader=train_data, crit=valid_metric, device=valid_dev)
-            #valid_metric, dataloader=train_data, device=valid_dev)
-      else: # then valid_metric is _explained_var
-        # this alos maps: model -> float
-        v_dation_train = lambda model:  1-len(train_data)*_evaluate(
-            model, dataloader=train_data, crit=valid_metric[0], device=valid_dev)
+    # parse valid_metric and setup v_dation_train
+    if isinstance(valid_metric, bool):
+      if valid_metric:
+        # Setup valid_metric according to whether this looks like a regression
+        # or a classification problem.
+        for minibatch in train_data:
+          if isinstance(minibatch[-1][0], FloatTensor):
+            valid_metric = 'regression'
+            #valid_metric = nn.functional.l1_loss
+            v_dation_train = lambda model:  1-len(train_data)*_evaluate(
+                model,
+                dataloader=train_data,
+                crit=_explained_var(train_data,device=valid_dev),
+                device=valid_dev)
+          elif isinstance(minibatch[-1][0], IntTensor):
+            #valid_metric = _batch2class_accuracy
+            v_dation_train = lambda model:  _evaluate(
+                model, dataloader=train_data,
+                crit=_batch2class_accuracy, device=valid_dev)
+          else:
+            raise RuntimeError('please specify a function to use for validation')
+          break
+    elif isinstance(valid_metric, FunctionType):
+      # this maps: model -> float
+      v_dation_train = lambda model: _evaluate(model, dataloader=train_data,
+          crit=valid_metric, device=valid_dev)
+    else:
+      raise RuntimeError('valid_metric must be boolean or a function')
 
     # these will hold the losses and validations for train data
     losses = []
     if valid_metric: v_dations = []
 
     if valid_data and valid_metric:
-      # parse the validation data
+      # parse the valid_data
       if isinstance(valid_data, torch.utils.data.DataLoader):
         if len(valid_data.dataset) == 0: valid_data = None
         assert len(valid_data.dataset[0]) == len(train_data.dataset[0])
@@ -1424,15 +1527,25 @@ def train(model, crit, train_data, **kwargs):
         assert all([isinstance(x, torch.Tensor) for x in valid_data])
         #just use the same batchsize as with training data
         valid_data = _DataLoader(valid_data, bs, shuffle = False)
-
+      # set up v_dation_valid
       if isinstance(valid_metric, FunctionType):
         v_dation_valid=functools.partial(  # this maps:  model -> float
             _evaluate, dataloader=valid_data, crit=valid_metric, device=valid_dev)
-      else:  # then valid_metric is _explained_var
-        v_dation_valid = lambda model: 1-len(valid_data)*_evaluate(
-            model, dataloader=valid_data, crit=valid_metric[1], device=valid_dev)
-      loss_valid = functools.partial(    # also maps:  model -> float
-        _evaluate, dataloader=valid_data, crit=crit, device=valid_dev)
+      else:  # then valid_metric is output of _explained_var
+        if valid_metric == 'regression':
+          v_dation_valid = lambda model: 1-len(valid_data)*_evaluate(
+              model,
+              dataloader=valid_data,
+              crit=_explained_var(valid_data, device=valid_dev),
+              device=valid_dev)
+        else:
+          v_dation_valid = lambda model: _evaluate(
+              model,dataloader=valid_data,
+              crit=_batch2class_accuracy, device=valid_dev)
+      # set up loss_valid
+      # this also maps:  model -> float
+      loss_valid = lambda model: _evaluate(model, dataloader=valid_data,
+          crit=crit, device=valid_dev)
 
       losses_valid=[] # this will hold the losses for test data
       v_dations_valid = [] # this will hold the validations for test data
@@ -1447,8 +1560,6 @@ def train(model, crit, train_data, **kwargs):
   for epoch in range(epochs):
     model.train()
     accum_loss = 0
-    #this breaks if not Dataloader
-    #for batch in _batcher(train_data, bs, data_dev, model_dev):
     for minibatch in train_data:
       #print(minibatch[0].size(), minibatch[-1].size()); quit()
       loss = crit(model(
@@ -2015,64 +2126,55 @@ def class_accuracy(model, data, **kwargs):
       accuracy = torch.trace(cm_pcts).item()
   return accuracy
 
-def _sum_square_div(yhatss, yss, denom=1.0):
-  """Return sum_squared diffs divided by denom.
+# change this to explained_var and change throughout
+def _explained_var(loader, device, mean_zero = False):
+  """Helper to compute the explained variation (variance).
+
+  Under certain conditions (e.g., poly lin regression), one has
+  the ANOVA decomposition
+                       TSS = RSS + ESS
+  where
+  TSS = (yss - yss.mean(0)).pow(2).sum()  #total sum of squares
+  RSS = (yss - yhats).pow(2).sum()    # residual sum of squares
+  ESS=(yhats-yss.mean(0)).pow(2).sum()#explained sum of squares.
+
+  So, under preferred conditions, one computes the explained
+  variance, resp. unexplained variance as a proportion of tot-
+  al  variance: ESS/TSS or RSS/TSS.
+
+  However, absent preferential conditions one can use 1-RSS/TSS
+  for explained variance.
+
+  This is a helper function for computing explained variance.
+  Both `train_loader` and `test_loader` are assumed to be in-
+  stances of Dataloader that yield feats and targets as tuples
+  of tensors.
 
   Args:
-    $yhatss$ (`Tensor`).
-    $yss$ (`Tensor`).
-    $denom$ (`float`). Default: `1.0`.
+    $loader$ (`Dataloader`)
+    $device$
+    $mean_zero$
 
   Returns:
-    `float`.
+    `function`. Function that maps a pair of tensors to a float.
 
-  Examples:
-  >>> _sum_square_div(torch.arange(4.),2*torch.arange(4))
-  tensor(14.)
-
-  >>> yhatss = torch.arange(5.).view(5,1)
-  >>> _sum_square_div(yhatss, yhatss.mean(0))
-  tensor(10.)
-
+  >>> `yhatss = torch.arange(4.).unsqueeze(1)`
+  >>> `yss = torch.tensor([-1., 5., 2., 3.]).unsqueeze(1)`
+  >>> loader = _DataLoader((yhatss, yss), batch_size=2)
+  >>> `1 - _explained_var(loader, 'cpu')(yhatss, yss).item()`
+  0.09333...
   """
-  diffs = yhatss - yss
-  return (diffs * diffs).sum() / denom
-
-def _explained_var(yss_train, yss_test=None, gpu = (-1,)):
-  """helper to compute explained variation (i.e., variance).
-
-  This returns two functions.
-
-  Something like this is necessary if one wants to compute the
-  coefficient of determination (r_squared) on dataloaders (so
-  batchwise, in an online fashion).
-
-  Note: this is not that useful as a metric.
-
-  But, if you really want to look at this, then call the `train`
-  function like this:
-
-  `model = train(`
-      ...
-      `valid_metric = _explained_var(yss_train, yss_test),`
-      ...
-  `)`
-  """
-  yss_train = yss_train.to(du.utils.get_device(gpu[0]))
-  yss_test = yss_test.to(du.utils.get_device(gpu[-1]))
-  train_r2 = lambda yhatss, yss: _sum_square_div(
-      yhatss, yss, _sum_square_div(yss_train, yss_train.mean(0)))
-  #train_r2 = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_train*yss_train).sum()
-  if yss_test is not None:
-    test_r2 = lambda yhatss, yss: _sum_square_div(
-        yhatss, yss, _sum_square_div(yss_test, yss_test.mean(0)))
-    #test_r2 = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_test*yss_test).sum()
+  if mean_zero:
+    yss_mean = torch.tensor(0.)
   else:
-    test_r2 = None
-  return train_r2, test_r2
+    yss_mean = online_means_stdevs(loader)[1][0]
+  TSS = 0
+  for minibatch in loader:
+    TSS += (minibatch[1]-yss_mean).pow(2).sum().item()
+  return lambda yhats, yss: (yhats-yss).pow(2).sum().item()/TSS
 
-def r_squared(yhatss, yss, **kwargs):
-  """Compute r_squared.
+def explained_var(model, data, **kwargs):
+  """Compute the explained variance.
 
   Returns the coefficient of determination of two 2-d tensors
   (where the first dimension in each indexes the examples), one
@@ -2084,15 +2186,8 @@ def r_squared(yhatss, yss, **kwargs):
     $data$ (`Union(Tuple[Tensor], DataLoader)`): Either a tuple of
         tensors `(xss, yss)` where `xss` are the features of the
         data and `yss` (assumed to be of shape len(yss) by 1) are
-        the targets or an instance of `torch.data.utils.DataLoad`
+        the targets or an instance of `torch.utils.data.DataLoad`
         `er` that yields such tuples.
-
-    $yhatss$ (`torch.Tensor`): Either the predicted outputs (assum-
-        ed to be of shape `(len(yhatss), 1)` (which is often just
-        `model(xss)`) or a tuple of the form `(model, xss)`; use
-        the second option to move both `model` and `xss` to the de-
-        vice determined by `gpu` before computing `model`(`xss`).
-    $yss$ (`torch.Tensor`): The actual outputs.
 
   Kwargs:
     $return_error$ (`bool`): If `False`, return the proportion of the
@@ -2109,46 +2204,50 @@ def r_squared(yhatss, yss, **kwargs):
     `float`. The proportion of variation explained by the model
         (as compared to a constant model) or (optionally) 1 mi-
         nus that proportion (i.e., the proportion unexplained).
-
-  >>> `yhatss = torch.arange(4.).unsqueeze(1)`
-  >>> `yss = torch.tensor([-1., 5., 2., 3.]).unsqueeze(1)`
-  >>> `r_squared(yhatss, yss)`
-  0.09333...
   """
-  # this is r_squared
+  # this is explained_var
   du.utils._check_kwargs(kwargs,['return_error','gpu'])
   return_error = kwargs.get('return_error', False)
   gpu = kwargs.get('gpu', -1)
   device = gpu if isinstance(gpu, torch.device) else du.utils.get_device(gpu)
 
-  if not isinstance(yhatss, torch.Tensor):
-    assert isinstance(yhatss, (tuple,list)),\
-        'Argument yhatss must be a tuple of the form (model, tensor), or a list'
-    assert (isinstance(yhatss[0], nn.Module) and\
-        isinstance(yhatss[1], torch.Tensor)), dedent("""\
-            If agrument yhatss is an iterable, then the first item should be
-            the model, and the second should be the xss.""")
-    model = yhatss[0].to(device)
-    with torch.no_grad():
-      yhatss = model(yhatss[1].to(device))
-  assert yhatss.dim() == yss.dim(), dedent("""\
-      The arguments yhatss (dim = {}) and yss (dim = {}) must have the
-      same dimension.""".format(yhatss.dim(), yss.dim()))
-  assert yhatss.dim() == 2, dedent("""\
-      Multiple outputs not implemented yet; yhatss should have dimen-
-      sion 2, not {}.""".format(yhatss.dim()))
-  assert len(yhatss) == len(yss), dedent("""\
-      len(yhatss) is {} which is not equal to len(yss) which is {}
-  """.format(len(yhatss),len(yss)))
-  assert yhatss.size()[1] ==  yss.size()[1] == 1, dedent("""\
-      The first dimension of yhatss and yss should index the examples.""")
-  ave_sum_squares = nn.MSELoss()
-  yhatss = yhatss.squeeze(1).to(device)
-  yss = yss.squeeze(1).to(device)
-  SS_E = len(yss) * ave_sum_squares(yhatss, yss)
-  SS_T=len(yss)*ave_sum_squares(yss,yss.mean(0)*torch.ones(len(yss)).to(device))
-  if return_error: return (SS_E/SS_T).item()
-  else: return 1.0-(SS_E/SS_T).item()
+  if isinstance(data, tuple):
+      assert len(data) == 2 and len(data[0]) == len(data[1])
+      data = _DataLoader(data, batch_size = len(data[0]))
+  else:
+      assert isinstance(data,(torch.utils.data.DataLoader,_DataLoader))
+  error = len(data)*_evaluate(
+      model, dataloader=data, crit=_explained_var(data,device=gpu), device=device)
+  return error if return_error else 1-error
+
+#  if not isinstance(yhatss, torch.Tensor):
+#    assert isinstance(yhatss, (tuple,list)),\
+#        'Argument yhatss must be a tuple of the form (model, tensor), or a list'
+#    assert (isinstance(yhatss[0], nn.Module) and\
+#        isinstance(yhatss[1], torch.Tensor)), dedent("""\
+#            If argument yhatss is an iterable, then the first item should be
+#            the model, and the second should be the xss.""")
+#    model = yhatss[0].to(device)
+#    with torch.no_grad():
+#      yhatss = model(yhatss[1].to(device))
+#  assert yhatss.dim() == yss.dim(), dedent("""\
+#      The arguments yhatss (dim = {}) and yss (dim = {}) must have the
+#      same dimension.""".format(yhatss.dim(), yss.dim()))
+#  assert yhatss.dim() == 2, dedent("""\
+#      Multiple outputs not implemented yet; yhatss should have dimen-
+#      sion 2, not {}.""".format(yhatss.dim()))
+#  assert len(yhatss) == len(yss), dedent("""\
+#      len(yhatss) is {} which is not equal to len(yss) which is {}
+#  """.format(len(yhatss),len(yss)))
+#  assert yhatss.size()[1] ==  yss.size()[1] == 1, dedent("""\
+#      The first dimension of yhatss and yss should index the examples.""")
+#  ave_sum_squares = nn.MSELoss()
+#  yhatss = yhatss.squeeze(1).to(device)
+#  yss = yss.squeeze(1).to(device)
+#  SS_E = len(yss) * ave_sum_squares(yhatss, yss)
+#  SS_T=len(yss)*ave_sum_squares(yss,yss.mean(0)*torch.ones(len(yss)).to(device))
+#  if return_error: return (SS_E/SS_T).item()
+#  else: return 1.0-(SS_E/SS_T).item()
 
 def optimize_ols(feats, **kwargs):
   """Compute the optimal learning rate and, optionally, momen-
@@ -2330,3 +2429,75 @@ if __name__ == '__main__':
 #      "Number of features ({}) must equal number of targets ({}).".\
 #          format(len(feats), len(targs))
 #  return feats, feats_lengths, targs
+
+# this is likely obsolete now
+#def _explained_var(yss_train, yss_test=None, gpu = (-1,)):
+#  """helper to compute explained variation (i.e., variance).
+#
+#  This returns two functions each of which actually return the
+#  average unexplained variance. So, each of the returned func-
+#  tions must be de-averaged and then adjusted.  For example,
+#  to get the explained variation for the training data, one
+#  computes:
+#
+#    1-len(yss_train)*_explained_var(yss_train,yss_test)[0]
+#
+#  Something like this is necessary if one wants to compute the
+#  explained variance on dataloaders (so batchwise, in an online
+#  fashion).
+#
+#  Note: this is not that useful as a metric.
+#
+#  But, if you really want to look at this, then call the `train`
+#  function like this:
+#
+#  `model = train(`
+#      ...
+#      `valid_metric = _explained_var(yss_train, yss_test),`
+#      ...
+#  `)`
+#
+#  Args:
+#    $yss_train$ (`tensor`)
+#    $yss_test$ (`tensor`) Default: `None`.
+#
+#  Returns:
+#    `(function, function)` where each function maps a pair of
+#        tensors to a float.
+#  """
+#  yss_train = yss_train.to(du.utils.get_device(gpu[0]))
+#  yss_test = yss_test.to(du.utils.get_device(gpu[-1]))
+#  train_fn = lambda yhatss, yss: _sum_square_div(
+#      yhatss, yss, _sum_square_div(yss_train, yss_train.mean(0)))
+#  #train_fn = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_train*yss_train).sum()
+#  if yss_test is not None:
+#    test_fn = lambda yhatss, yss: _sum_square_div(
+#        yhatss, yss, _sum_square_div(yss_test, yss_test.mean(0)))
+#    #test_fn = lambda yhatss, yss: (yhatss*yhatss).sum()/(yss_test*yss_test).sum()
+#  else:
+#    test_fn = None
+#  return train_fn, test_fn
+
+# this is likely obsolete now
+#def _sum_square_div(yhatss, yss, denom=1.0):
+#  """Return sum_squared diffs divided by denom.
+#
+#  Args:
+#    $yhatss$ (`Tensor`).
+#    $yss$ (`Tensor`).
+#    $denom$ (`float`). Default: `1.0`.
+#
+#  Returns:
+#    `float`.
+#
+#  Examples:
+#  >>> _sum_square_div(torch.arange(4.),2*torch.arange(4))
+#  tensor(14.)
+#
+#  >>> yhatss = torch.arange(5.).view(5,1)
+#  >>> _sum_square_div(yhatss, yhatss.mean(0))
+#  tensor(10.)
+#
+#  """
+#  diffs = yhatss - yss
+#  return (diffs * diffs).sum() / denom
