@@ -144,7 +144,21 @@ def denseFFhidden(n_inputs, n_outputs, widths, **kwargs):
         nn.Linear(widths[layer], widths[layer+1]))
   return block
 
-class FFNet_(nn.Module):
+class Net_(nn.Module):
+    """A base class for all of DUlib's neural nets.
+
+    """
+    def __init__(self):
+        super().__init__()
+
+    def numel_(self, trainable=True):
+        """Return the number of parameters."""
+        if trainable:
+            return sum(p.numel() for p in self.parameters() if p.requires_grad)
+        else:
+            return sum(p.numel() for p in self.parameters())
+
+class FFNet_(Net_):
   """A base class for feed-forward neural nets.
 
   This simply adds to `nn.Module` attributes called `means` and `st`

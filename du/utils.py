@@ -445,7 +445,7 @@ def print_devices():
       print(aboutCudaDevices())
 
 def format_num(number):
-  """Format a small number nicely.
+  """Format a small or a large number nicely.
 
   Args:
     $number$ (`float`): A number.
@@ -455,9 +455,24 @@ def format_num(number):
 
   >>> `print(format_num(.00000006))`
   6e-08
+  >>> `print(format_num(12332314123))`
+  12.3B
+  >>> `print(format_num(999999))`
+  1M
   """
-  if number < .005: string = '{:.4g}'.format(number)
-  else: string = '{:.5g}'.format(number)
+  if number < .005:
+    string = '{:.4g}'.format(number)
+  elif number < 0:
+    string = '{:.5g}'.format(number)
+  elif number > 999:
+    number = float('{:.3g}'.format(number))
+    mag = 0
+    while abs(number) >= 1000:
+        mag += 1
+        number /= 1000.0
+    string='{}{}'.format('{:f}'.format(number).rstrip('0').rstrip('.'),['','K','M','B','T'][mag])
+  else:
+    string = str(number)
   return string
 
 def _check_kwargs(passed, valid_keywords):
