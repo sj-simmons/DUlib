@@ -786,7 +786,7 @@ def online_means_stdevs(data, *transforms_, batchsize=1):
             '`utils.data.DataLoader` or `du.lib._DataLoader` yielding such mini`'
             '-batches of such tuples.')
     if transforms_!=():
-      print(du.utils._markup('$warning$ (from online_means_stdevs):'
+      print(du.utils._markup('$warning$ (from `online_means_stdevs`):'
           '|best practice is to put transforms in a dataloader|'))
     loader = data
     batchsize = loader.batch_size
@@ -1382,7 +1382,7 @@ def train(model, crit, train_data, **kwargs):
     for kwarg in ['learn_params', 'bs', 'epochs', 'graph',
         'print_lines', 'verb', 'gpu']:
       if kwarg in kwargs and kwarg in vars(args).keys():
-        print(du.utils._markup('$warning$ (from train):'
+        print(du.utils._markup('$warning$ (from `train`):'
             f'|argument passed via parameter| `{kwarg}`'
             f' |overriding| `args.{kwarg}`'))
   bs = kwargs.get('bs', -1 if not hasattr(args,'bs') else args.bs)
@@ -1696,8 +1696,8 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
 
   The data are appropriately centered and normalized during
   training. If the number of the features is not divisible by
-  `k`, then the last chunk is thrown away (so make the length of
-  it small, if not zero).
+  `k`, then the last chunk has a different size that previous
+  ones.
 
   Args:
     $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
@@ -1721,9 +1721,12 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
 
   Kwargs:
     $valid_metric$ (`nn.Module`): The validation metric to use when
-        gauging the accuracy of the model on test data. If this is
-        `None`, then `crit`, the training criterion, is used.
-        Default: `None`.
+        gauging the accuracy of the model on the `1/k`th of `train`
+        `_data` that is used for validation data during a step of
+        cross validation. If this `None`, then the validation me-
+        tric automatcally becomes classification accuracy, if
+        the targets of `train_data` are integers, or explained
+        variance, if those targets are floats.
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the features; and the sec-
         ond, whether to normalize them. Default: `(True, True)`.
@@ -1748,6 +1751,8 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         gpus, where -1 means to use the last gpu found, and -2
         means to override using a found gpu and use the cpu.
         Default: `-1`.
+    $warn$ (`bool`): Issue descriptive warning if $k$ does not div-
+        ide the number of training examples. Default: `False`.
 
   Returns:
     `nn.Module`. Returns `model` which has been partially trained
@@ -1755,70 +1760,86 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         its `k` validations.
   """
   #_this is cross_validate_train
-  du.utils._check_kwargs(kwargs,['k','valid_metric','cent_norm_feats',\
-      'cent_norm_targs','learn_params','bs','epochs','gpu','verb'])
+  du.utils._check_kwargs(kwargs,['k','valid_metric','cent_norm_feats','cent_norm_targs',\
+      'learn_params','bs','epochs','gpu','verb','warn'])
   du.utils._catch_sigint()
   valid_metric = kwargs.get('valid_metric', None)
-  assert 2 <= len(train_data) <= 3, dedent("""\
-      Argument train_data tuple must have length 2 or 3, not {}
-  """.format(len(train_data)))
+  assert 2 <= len(train_data) <= 3,\
+      f'Argument train_data must be a tuple of length 2 or 3, not {len(train_data)}'
   feats_lengths = None
   if len(train_data) == 2:
-    feats, targs = train_data
+      feats, targs = train_data
   elif len(train_data) == 3:
-    feats, feats_lengths, targs = train_data
+      feats, feats_lengths, targs = train_data
   assert len(feats) == len(targs),\
-      "Number of features ({}) must equal number of targets ({}).".\
-          format(len(feats), len(targs))
+      f'Number of features ({len(feats)}) must equal number of targets ({len(targs)}).'
   assert not feats_lengths, 'variable length not implemented yet'
   cent_feats, norm_feats = kwargs.get('cent_norm_feats',(True, True))
   cent_targs, norm_targs = kwargs.get('cent_norm_targs',(True, True))
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
-  bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
-  verb = kwargs.get('verb', 2); gpu = kwargs.get('gpu', -1)
+  bs = kwargs.get('bs', -1)
+  epochs = kwargs.get('epochs', 1)
+  verb = kwargs.get('verb', 2)
+  gpu = kwargs.get('gpu', -1)
+  warn = kwargs.get('warn', False)
 
   valids = torch.zeros(k) # this will hold the k validations
-  chunklength = len(feats) // k
 
-  if not valid_metric: valid_metric = crit
+  if len(feats) % k != 0:
+      chunklength = len(feats) // k + 1
+      if warn:
+          print(du.utils._markup('$warning$ (from `cross_validate`):|disjointly partitioning into|'
+              f' `{len(feats)//chunklength}` |chunks each of size |`{chunklength}`'),end='')
+          lenlastchunk = len(feats) - chunklength * (len(feats) // chunklength)
+          if lenlastchunk > 0:
+              print(du.utils._markup(f' |followed by a chunk of length| `{lenlastchunk}`'))
+  else:
+      chunklength = len(feats) // k
 
   # randomize
   indices = torch.randperm(len(feats))
   xss = feats.index_select(0, indices)
   yss = targs.index_select(0, indices)
 
-  for idx in range(0, chunklength * (len(xss)//chunklength), chunklength):
+  for idx in range(0, len(feats), chunklength):
 
-    xss_train = torch.cat((xss[:idx],xss[idx+chunklength:]),0).clone()
-    xss_test = xss[idx:idx + chunklength].clone()
-    yss_train = torch.cat((yss[:idx],yss[idx+chunklength:]),0).clone()
-    yss_test = yss[idx:idx + chunklength].clone()
+      xss_train = torch.cat((xss[:idx],xss[idx+chunklength:]),0).clone()
+      xss_test = xss[idx:idx + chunklength].clone()
+      yss_train = torch.cat((yss[:idx],yss[idx+chunklength:]),0).clone()
+      yss_test = yss[idx:idx + chunklength].clone()
 
-    if cent_feats: xss_train, xss_train_means = center(xss_train)
-    if norm_feats: xss_train, xss_train_stdevs = normalize(xss_train)
-    if cent_targs: yss_train, yss_train_means = center(yss_train)
-    if norm_targs: yss_train, yss_train_stdevs = normalize(yss_train)
+      if cent_feats: xss_train, xss_train_means = center(xss_train)
+      if norm_feats: xss_train, xss_train_stdevs = normalize(xss_train)
+      if cent_targs: yss_train, yss_train_means = center(yss_train)
+      if norm_targs: yss_train, yss_train_stdevs = normalize(yss_train)
 
-    model = train(
-        model=model,
-        crit=crit,
-        train_data = (xss_train, yss_train),
-        learn_params = learn_params,
-        bs=bs,
-        epochs=epochs,
-        verb=verb-1,
-        gpu=(gpu,))
+      model = train(
+          model=model,
+          crit=crit,
+          train_data = (xss_train, yss_train),
+          learn_params = learn_params,
+          valid_metric = valid_metric,
+          bs=bs,
+          epochs=epochs,
+          verb=verb-1,
+          gpu=(gpu,))
 
-    if cent_feats: xss_test.sub_(xss_train_means)
-    if norm_feats: xss_test.div_(xss_train_stdevs)
-    if cent_targs: yss_test.sub_(yss_train_means)
-    if norm_targs: yss_test.div_(yss_train_stdevs)
+      if cent_feats: xss_test, _ = center(xss_test, xss_train_means)
+      if norm_feats: xss_test, _ = normalize(xss_test, xss_train_stdevs)
+      if cent_targs: yss_test, _ = center(yss_test, yss_train_means)
+      if norm_targs: yss_test, _ = normalize(yss_test, yss_train_stdevs)
 
-    valids[idx//chunklength] = valid_metric(model(xss_test), yss_test)
+      if valid_metric is None:
+          if isinstance(train_data[-1], FloatTensor):
+              valids[idx//chunklength] = explained_var(model, (xss_test, yss_test))
+          if isinstance(train_data[-1], IntTensor):
+              valids[idx//chunklength] = class_accuracy(model, (xss_test, yss_test))
+      else:
+          valids[idx//chunklength] = valid_metric(model(xss_test), yss_test)
 
   return model, valids
 
-def cross_validate(model, crit, train_data, k, **kwargs):
+def cross_validate(model, crit, train_data, k = 10, **kwargs):
   """Cross-validate a model.
 
   The data are appropriately centered and normalized during
@@ -1850,10 +1871,15 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         Default: `10`.
 
   Kwargs:
-    $valid_metric$ (`nn.Module`): The validation criterion to use
-        when gauging the accuracy of the model on test data. If
-        `None`, this is set to `crit`; i.e., the training criter-
-        ion. Default: `None`.
+    $valid_metric$ (`nn.Module`): The validation metric to use when
+        gauging the accuracy of the model on the `1/k`th of `train`
+        `_data` that is used for validation data during a step of
+        cross validation. If this `None`, then the validation me-
+        tric automatcally becomes classification error, if the
+        targets of `train_data` are integers, or 1 - explained
+        variance, if those targets are floats. Alternatively,
+        one can put any metric that maps (yhatss, yss)-> float
+        for which lower is better. Default: `None`.
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the features; the second en-
         try determines whether to normalize the features. De-
@@ -1884,76 +1910,75 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         average of that model's `k` validations.
   """
   #_this is cross_validate
-  du.utils._check_kwargs(kwargs,['k','bail_after','valid_metric',\
-      'cent_norm_feats','cent_norm_targs','learn_params','bs',\
-      'epochs','verb','gpu'])
+  du.utils._check_kwargs(kwargs,['bail_after','valid_metric','cent_norm_feats',\
+      'cent_norm_targs','learn_params','bs','epochs','verb','gpu'])
   valid_metric = kwargs.get('valid_metric', None)
-  k = kwargs.get('k', 10)
   bail_after = kwargs.get('bail_after', 5)
-  assert 2 <= len(train_data) <= 3, dedent("""\
-      Argument train_data tuple must have length 2 or 3, not {}
-  """.format(len(train_data)))
+  assert 2 <= len(train_data) <= 3,\
+      f'Argument train_data must be a tuple of length 2 or 3, not {len(train_data)}'
   feats_lengths = None
   if len(train_data) == 2:
-    feats, targs = train_data
+      feats, targs = train_data
   elif len(train_data) == 3:
-    feats, feats_lengths, targs = train_data
+      feats, feats_lengths, targs = train_data
   assert len(feats) == len(targs),\
-      "Number of features ({}) must equal number of targets ({}).".\
-          format(len(feats), len(targs))
+      f'Number of features ({len(feats)}) must equal number of targets ({len(targs)}).'
   assert not feats_lengths, 'variable length not implemented yet'
   cent_norm_feats = kwargs.get('cent_norm_feats',(True, True))
   cent_norm_targs = kwargs.get('cent_norm_targs',(True, True))
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
-  bs = kwargs.get('bs', -1); epochs = kwargs.get('epochs', 1)
-  verb = kwargs.get('verb', 1); gpu = kwargs.get('gpu', -1)
+  bs = kwargs.get('bs', -1)
+  epochs = kwargs.get('epochs', 1)
+  verb = kwargs.get('verb', 1)
+  gpu = kwargs.get('gpu', -1)
 
   no_improvement = 0
   best_valids = 1e15*torch.ones(k)
   total_epochs = 0
 
-  if len(feats) % k != 0:
-    chunklength = len(feats) // k
-    print("warning: the first",k-1,"chunks have size",chunklength,\
-        "but the last one has size",str(len(feats) % chunklength)+".")
-
-  if not valid_metric: valid_metric = crit
+  warn = True
 
   while no_improvement < bail_after:
 
-    model, valids = cross_validate_train(
-        model = model,
-        crit = crit,
-        train_data = train_data,
-        k = k,
-        valid_metric = valid_metric,
-        cent_norm_feats = cent_norm_feats,
-        cent_norm_targs = cent_norm_targs,
-        epochs = epochs,
-        learn_params = learn_params,
-        bs = bs,
-        verb = verb,
-        gpu = gpu)
+      model, valids = cross_validate_train(
+          model = model,
+          crit = crit,
+          train_data = train_data,
+          k = k,
+          valid_metric = valid_metric,
+          cent_norm_feats = cent_norm_feats,
+          cent_norm_targs = cent_norm_targs,
+          epochs = epochs,
+          learn_params = learn_params,
+          bs = bs,
+          verb = verb,
+          gpu = gpu,
+          warn = warn)
 
-    total_epochs += k*epochs
+      total_epochs += k*epochs
 
-    if valids.mean().item() < best_valids.mean().item():
-      best_model = copy.deepcopy(model)
-      best_valids = valids
-      no_improvement = 0
-    else:
-      no_improvement += 1
+      # both of the automatic metrics are larger is better
+      if valid_metric is None:
+          valids = torch.tensor([1 - valid for valid in valids])
 
-    if valids.mean().item() == 0.0: no_improvement = bail_after
+      if valids.mean().item() < best_valids.mean().item():
+          best_model = copy.deepcopy(model)
+          best_valids = valids
+          no_improvement = 0
+      else:
+          no_improvement += 1
 
-    if verb > 0:
-      print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
-          format(valids.mean().item(),valids.std().item(),best_valids.mean().\
-          item(),total_epochs)+' '+str(no_improvement)+"/"+str(bail_after))
+      if valids.mean().item() == 0.0: no_improvement = bail_after
+
+      if verb > 0:
+          print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
+              format(valids.mean().item(),valids.std().item(),best_valids.mean().\
+              item(),total_epochs)+' '+str(no_improvement)+"/"+str(bail_after))
+      warn = False
 
   if verb > 0:
-    print("best valid:  mean={0:.5g}  stdev={1:.5g}".\
-        format(best_valids.mean().item(),best_valids.std().item()))
+      print("best valid:  mean={0:.5g}  stdev={1:.5g}".\
+          format(best_valids.mean().item(),best_valids.std().item()))
 
   return best_model, best_valids.mean()
 
@@ -2048,9 +2073,9 @@ def class_accuracy(model, data, **kwargs):
     #check whether the device already lives on the device determined above
     already_on = list(model.parameters())[0].device
     if (str(device)[:3] !=  str(already_on)[:3] or str(device)[:3] != 'cpu')\
-       and device != already_on:
-      print(du.utils._markup('$warning$ (from class_accuracy):'), end=' ')
-      print(du.utils._markup(f'|model moved from| `{already_on}` to `{device}`'))
+        and device != already_on:
+      print(du.utils._markup('$warning$ (from `class_accuracy`):'
+          f'|model moved from| `{already_on}` to `{device}`'))
       model = model.to(device)
 
     # Check basic things and set stuff up including creating an appropriate,
