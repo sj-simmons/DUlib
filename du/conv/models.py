@@ -546,7 +546,7 @@ class OneMetaCNN(FFNet_):
 class TwoMetaCNN(FFNet_):
   """Two meta-layer CNN with three fully-connected layers.
 
-  Note: Consider using `DenseFFNet` which generalizes this.
+  Note: Consider using `ConvFFNet` which generalizes this.
   """
   def __init__(self, in_size, n_out, channels, width, **kwargs):
     """Constructor.
@@ -562,7 +562,7 @@ class TwoMetaCNN(FFNet_):
           entries are `out_channels` for the convolutional
           parts of the first and second metalayers, resp.
       $width$ (`int`): the widths (no. of nodes) in the second
-          layers of the dense part.
+          layer of the dense part.
 
     Kwargs:
       $outfn$ (`nn.Module`): a function to pipe out though lastly
