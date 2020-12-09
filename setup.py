@@ -30,7 +30,7 @@ setup(
   install_requires=[],
   version='0.9.3',
   license='Apache 2.0',
-  description='tools from The DL@DU Project',
+  description='courtesy of the DL@DU Project',
   long_description=readme(),
   include_package_data=True,
   zip_safe=False,
