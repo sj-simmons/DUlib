@@ -413,6 +413,10 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     want means and stdevs for both of those).  As a result, the api has changed.
     For example, the return value is a tuple of tuples of tensors.
 
+**Version 0.9.4** (coming soon)
+  * In **du.lib**, **cross_validation** is now called, more correctly, **cv_train**;
+    and **cross_validation_train** is now **cross_validation**.
+
 ## Modifying DUlib
 
 If you want to experiment with the code in the libraries, then you can clone

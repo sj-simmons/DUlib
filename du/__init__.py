@@ -20,9 +20,12 @@ $classes$ are, as of this release,
   │  ├─ $normalize$       normalize data
   │  ├─ $standardize$     mean-center and normalize
   │  ├─ $online_means_stdevs$ online compute means and st devs
+  │  ├─ $Data$            easily augment data
+  │  ├─ $FoldableData$    cross-validation with DataLoaders
   │  │  ~training:~
   │  ├─ $train$           train a model
-  │  ├─ $cross_validate$  cross-validate train a model
+  │  ├─ $cv_train$        cv (cross-validate) train a model
+  │  ├─ $cv_train2$       cv train a model on augmented data
   │  ├─ $LearnParams_$    class to add training parameters
   │  ├─ $Momentum$        add momentum to SGD
   │  ├─ $optimize_ols$    optimize learning rate and momentum
@@ -48,14 +51,14 @@ $classes$ are, as of this release,
   │  └─ |examples|
   ├─ |rec| !recurrence and natural language processing!
   │  ├─ |lib|
-  │  │  ├─ |ngrams|    model n-grams for a word corpus
-  │  │  └─ |cbow|      model CBOW wordvecs given a corpus
+  │  │  ├─ |ngrams|       model n-grams for a word corpus
+  │  │  └─ |cbow|         model CBOW wordvecs given a corpus
   │  ├─ |models|
   │  └─ |examples|
   ├─ |utils| !potentially helpful utilites!
-  │   ├─ $standard_args$  easily set command-line options
-  │   └─ $args2string$    easily make a logging string
-  └─ |highlight|       highlighting conventions for docs
+  │  ├─ $standard_args$   easily set command-line options
+  │  └─ $args2string$     easily make a logging string
+  └─ |highlight|          highlighting conventions for docs
 
 !Quick Start!
 

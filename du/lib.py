@@ -56,13 +56,26 @@ trained models.
                  -do not divide by a number smaller than this
 
   |online_means_stdevs|
-                 -compute the means and stdevs of large or aug-
-                  mented datasets; returns a tuple of tupled
-                  pairs of tensors.
+               compute the means and stdevs of large or augmen-
+               ted datasets; returns a tuple of tupled pairs of
+               tensors.
     ($data$,       -a pair `(xss, yss)` of tensors or a dataloader
      $transforms_$,-any number of augmentations of the data
      $batchsize=1$)-the online computation is done this many exa-
                   mples at a time.
+
+  |Data|         encapsulate large or augmented data sets; extends
+                 `torch.utils.data.Dataset`.
+    ($df$,         -an instance of `pandas.Dataframe`
+     $maps$,       -tuple of fns determining how data is yielded
+     $*transforms$)-augmentations
+
+  |FoldedData|   useful when cross-validating on augmented data
+    ($df$,         -an instance of `pandas.Dataframe`
+     $maps$,       -tuple of fns determining how data is yielded
+     $transforms$  -augmentations
+     $k$           -the number of folds
+     $randomize$=`True`)
 
   ~tools for training:~
 
@@ -105,23 +118,23 @@ trained models.
                   above. This argument is typically created us-
                   ing `du.utils.standard_args`.
 
-  |cross_validate_train|
+  |cross_validate|
     ($model$, $crit$, $train_data$, $k$, $**kwargs$)
-     This is a helper function for `cross_validate`; each epoch
-     it iterates fold-wise, validating on the `k` possible test
-     sets, and returns the partially trained (for 1 epoch, by
-     default) model; consider using `cross_validate` instead of
-     calling this directly; the parameters are the same as for
-     `cross_validate` but without `bail_after`.
+     This is a helper function for `cv_train`; each epoch it it-
+     erates fold-wise, validating on the `k` possible test sets,
+     and returns the partially trained (for 1 epoch by default)
+     model; consider using `cv_train` instead of calling this di-
+     rectly; the parameters are essentially the same as those
+     of `cv_train` but without `bail_after`.
 
-  |cross_validate| return `model` cross-validate trained tupled
+  |cv_train|       return `model`, cross-validate trained, tupled
                  with the mean (`float`) of `model`'s validations
     ($model$,     -the model to be cross-validated
      $crit$,      -the loss function while training
      $train_data$,-either `(train_feats, train_targs)` or
-                 `(test_feats, test_lengths, train_targs)`
+                 `(train_feats, train_lengths, train_targs)`
      $k$ = `10`,    -the number of folds when cross-validating
-     $bail_after$ = `5`,
+     $bail_after$ = `10`,
                 -bail after this many steps if no improvement
      $valid_metric$ = `None`,
                 -the criterion to use when validating on test
@@ -145,6 +158,14 @@ trained models.
                  last gpu if multiple ones found; put -2 to ov-
                  erride found gpu(s) and use the cpu.  Consider
                  just accepting the default here.
+
+  |cross_validate2|
+                 similar to `cross_validate`
+
+  |cv_train2|      similar to `cv_train` except that an agument to
+                 the parameter `train_data` is assumed to be an
+                 instance of `FoldedData`. Use this if you are
+                 augmenting your training data with transforms.
 
   |LearnParams_|  base class for defining learning parameters
     ($lr$ = `0.1`)  -we need at least a learning rate
@@ -221,10 +242,10 @@ trained models.
 #    So try to refrain to going to device in programs (but still
 #    get and pass the device, of course). THINK THROUGH THIS.
 #    - what about the new normal -- only moving to device for in
-#      the train fn -- w/r to cross_validate_train?
+#      the train fn -- w/r to cross_validate?
 #    - grep this whole file for device and look carefully
 #    - NOTE:  now using the gpu arg in train ...
-#  - make cross_validate_train and cross_validate work with
+#  - make cross_validate and cv_train work with
 #    variable length data
 #    - add feats lengths to all three train fns and document-
 #      ation
@@ -239,8 +260,7 @@ trained models.
 #    - Fix catch_sigint_and_break or remove it. If it is working
 #      in bash, check and see how it interacts with interrupt in
 #      say IDLE.
-#  - Clean up verbosity in cross_validate_train and
-#    cross_validate.
+#  - Clean up verbosity in cross_validate and cv_train.
 #  - Start type checking kwargs whenever everyone is clearly
 #    running Python 3.6 or greater.
 #  - Clean up strings by using multiline ones correctly. Use
@@ -368,7 +388,8 @@ def split_df(df, splits):
     return tuple(returnlist)
   else:
     sum_ = sum(splits)
-    assert sum_ <= 1.0, _markup('sum of entries in arg. $splits$ must be <= 1.0')
+    assert sum_ <= 1.0, du.utils._markup(
+        f'the sum of entries in the argument to $splits$ must be <= 1.0 not {sum(splits)}')
     frac = .5; splits = [1.0] + list(splits)
     for idx in range(len(splits)-1):
       frac = (frac / (1-frac)) * (splits[idx+1] / splits[idx])
@@ -1006,7 +1027,7 @@ def _tuple2dataset(tup):
   """Return instance of Dataset.
 
   If you don't need any transforms, this a quick way to create
-  a dataset from a tuple that fits well in memory.
+  a dataset from a tuple which fits well in memory.
 
   >>> feats = torch.rand(40, 2); targs = torch.rand(40, 1)
   >>> dataset = _tuple2dataset((feats, targs))
@@ -1015,7 +1036,7 @@ def _tuple2dataset(tup):
   >>> len(dataset[0][0]), len(dataset[0][1])
   (2, 1)
   """
-  class Data(torch.utils.data.Dataset):
+  class __Data(torch.utils.data.Dataset):
     def __init__(self, tup):
       self.tup = tup
 
@@ -1024,7 +1045,45 @@ def _tuple2dataset(tup):
 
     def __getitem__(self, idx):
       return tuple([tup[j][idx] for j in range(len(self.tup))])
-  return Data(tup)
+  return __Data(tup)
+
+class Data(torch.utils.data.Dataset):
+    """Base class for data sets.
+
+    Simple example:
+    >>> import pandas as pd
+    >>> data = {'number':list(range(12)),\
+                'letter':list('abcdefghijkl')}
+    >>> df = pd.DataFrame(data)
+    >>> maps = (lambda df, idx: df.iloc[idx, 0],\
+                lambda df, idx: df.iloc[idx, 1])
+    >>> id_ = lambda x: x
+    >>> double = lambda x: x+x
+    >>> dataset = Data(df, maps, id_, double)
+    >>> print(dataset[1])
+    (1, 'bb')
+    """
+    def __init__(self, df, maps, *transforms):
+        """
+        Args:
+          $df$ (`pandas.Dataframe`]) Dataframe holding the data.
+          $maps$ (`Tuple[FunctionType]`) Tuple of functions that
+              each map a dataframe and an index (integer) to a
+              Tensor or whatever is to be retuned in that posit-
+              ion by `__getitem__`.
+          $transforms$ (`Transform)` One or more transformations
+              (see the `torchvision.transforms` library).
+        """
+        assert len(transforms) <= len(maps)
+        self.df = df
+        self.mps = maps
+        self.tfs = transforms
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        return tuple(tf(mp(self.df,idx)) for tf, mp in zip(self.tfs, self.mps) if tf is not None)
 
 # keeping this since it's faster than DataLoader
 class _DataLoader:
@@ -1323,6 +1382,8 @@ def train(model, crit, train_data, **kwargs):
     $bs$ (`int`): The mini-batch size where -1 forces batch gradi-
         ent descent (i.e. feed-forwarding all training examples
         before each back-propagation). Default: `-1`.
+        Note: the batchsizes of any dataloaders that are passed
+        via `train_data` and `valid_data` supersede this.
     $epochs$ (`int`): The number of epochs to train over, where an
         epoch is the 'time' required to see each training exam-
         ple exactly once. Default: `10`.
@@ -1503,7 +1564,9 @@ def train(model, crit, train_data, **kwargs):
                 model, dataloader=train_data,
                 crit=_batch2class_accuracy, device=valid_dev)
           else:
-            raise RuntimeError('please specify a function to use for validation')
+            raise RuntimeError(du.utils._markup(
+                'from `train`: please use the `valid_metric` paramter to pass a function'
+                'for use when validating'))
           break
     elif isinstance(valid_metric, FunctionType):
       # this maps: model -> float
@@ -1688,16 +1751,119 @@ def train(model, crit, train_data, **kwargs):
   #model = model.to('cpu')
   return model
 
-def cross_validate_train(model, crit, train_data, k, **kwargs):
-  """Cross-validate train a model for one (by default) epoch.
+class FoldedData:
+    """Dataset factory for use in cross-validation.
+
+    If `k` = 1, then this essentially specializes to `du.lib.Data`
+    and so yields tuples of data accordingly. If `k` > 1, then each
+    tensor in such a tuple is coherently partitioned into k dis-
+    joint 'folds' and then two tuples are yielded: one with the
+    `k`th fold of each tensor left out and another consisting of
+    the omitted fold.
+
+    Simple example:
+    >>> import pandas as pd
+    >>> data = {'num':list(range(9)),'let':list('abcdefghi')}
+    >>> df = pd.DataFrame(data)
+    >>> num_map = lambda df, idx: df.iloc[idx, 0]
+    >>> let_map = lambda df, idx: df.iloc[idx, 1]
+    >>> maps = (num_map, let_map)
+    >>> id_ = lambda x: x
+    >>> dataset=FoldedData(df,maps,(id_,id_),3,randomize=False)
+    >>> for traindata, testdata in dataset:
+    ...     print(list(traindata))
+    ...     print(list(testdata))
+    [(3, 'd'), (4, 'e'), (5, 'f'), (6, 'g'), (7, 'h'), (8, 'i')]
+    [(0, 'a'), (1, 'b'), (2, 'c')]
+    [(0, 'a'), (1, 'b'), (2, 'c'), (6, 'g'), (7, 'h'), (8, 'i')]
+    [(3, 'd'), (4, 'e'), (5, 'f')]
+    [(0, 'a'), (1, 'b'), (2, 'c'), (3, 'd'), (4, 'e'), (5, 'f')]
+    [(6, 'g'), (7, 'h'), (8, 'i')]
+
+    >>> data = {'num':list(range(7)),'let':list('abcdefg')}
+    >>> df = pd.DataFrame(data)
+    >>> ();dataset=FoldedData(df,maps,(id_,id_),2,randomize=False);()
+    (...)
+    >>> for traindata, testdata in dataset:
+    ...     print(list(traindata))
+    ...     print(list(testdata))
+    [(4, 'e'), (5, 'f'), (6, 'g')]
+    [(0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')]
+    [(0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')]
+    [(4, 'e'), (5, 'f'), (6, 'g')]
+
+    >>> data = {'num':list(range(11)),'let':list('abcdefghijk')}
+    >>> df = pd.DataFrame(data)
+    >>> ();dataset=FoldedData(df,maps,(id_,),3,randomize=False);()
+    (...)
+    >>> for traindata, testdata in dataset:
+    ...     print(list(traindata))
+    ...     print(list(testdata))
+    """
+    def __init__(self, df, maps, transforms, k, randomize=True):
+        """
+        Args:
+          $df$ (`pandas.Dataframe`]) Dataframe holding the data.
+          $maps$ (`Tuple[FunctionType]`) Tuple of functions that
+              each map a dataframe and an index (integer) to a
+              Tensor or whatever is to be retuned in that posit-
+              ion by `__getitem__`.
+          $transforms$ (`Transform)` One or more transformations
+              (see the `torchvision.transforms` library).
+          $k$ (`int`) The number of folds.
+          $randomize$ (`bool`) Whether to randomize `df` just before
+              returning the iterator. Default: `True`.
+        """
+        assert k>0, dulib._markup('The number of folds, `k`, must be positive.')
+        assert k>1, dulib._markup('There is no point in having `k`=1 fold.')
+        self.df = df
+        self.mps = maps
+        self.tfs = transforms
+        self.randomize = randomize
+        self.test_fold = 0
+        if len(df) % k != 0:
+            chunklength = len(df) // k + 1
+            self.k = len(df)//chunklength
+            print(du.utils._markup('$warning$ (from `cv_train2`):|disjointly partitioning into|'
+                f' `{self.k}` |chunk(s) each of length |`{chunklength}`'),end='')
+            lenlastchunk = len(df) - chunklength * (len(df) // chunklength)
+            if lenlastchunk > 0:
+                self.k += 1
+                print(du.utils._markup(f' |followed by a chunk of length| `{lenlastchunk}`'))
+            else:
+                print()
+        else:
+            chunklength = len(df) // k
+            self.k = k
+        self.chunklength = chunklength
+
+    def __iter__(self):
+        if self.randomize:
+            self.df = self.df.sample(frac = 1.0)
+        self.test_fold = 0
+        return self
+
+    def __next__(self):
+        if self.test_fold < self.k:
+            start_idx = self.test_fold * self.chunklength
+            end_idx = None if self.test_fold == self.k-1 else (self.test_fold+1) * self.chunklength
+            test_df = self.df[start_idx:end_idx]
+            train_df = self.df.drop(test_df.index)
+            self.test_fold += 1
+            return Data(train_df, self.mps, *self.tfs), Data(test_df, self.mps, *self.tfs)
+        else:
+            raise StopIteration
+
+def cross_validate(model, crit, train_data, k, **kwargs):
+  """Perform one round of cross-validation.
+
+  Here a 'round of cross-validation' entails k training steps
+  where k is the number of folds. The jth such step validates
+  on the jth fold after training (for, by default, one epoch)
+  on union of the remaining k-1 folds.
 
   Rather than calling this directly, consider calling the func-
-  tion `cross_validate` in this module.
-
-  The data are appropriately centered and normalized during
-  training. If the number of the features is not divisible by
-  `k`, then the last chunk has a different size that previous
-  ones.
+  tion `cv_train` in this module.
 
   Args:
     $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
@@ -1755,11 +1921,11 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
         ide the number of training examples. Default: `False`.
 
   Returns:
-    `nn.Module`. Returns `model` which has been partially trained
-        (for one epoch, by default) along with a tensor holding
-        its `k` validations.
+    `(nn.Module, Tensor)`. Returns `model` which has been part-
+        ially trained along with a tensor holding its `k` valid-
+        ations.
   """
-  #_this is cross_validate_train
+  #_this is cross_validate
   du.utils._check_kwargs(kwargs,['k','valid_metric','cent_norm_feats','cent_norm_targs',\
       'learn_params','bs','epochs','gpu','verb','warn'])
   du.utils._catch_sigint()
@@ -1788,11 +1954,13 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
   if len(feats) % k != 0:
       chunklength = len(feats) // k + 1
       if warn:
-          print(du.utils._markup('$warning$ (from `cross_validate`):|disjointly partitioning into|'
+          print(du.utils._markup('$warning$ (from `cv_train`):|disjointly partitioning into|'
               f' `{len(feats)//chunklength}` |chunks each of size |`{chunklength}`'),end='')
           lenlastchunk = len(feats) - chunklength * (len(feats) // chunklength)
           if lenlastchunk > 0:
               print(du.utils._markup(f' |followed by a chunk of length| `{lenlastchunk}`'))
+          else:
+              print()
   else:
       chunklength = len(feats) // k
 
@@ -1839,13 +2007,8 @@ def cross_validate_train(model, crit, train_data, k, **kwargs):
 
   return model, valids
 
-def cross_validate(model, crit, train_data, k = 10, **kwargs):
+def cv_train(model, crit, train_data, k = 10, **kwargs):
   """Cross-validate a model.
-
-  The data are appropriately centered and normalized during
-  training. If the number of the features is not divisible by
-  `k`, then the last chunk is thrown away (so make the length of
-  it small, if not zero).
 
   Args:
     $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
@@ -1875,15 +2038,15 @@ def cross_validate(model, crit, train_data, k = 10, **kwargs):
         gauging the accuracy of the model on the `1/k`th of `train`
         `_data` that is used for validation data during a step of
         cross validation. If this `None`, then the validation me-
-        tric automatcally becomes classification error, if the
+        tric automatically becomes classification error if the
         targets of `train_data` are integers, or 1 - explained
-        variance, if those targets are floats. Alternatively,
+        variance if those targets are floats. Alternatively,
         one can put any metric that maps (yhatss, yss)-> float
         for which lower is better. Default: `None`.
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
-        ermining whether to center the features; the second en-
-        try determines whether to normalize the features. De-
-        fault: `(True, True)`.
+        ermining whether to center the features and the second
+        entry determining whether to normalize the features
+        when cross-validate training. Default: `(True, True)`.
     $cent_norm_targs$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the targets, and the second,
         whether to normalize them. Default: `(True, True)`.
@@ -1898,8 +2061,8 @@ def cross_validate(model, crit, train_data, k = 10, **kwargs):
         ent descent (i.e. feed-forwarding all training examples
         before each backpropagation). Default: `-1`.
     $epochs$ (`int`): The number of epochs to train over for each
-        validation step. Default: `1`.
-    $verb$ (`int`): The verbosity. 0: silent, or 1. Default: `1`.
+        cross validation step. Default: `1`.
+    $verb$ (`int`): The verbosity. 0: silent; or 1. Default: `1`.
     $gpu$ (`int`): Which gpu to use in the presence of one or more
         gpus, where -1 means to use the last gpu found, and -2
         means to override using a found gpu and use the cpu.
@@ -1909,11 +2072,11 @@ def cross_validate(model, crit, train_data, k = 10, **kwargs):
     `(nn.Module, float)`. The trained 'best' `model` along with the
         average of that model's `k` validations.
   """
-  #_this is cross_validate
+  #_this is cv_train
   du.utils._check_kwargs(kwargs,['bail_after','valid_metric','cent_norm_feats',\
       'cent_norm_targs','learn_params','bs','epochs','verb','gpu'])
   valid_metric = kwargs.get('valid_metric', None)
-  bail_after = kwargs.get('bail_after', 5)
+  bail_after = kwargs.get('bail_after', 10)
   assert 2 <= len(train_data) <= 3,\
       f'Argument train_data must be a tuple of length 2 or 3, not {len(train_data)}'
   feats_lengths = None
@@ -1933,14 +2096,14 @@ def cross_validate(model, crit, train_data, k = 10, **kwargs):
   gpu = kwargs.get('gpu', -1)
 
   no_improvement = 0
-  best_valids = 1e15*torch.ones(k)
+  best_valids_mean = 1e15
   total_epochs = 0
 
   warn = True
 
   while no_improvement < bail_after:
 
-      model, valids = cross_validate_train(
+      model, valids = cross_validate(
           model = model,
           crit = crit,
           train_data = train_data,
@@ -1961,14 +2124,244 @@ def cross_validate(model, crit, train_data, k = 10, **kwargs):
       if valid_metric is None:
           valids = torch.tensor([1 - valid for valid in valids])
 
-      if valids.mean().item() < best_valids.mean().item():
+      if valids.mean().item() < best_valids_mean:
           best_model = copy.deepcopy(model)
           best_valids = valids
+          best_valids_mean = best_valids.mean()
           no_improvement = 0
       else:
           no_improvement += 1
 
-      if valids.mean().item() == 0.0: no_improvement = bail_after
+      if valids.mean().item() == 0.0:
+          no_improvement = bail_after
+
+      if verb > 0:
+          print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
+              format(valids.mean().item(),valids.std().item(),best_valids.mean().\
+              item(),total_epochs)+' '+str(no_improvement)+"/"+str(bail_after))
+      warn = False
+
+  if verb > 0:
+      print("best valid:  mean={0:.5g}  stdev={1:.5g}".\
+          format(best_valids.mean().item(),best_valids.std().item()))
+
+  return best_model, best_valids.mean()
+
+def cross_validate2(model, crit, train_data, **kwargs):
+  """Perform one round of cross-validation.
+
+  Here a 'round of cross-validation' entails k training steps
+  where k is the number of folds. The jth such step validates
+  on the jth fold after training (for, by default, one epoch)
+  on union of the remaining k-1 folds.
+
+  Rather than calling this directly, consider calling the func-
+  tion `cv_train2` in this module.
+
+  Args:
+    $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
+    $crit$ (`nn.modules.loss`): The loss function when training.
+    $train_data$ (`FoldedData`):
+
+  Kwargs:
+    $valid_metric$ (`nn.Module`): The validation metric to use when
+        gauging the accuracy of the model on the `1/k`th of `train`
+        `_data` that is used for validation data during a step of
+        cross validation. If this `None`, then the validation me-
+        tric automatcally becomes classification accuracy, if
+        the targets of `train_data` are integers, or explained
+        variance, if those targets are floats.
+    $learn_params$
+        (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
+        The training or 'learning' hyperparameters in the form
+        of an instance of the class `LearnParams_`; or, for bas-
+        ic functionality, a `dict` whose keys map the string
+        'lr', and optionally 'mo', to `float`s; or an instance of
+        `torch.optim.Optimizer`. Default: `{'lr': 0.1}`.
+    $bs$ (`int`): The mini-batch size where -1 forces batch grad-
+        ient descent (i.e. feed-forwarding all training exam-
+        ples before each backpropagation). Default: `-1`.
+    $epochs$ (`int`): The number of epochs to train over for each
+        validation step. Default: `1`.
+    $verb$ (`int`): The verbosity. 0: silent, 1: more, 2: all. De-
+        fault: `2`.
+    $gpu$ (`int`): Which gpu to use in the presence of one or more
+        gpus, where -1 means to use the last gpu found, and -2
+        means to override using a found gpu and use the cpu.
+        Default: `-1`.
+    $warn$ (`bool`): Issue descriptive warning if $k$ does not div-
+        ide the number of training examples. Default: `False`.
+
+  Returns:
+    `(nn.Module, Tensor)`. Returns `model` which has been part-
+        ially trained along with a tensor holding its `k` valid-
+        ations.
+  """
+  #_this is cross_validate2
+  du.utils._check_kwargs(kwargs,[
+      'valid_metric','learn_params','bs','epochs','gpu','verb','warn','num_workers','pin_memory'])
+  du.utils._catch_sigint()
+  valid_metric = kwargs.get('valid_metric', None)
+  learn_params = kwargs.get('learn_params', {'lr': 0.1})
+  bs = kwargs.get('bs', -1)
+  epochs = kwargs.get('epochs', 1)
+  verb = kwargs.get('verb', 2)
+  gpu = kwargs.get('gpu', -1)
+  warn = kwargs.get('warn', False)
+  num_workers = kwargs.get('num_workers', 1)
+  pin_memory = kwargs.get('pin_memory', True)
+  assert isinstance(model, nn.Module)
+  assert isinstance(train_data, FoldedData),du.utils._markup(
+      f'$error$ from `cross_validate2`:'
+      f'`train_data` |should be an instance of| `du.lib.FoldedData` |not| {type(train_data)}')
+
+  valids = []
+
+  for train_dataset, valid_dataset in train_data:
+
+      #!!!!!!!!!!!!  put more stuff for these dataloaders
+      train_loader = torch.utils.data.DataLoader(
+          train_dataset, batch_size=bs, num_workers=num_workers, pin_memory=pin_memory)
+      valid_loader = torch.utils.data.DataLoader(
+          valid_dataset, batch_size=bs, num_workers=num_workers, pin_memory=pin_memory)
+
+      model = train(
+          model = model,
+          crit = crit,
+          train_data = train_loader,
+          valid_data = valid_loader,
+          valid_metric = valid_metric,
+          learn_params = learn_params,
+          bs = bs,
+          epochs = epochs,
+          verb = verb-1,
+          gpu = (gpu,))
+
+      if valid_metric is None:
+          if isinstance(train_dataset[0][-1], FloatTensor):
+              valids.append(explained_var(model, valid_loader, gpu=gpu))
+          elif isinstance(train_dataset[0][-1], IntTensor):
+              valids.append(class_accuracy(model, valid_loader, gpu=gpu))
+          else:
+              raise RuntimeError(du.utils._markup(
+                  'from `train`: please use the `valid_metric` paramter to pass a function'
+                  'for use when validating'))
+      else:
+          valids.append(_evaluate(model, dataloader=valid_loader, crit=valid_metric, device=gpu))
+
+  return model, torch.tensor(valids)
+
+def cv_train2(model, crit, train_data, **kwargs):
+  """Cross-validate train a model.
+
+  This is similar to `cv_train` except that `train_data` is assumed
+  to be an instance of `FoldedData`. Moreover, this function, un-
+  like `cv_train`, does not (optionally) center or normalize dur-
+  ing cross-validation training. So take care of that, if
+  warranted, when instancing `FoldedData1`.
+
+  Args:
+    $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
+    $crit$ (`nn.modules.loss`): The loss function when training.
+    $train_data$ (`du.lib.FoldedData`): An instance of `FoldedData`
+        yielding train_data/valid_data pairs of instances of
+        `du.lib.Data` suitable as arguments to the corresponding
+        parameters of `du.lib.train`.
+    $bail_after$ (`int`): The number of steps of cross_validation
+        training after which to bail if no improvement is seen.
+        Default: `10`.
+
+  Kwargs:
+    $valid_metric$ (`nn.Module`): The validation metric to use when
+        gauging the accuracy of the model on the `1/k`th of `train`
+        `_data` that is used for validation data during a step of
+        cross validation. If this `None`, then the validation me-
+        tric automatcally becomes classification error if the
+        targets of `train_data` are integers, or 1 - explained
+        variance if those targets are floats. Alternatively,
+        one can put any metric that maps (yhatss, yss)-> float
+        for which lower is better. Default: `None`.
+    $learn_params$
+        (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
+        The training (or 'learning') hyper-parameters in the
+        form of an instance of the class `LearnParams_`; or, for
+        basic functionality, a `dict` whose keys map the string
+        'lr', and optionally 'mo', to `float`s; or an instance of
+        `torch.optim.Optimizer`. Default: `{'lr':0.1}`.
+    $bs$ (`int`): The mini-batch size where -1 forces batch gradi-
+        ent descent (i.e. feed-forwarding all training examples
+        before each backpropagation). Default: `-1`.
+    $epochs$ (`int`): The number of epochs to train over for each
+        cross validation step. Default: `1`.
+    $num_workers$ (`int`): Used when instancing DataLoaders for
+        training and validating. Default: `1`.
+    $pin_memory$ (`bool`): Used when instancing DataLoaders for
+        training and validating. Default: `True`.
+    $verb$ (`int`): The verbosity. 0: silent; or 1. Default: `1`.
+    $gpu$ (`int`): Which gpu to use in the presence of one or more
+        gpus, where -1 means to use the last gpu found, and -2
+        means to override using a found gpu and use the cpu.
+        Default: `-1`.
+
+  Returns:
+    `(nn.Module, float)`. The trained 'best' `model` along with the
+        average of that model's `k` validations.
+  """
+  #_this is cv_train2
+  du.utils._check_kwargs(kwargs,['bail_after','valid_metric','learn_params','bs','epochs',
+      'verb','gpu','num_workers','pin_memory'])
+  valid_metric = kwargs.get('valid_metric', None)
+  bail_after = kwargs.get('bail_after', 10)
+  learn_params = kwargs.get('learn_params', {'lr': 0.1})
+  bs = kwargs.get('bs', -1)
+  epochs = kwargs.get('epochs', 1)
+  num_workers = kwargs.get('num_workers', 1)
+  pin_memory = kwargs.get('pin_memory', True)
+  verb = kwargs.get('verb', 1)
+  gpu = kwargs.get('gpu', -1)
+
+  assert isinstance(model, nn.Module)
+  assert isinstance(train_data, FoldedData),du.utils._markup(
+      f'$error$ from `cv_train2`:'
+      f'`train_data` |should be an instance of| `du.lib.FoldedData` |not| {type(train_data)}')
+
+  no_improvement = 0
+  best_valids_mean = 1e15
+  total_epochs = 0
+  warn = True
+
+  while no_improvement < bail_after:
+
+      model, valids = cross_validate2(
+          model = model,
+          crit = crit,
+          train_data = train_data,
+          valid_metric = valid_metric,
+          epochs = epochs,
+          learn_params = learn_params,
+          bs = bs,
+          verb = verb,
+          gpu = gpu,
+          num_workers = num_workers,
+          pin_memory = pin_memory,
+          warn = warn)
+
+      total_epochs += len(valids)*epochs
+
+      # both automatic metrics are 'larger is better'
+      if valid_metric is None:
+          valids = torch.tensor([1 - valid for valid in valids])
+
+      if valids.mean().item() < best_valids_mean:
+          best_model = copy.deepcopy(model)
+          best_valids = valids
+          best_valids_mean = best_valids.mean()
+          no_improvement = 0
+      else:
+          no_improvement += 1
+
+      if valids.mean().item() == 0.0:
+          no_improvement = bail_after
 
       if verb > 0:
           print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
@@ -2075,7 +2468,7 @@ def class_accuracy(model, data, **kwargs):
     if (str(device)[:3] !=  str(already_on)[:3] or str(device)[:3] != 'cpu')\
         and device != already_on:
       print(du.utils._markup('$warning$ (from `class_accuracy`):'
-          f'|model moved from| `{already_on}` to `{device}`'))
+          f'|model moved from| `{already_on}` |to| `{device}`'))
       model = model.to(device)
 
     # Check basic things and set stuff up including creating an appropriate,
@@ -2186,7 +2579,7 @@ def _explained_var(loader, device, mean_zero = False):
   >>> `yhatss = torch.arange(4.).unsqueeze(1)`
   >>> `yss = torch.tensor([-1., 5., 2., 3.]).unsqueeze(1)`
   >>> loader = _DataLoader((yhatss, yss), batch_size=2)
-  >>> `1 - _explained_var(loader, 'cpu')(yhatss, yss).item()`
+  >>> `1 - _explained_var(loader, 'cpu')(yhatss, yss)`
   0.09333...
   """
   if mean_zero:
