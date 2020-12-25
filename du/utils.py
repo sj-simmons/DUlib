@@ -133,8 +133,8 @@ def standard_args(desc = '', **kwargs):
     $props$ (`Union[bool,Tuple[float]]`): Similar to above, but
         for the proportions on which to train, validate, and/or
         validate. Default: `False`.
-    $dropout$ ('float'): As above, useful for controlling dropout
-        layer in your model. Default: `False`.
+    $dropout$ ('Union[bool,Tuple[float]]'): As above, useful for
+        controlling dropout in your model. Default: `False`.
     $gpu$ (`Union[bool,Tuple[int]]`): Add a `gpu` switch. with a note
         in the help string to the effect:   ~which gpu (int or~
         ~ints separated by whitespace) for training/validating;~
@@ -222,13 +222,6 @@ def standard_args(desc = '', **kwargs):
   elif lr:
     parser.add_argument('-mo', type=float, help='momentum',required=True)
 
-  if isinstance(dropout, float):
-    parser.add_argument('-dropout', type=float, help='dropout proportion',
-        default=dropout)
-  elif dropout:
-    parser.add_argument('-dropout', type=float, help='dropout proportion',
-        required=True)
-
   hstr='the mini-batch size; set to -1 for (full) batch gradient descent'
   if not isinstance(bs, bool) and isinstance(bs, int):
     parser.add_argument('-bs', type=int, help=hstr, default=bs)
@@ -248,6 +241,13 @@ def standard_args(desc = '', **kwargs):
   elif isinstance(props, bool) and props:
     parser.add_argument('-props', type=int, help=hstr, metavar='props',
         nargs='*', required=True)
+
+  if not isinstance(dropout, bool) and isinstance(dropout, tuple):
+    parser.add_argument('-dropout', type=float, help='dropout proportion',
+        nargs='*', default=dropout)
+  elif isinstance(dropout, bool) and dropout:
+    parser.add_argument('-dropout', type=float, help='dropout proportion',
+        required=True)
 
   hstr='which gpu (int or ints separated by whitespace) for\
       training/validating; -1 for last gpu found (or to use cpu\

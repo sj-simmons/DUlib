@@ -382,9 +382,10 @@ class ConvFFNet(FFNet_):
           second element of this tuple; those will be applied
           in each convolutional metalayer's batch normalizat-
           ion layer. Default: `('before',)`.
-      $dropout$ (`float`): If greater than zero, add a dropout
-          layer with this probablity before each nonlinearity.
-          Default: `0`.
+      $dropout$ (`Tuple(float)`): If the first (last) float is
+          greater than zero, add dropout with this probablity
+          to each layer of the convolutional (dense) part be-
+          fore the nonlinearity. Default: `(0, 0)`.
       $outfn$ (`nn.Module`): A function to pipe out though lastly
           in the `forward` method; The default is `log_softmax`.
           For regression, you likely want to put `None`.
@@ -427,18 +428,18 @@ class ConvFFNet(FFNet_):
     conv_kernels = kwargs.get('conv_kernels',(len(channels)-1)*[5])
     pool_kernels = kwargs.get('pool_kernels',(len(channels)-1)*[2])
     nonlins = kwargs.get('nonlins', (nn.ReLU(), nn.ReLU()))
-    dropout = kwargs.get('dropout', 0)
+    dropout = kwargs.get('dropout', (0, 0))
     batchnorm = kwargs.get('batchnorm', ('before',))
 
     # build the convolutional part:
     self.conv, out_size = convFFhidden(
         channels, conv_kernels, pool_kernels, nonlins = nonlins[0],
-        batchnorm = batchnorm, dropout = dropout)
+        batchnorm = batchnorm, dropout = dropout[0])
     # build the dense part
     n_inputs_dense = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size))
     self.dense = denseFFhidden(
         n_inputs = n_inputs_dense, n_outputs = n_out, widths = widths,
-        nonlins = (nonlins[1],), dropout = dropout)
+        nonlins = (nonlins[1],), dropout = dropout[1])
 
     # build a short representation string
     nonlins = list(map(lambda mo: repr(mo)[repr(mo).rfind('.')+1:-2], nonlins))
@@ -446,12 +447,12 @@ class ConvFFNet(FFNet_):
     convpart = functools.reduce(lambda x, y: x + ' ' + y,
         ['Conv.: ~channels~'] + list(map(lambda x: '`'+str(x)+'`', channels)) \
         + ['`'+nonlins[0]+'`'] + ['~batchnorm~:'+ '`'+str(batchnorm)+'`']\
-        + ['~dropout~:'+'`'+str(dropout)+'`'])
+        + ['~dropout~:'+'`'+str(dropout[0])+'`'])
     densepart = functools.reduce(lambda x, y: x + ' ' + y,
         ['\nDense: ~widths~'] \
         + list(map(lambda x: '`'+str(x)+'`', (n_inputs_dense,) \
         + tuple(widths) + (n_out,))) + ['`'+nonlins[1]+'`']\
-        + ['~dropout~:'+'`'+str(dropout)+'`'])
+        + ['~dropout~:'+'`'+str(dropout[1])+'`'])
     self.repr_ = convpart + densepart
 
   def forward(self, xss):
