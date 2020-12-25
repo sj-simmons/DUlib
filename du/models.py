@@ -3,12 +3,18 @@
 
 \n`QUICK SIGNATURES`
 
-  |FFNet_|($means$=None, $stdevs$=None)
-    |SimpleLinReg|($degree$=1, $**kwargs$)
-    |DenseFFNet|($n_inputs$, $n_outputs$, $widths$, $**kwargs$)
+  |Net_|
+    |FFNet_|($means$=None, $stdevs$=None)
+      |SimpleLinReg|($degree$=1, $**kwargs$)
+      |DenseFFNet|($n_inputs$, $n_outputs$, $widths$, $**kwargs$)
 
   |denseFFhidden|($n_inputs$, $n_outputs$, $widths$, $**kwargs$)
   |polyize|($xss$, $degree$)
+
+The base class for all neural nets is `Net_` which subclasses
+`nn.Module` and implements a single method `numel_` that returns
+the number of ~parameters~ (i.e. ~weights~ of the corresponding
+model).
 
 The class `FFNet_` is a base class for feed forward neural nets.
 It is a subclass of `nn.Module` that adds the single feature that
