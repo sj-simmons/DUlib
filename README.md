@@ -382,9 +382,6 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
   * New functions **du.lib.online_mens_stdevs** and **du.lib.standardize** were
     added.
 
-<a id="latest"></a>
-####
-
 **Version 0.9.2** (Nov. 8, 2020)
   * API changes (please modify you code accordingly):
     * The function **du.lib.confusion_matrix** is now **du.lib.class_accuracy**;
@@ -412,6 +409,9 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     more than one tensor; e.g., dataloaders yielding both targs and feats (where you
     want means and stdevs for both of those).  As a result, the api has changed.
     For example, the return value is a tuple of tuples of tensors.
+
+<a id="latest"></a>
+####
 
 **Version 0.9.4** (now on Github)
   * The class **du.lib.Data** has been added; this is a sensible way to organize
