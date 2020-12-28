@@ -304,9 +304,9 @@ from textwrap import dedent
 import du.utils
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.3'
+__version__ = '0.9.4'
 __status__ = 'Development'
-__date__ = '12/03/20'
+__date__ = '12/27/20'
 __copyright__ = """
   Copyright 2019-2021 Scott Simmons
 
