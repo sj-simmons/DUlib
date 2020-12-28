@@ -34,7 +34,7 @@ pip3 install DUlib --user
 
 Or, install the latest development release with, e.g.:
 ```shell
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.3  --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.4  --user
 ```
 Notes
 * Safest practice is to replace **pip3** in the commands above (and below) with
@@ -413,9 +413,16 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     want means and stdevs for both of those).  As a result, the api has changed.
     For example, the return value is a tuple of tuples of tensors.
 
-**Version 0.9.4** (coming soon)
+**Version 0.9.4** (now on Github)
+  * The class **du.lib.Data** has been added; this is a sensible way to organize
+    augmentation of Data.
   * In **du.lib**, **cross_validation** is now called, more correctly, **cv_train**;
     and **cross_validation_train** is now **cross_validation**.
+  * A Function **cv_train2** (along with a helper function **cross_validation2**) has
+    been added to **du.lib**; they handle cross validation on augmented data. These
+    functions employ the newly added class **du.lib.FoldedData**. See
+    [here](https://github.com/sj-simmons/data-augmentation/blob/master/README.md#cross-validating-with-dataloaders)
+    for example usage.
 
 ## Modifying DUlib
 

@@ -308,7 +308,7 @@ __version__ = '0.9.3'
 __status__ = 'Development'
 __date__ = '12/03/20'
 __copyright__ = """
-  Copyright 2019-2020 Scott Simmons
+  Copyright 2019-2021 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -1398,6 +1398,10 @@ def train(model, crit, train_data, **kwargs):
         ellipses during compressed printing to the console. A
         length one tuple is duplicated into a length two one.
         Put (-1,) to print all losses. Default: `(7,)`.
+        Note: if you experience char escape problems (if say
+        running in a jupyter notebook) then, short of disabling
+        fancy printing with (-1,), just negate one or both ent-
+        ries in your tuple; e.g. (-7,) or (-10,11).
     $verb$ (`int`): Verbosity; 0, silent; 1, just timing info; 2,
         also print device notes; 3, add loss per epoch. Def.:`3`.
     $gpu$ (`Tuple[int]`): Tuple of `int`s of length 1 or 2 where the
@@ -1614,7 +1618,12 @@ def train(model, crit, train_data, **kwargs):
       v_dations_valid = [] # this will hold the validations for test data
 
   # set up console printing
-  if print_init == -1 or print_last == -1: print_init, print_last = epochs, -1
+  if print_init == -1 or print_last == -1:
+    print_init, print_last = epochs, -1
+  nobackspace = False
+  if print_init < -1 or print_last < -1:
+    nobackspace = True
+    print_init, print_last = abs(print_init), abs(print_last)
 
   # try to catch crtl-C
   du.utils._catch_sigint()
@@ -1638,29 +1647,46 @@ def train(model, crit, train_data, **kwargs):
     # print to terminal
     if print_init * print_last != 0 and verb > 2:
       loss_len = 20
-      base_str = "epoch {0}/{1}; loss ".format(epoch+1, epochs)
-      loss_str = "{0:<10g}".format(accum_loss*bs/num_examples)
-      if epochs < print_init+print_last+2 or epoch < print_init:
-        print(base_str + loss_str)
-      elif epoch > epochs - print_last - 1:
-        print(end='\b'*len(base_str))
+      base_str = f'epoch {epoch+1}/{epochs}; loss '
+      loss_str = f'{accum_loss*bs/num_examples:g}'
+      if epochs < print_init+print_last+2 or epoch < print_init: # if epochs is small or if near the
+        print(base_str + loss_str)                               # beginning of training
+      elif epoch > epochs - print_last - 1:        # if near the end of training
+        if not nobackspace:
+          print(end='\b'*len(base_str))
         print(base_str + loss_str)
       elif epoch == print_init:
         print("...")
       else:
-        print(' '*loss_len, end='\b'*loss_len)
-        print(end='\b'*len(base_str))
-        loss_len = len(loss_str)
-        print(base_str+loss_str, end='\b'*loss_len, flush=True)
+        if nobackspace:
+          pass
+        else:
+          print(' '*loss_len, end='\b'*loss_len)
+          print(end='\b'*len(base_str))
+          loss_len = len(loss_str)
+          print(base_str+loss_str, end='\b'*loss_len, flush=True)
 
     if graph:
       # set some facecolors:
-      #blue_fc = 'tab:blue'; red_fc = 'tab:red'  # primary
-      #blue_fc = '#799FCB'; red_fc = '#F9665E'    # pastel
-      #blue_fc = '#95B4CC'; red_fc = '#FEC9C9'    # more pastel
-      #blue_fc = '#AFC7D0'; red_fc = '#EEF1E6'    # more
-      #blue_fc = '#c4cfcf'; red_fc = '#cfc4c4'
-      blue_fc = '#c4cfcf'; red_fc = '#cfc4c4'
+      #fc_color1 = 'tab:blue'; fc_color2 = 'tab:red'  # primary
+      #fc_color1 = '#799FCB'; fc_color2 = '#F9665E'    # pastel
+      #fc_color1 = '#95B4CC'; fc_color2 = '#FEC9C9'    # more pastel
+      #fc_color1 = '#AFC7D0'; fc_color2 = '#EEF1E6'    # more
+      #fc_color1 = '#c4cfcf'; fc_color2 = '#cfc4c4'
+      #fc_color1 = '#c4cfcf'; fc_color2 = '#cfc4c4'
+
+      ######### below are from https://99designs.com/blog/creative-inspiration/color-combinations/
+      #fc_color1 = '#829079'; fc_color2 = '#b9925e' # olive / tan
+      #fc_color1 = '#e7e8d1'; fc_color2 = '#a7beae' # light olive / light teal
+      fc_color1 = '#a2a595'; fc_color2 = '#b4a284' # slate / khaki
+      #fc_color1 = '#e3b448'; fc_color2 = '#cbd18f' # mustard / sage
+      #fc_color1 = '#e1dd72'; fc_color2 = '#a8c66c' # yellow-green / olive
+      #fc_color1 = '#edca82'; fc_color2 = '#097770' # sepia / teal
+      #fc_color1 = '#e0cdbe'; fc_color2 = '#a9c0a6' # beige / sage
+      #fc_color1 = '#316879'; fc_color2 = '#f47a60' # teal / coral
+      #fc_color1 = '#1d3c45'; fc_color2 = '#d2601a' # deep pine green / orange
+      #fc_color1 = '#c4a35a'; fc_color2 = '#c66b3d' # ochre / burnt sienna
+      #fc_color1 = '#d72631'; fc_color2 = '#077b8a' # red / jade
 
       model.eval()
 
@@ -1703,22 +1729,22 @@ def train(model, crit, train_data, **kwargs):
           v_dationtest_ys = np.array(v_dations_valid[xlim_start-1:], dtype=float)
           ax1.plot(xlim,losstest_ys,xlim,loss_ys,color='black',lw=.5)
           ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys >=loss_ys,
-              facecolor=red_fc,interpolate=True, alpha=.8, hatch=5*'.')
+              facecolor=fc_color2,interpolate=True, alpha=.8, hatch=5*'.')
           ax1.fill_between(xlim,losstest_ys,loss_ys,where = losstest_ys <=loss_ys,
-              facecolor=blue_fc,interpolate=True, alpha=.8,hatch=5*'.')
+              facecolor=fc_color1,interpolate=True, alpha=.8,hatch=5*'.')
           ax2.plot(xlim,v_dationtest_ys,xlim,v_dation_ys,color='black',lw=.5)
           ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
-              where = v_dationtest_ys >=v_dation_ys, facecolor=red_fc,
+              where = v_dationtest_ys >=v_dation_ys, facecolor=fc_color2,
               interpolate=True, alpha=.8,label='test > train')
           ax2.fill_between(xlim,v_dationtest_ys,v_dation_ys,
               where = v_dationtest_ys <=v_dation_ys,
-              facecolor=blue_fc,interpolate=True, alpha=.8,label='train > test')
+              facecolor=fc_color1,interpolate=True, alpha=.8,label='train > test')
           ax2.legend(fancybox=True, loc=2, framealpha=0.8, prop={'size': 9})
         else:
           ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
           ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
           if valid_metric:
-            ax2.plot(xlim,v_dation_ys,color=blue_fc,lw=1.2,label='validation')
+            ax2.plot(xlim,v_dation_ys,color=fc_color1,lw=1.2,label='validation')
             ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
         len_valid_data = len(valid_data.dataset) if valid_data is not None else 0
         plt.title('training on {} ({:.1f}%) of {} examples'.format( num_examples,
