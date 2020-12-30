@@ -341,141 +341,155 @@ def convFFhidden(channels, conv_kernels, pool_kernels, **kwargs):
       lambda f,g: lambda x,y:g(*f(x,y)), funcs, lambda x,y:(x,y))
 
 class ConvFFNet(FFNet_):
-  """Meta-layered convolutional net.
+    """Meta-layered convolutional net.
 
-  Builds a convolutional net consisting of the composition of
-  convolutional metalayers followed by dense layers.
-  """
-  def __init__(self, in_size, n_out, channels, widths, **kwargs):
-    """Constructor.
-
-    Args:
-      $in_size$ (`Tuple[int]`): A tuple (height, width) holding
-          the height and width of each input (in pixels, for
-          images).
-      $n_out$ (`int`): Number of outputs from the model in its
-          entirety. This would be 10 to say classify digits,
-          or 1 for a regression problem.
-      $channels$ (`Tuple[int]`): The first entry sets `in_channels`
-          for the first metalayer's convolutional part; the
-          rest of the entries are the successive `out_chann`
-          `els` for the convolutional part of the first meta-
-          layer, the second metalayer, etc.
-      $widths$ (`Tuple[int]`): The widths (no. of nodes) in the
-          successive layers of the dense part.
-
-    Kwargs:
-      $conv_kernels$ (`Tuple[int]`): Default: `(len(channels)-1)*[5]`
-      $pool_kernels$ (`Tuple[int]`): Default: `(len(channels)-1)*[2]`
-      $nonlins$ (`Tuple[nn.Module]`): A length 2 tuple determin-
-          ing the nonlinearities for, resp., the convolution-
-          al and the dense parts of the network. Default: `(nn`
-          `.ReLU(), nn.ReLU())`.
-      $batchnorm$ (`(str, kwargs)`): A tuple which, if not empty,
-          results in a batch normalization layer being inser-
-          ted in each convolutional metalayer. If the string
-          in the first position is 'before', resp. 'after',
-          then batch normalization takes place before, resp.
-          after, the nonlinearity in each convolutional meta-
-          layer. Keywords for `torch.nn.BatchNorm2d` can be
-          supplied in the form a `dict` and included as the
-          second element of this tuple; those will be applied
-          in each convolutional metalayer's batch normalizat-
-          ion layer. Default: `('before',)`.
-      $dropout$ (`Tuple(float)`): If the first (last) float is
-          greater than zero, add dropout with this probablity
-          to each layer of the convolutional (dense) part be-
-          fore the nonlinearity. Default: `(0, 0)`.
-      $outfn$ (`nn.Module`): A function to pipe out though lastly
-          in the `forward` method; The default is `log_softmax`.
-          For regression, you likely want to put `None`.
-      $means$ (`torch.Tensor`): A tensor typically holding the
-          means of the training data.
-      $stdevs$ (`torch.Tensor`): A tensor typically holding the
-          standard deviations of the training data.
-
-    >>> `model = ConvFFNet((28,28), 10, (1,16,8), (100,50))`
-    >>> `xss = torch.rand(100,28,28)` # e.g., b&w images
-    >>> `yhatss = model(xss)`
-    >>> `yhatss.size()`
-    torch.Size([100, 10])
-
-    >>> `bn = ('before',{'momentum':0.9})`
-    >>> `model=ConvFFNet((28,28),8,(1,16),(100,),batchnorm=bn)`
-    >>> `xss = torch.rand(100,28,28)` # e.g., b&w images
-    >>> `yhatss = model(xss)`
-    >>> `yhatss.size()`
-    torch.Size([100, 8])
-
-    >>> `print(model.short_repr(color=False))`
-    Conv.: channels 1 16 ReLU batchnorm:before dropout:0
-    Dense: widths 3136 100 8 ReLU dropout:0
-
-    >>> `model=ConvFFNet((28,28),8,(1,16),(),batchnorm=bn)`
-    >>> `print(model.short_repr(color=False))`
-    Conv.: channels 1 16 ReLU batchnorm:before dropout:0
-    Dense: widths 3136 8 ReLU dropout:0
+    Builds a convolutional net consisting of the composition of
+    convolutional metalayers followed by dense layers.
     """
-    du.utils._check_kwargs(kwargs, ['conv_kernels','pool_kernels','means',
-        'stdevs','outfn','nonlins','batchnorm','dropout'])
-    means = kwargs.get('means', None)
-    stdevs = kwargs.get('stdevs', None)
-    assert len(in_size) == 2,\
-        'in_size must have length 2 not {}'.format(len(in_size))
-    super().__init__(means = means, stdevs = stdevs)
-    self.outfn = kwargs.get('outfn',
-        lambda xss: torch.log_softmax(xss,dim=1))
-    conv_kernels = kwargs.get('conv_kernels',(len(channels)-1)*[5])
-    pool_kernels = kwargs.get('pool_kernels',(len(channels)-1)*[2])
-    nonlins = kwargs.get('nonlins', (nn.ReLU(), nn.ReLU()))
-    dropout = kwargs.get('dropout', (0, 0))
-    batchnorm = kwargs.get('batchnorm', ('before',))
+    def __init__(self, in_size, n_out, channels, widths, **kwargs):
+        """Constructor.
 
-    # build the convolutional part:
-    self.conv, out_size = convFFhidden(
-        channels, conv_kernels, pool_kernels, nonlins = nonlins[0],
-        batchnorm = batchnorm, dropout = dropout[0])
-    # build the dense part
-    n_inputs_dense = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size))
-    self.dense = denseFFhidden(
-        n_inputs = n_inputs_dense, n_outputs = n_out, widths = widths,
-        nonlins = (nonlins[1],), dropout = dropout[1])
+        Args:
+          $in_size$ (`Tuple[int]`): A tuple (height, width) holding
+              the height and width of each input (in pixels, for
+              images).
+          $n_out$ (`int`): Number of outputs from the model in its
+              entirety. This would be 10 to say classify digits,
+              or 1 for a regression problem.
+          $channels$ (`Tuple[int]`): The first entry sets `in_channels`
+              for the first metalayer's convolutional part; the
+              rest of the entries are the successive `out_chann`
+              `els` for the convolutional part of the first meta-
+              layer, the second metalayer, etc.
+          $widths$ (`Tuple[int]`): The widths (no. of nodes) in the
+              successive layers of the dense part.
 
-    # build a short representation string
-    nonlins = list(map(lambda mo: repr(mo)[repr(mo).rfind('.')+1:-2], nonlins))
-    batchnorm = 'none' if len(batchnorm)==0 else batchnorm[0]
-    convpart = functools.reduce(lambda x, y: x + ' ' + y,
-        ['Conv.: ~channels~'] + list(map(lambda x: '`'+str(x)+'`', channels)) \
-        + ['`'+nonlins[0]+'`'] + ['~batchnorm~:'+ '`'+str(batchnorm)+'`']\
-        + ['~dropout~:'+'`'+str(dropout[0])+'`'])
-    densepart = functools.reduce(lambda x, y: x + ' ' + y,
-        ['\nDense: ~widths~'] \
-        + list(map(lambda x: '`'+str(x)+'`', (n_inputs_dense,) \
-        + tuple(widths) + (n_out,))) + ['`'+nonlins[1]+'`']\
-        + ['~dropout~:'+'`'+str(dropout[1])+'`'])
-    self.repr_ = convpart + densepart
+        Kwargs:
+          $conv_kernels$ (`Tuple[int]`): Default: `(len(channels)-1)*[5]`
+          $pool_kernels$ (`Tuple[int]`): Default: `(len(channels)-1)*[2]`
+          $nonlins$ (`Tuple[nn.Module]`): A length 2 tuple determin-
+              ing the nonlinearities for, resp., the convolution-
+              al and the dense parts of the network. Default: `(nn`
+              `.ReLU(), nn.ReLU())`.
+          $batchnorm$ (`(str, kwargs)`): A tuple which, if not empty,
+              results in a batch normalization layer being inser-
+              ted in each convolutional metalayer. If the string
+              in the first position is 'before', resp. 'after',
+              then batch normalization takes place before, resp.
+              after, the nonlinearity in each convolutional meta-
+              layer. Keywords for `torch.nn.BatchNorm2d` can be
+              supplied in the form a `dict` and included as the
+              second element of this tuple; those will be applied
+              in each convolutional metalayer's batch normalizat-
+              ion layer. Default: `('before',)`.
+          $dropout$ (`Tuple(float)`): In the case that this tuple
+              has length 2: if the first (last) float is greater
+              than zero, add dropout with this probablity to each
+              layer of the convolutional (dense) part before the
+              nonlinearity.
+              If this tuple the length 3, then the first entry
+              determines dropout probability for the input layer;
+              while the last 2 numbers function as above.
+              Default: `(0, 0, 0)`.
+          $outfn$ (`nn.Module`): A function to pipe out though lastly
+              in the `forward` method; The default is `log_softmax`.
+              For regression, you likely want to put `None`.
+          $means$ (`torch.Tensor`): A tensor typically holding the
+              means of the training data.
+          $stdevs$ (`torch.Tensor`): A tensor typically holding the
+              standard deviations of the training data.
 
-  def forward(self, xss):
-    """Forward inputs.
+        >>> `model = ConvFFNet((28,28), 10, (1,16,8), (100,50))`
+        >>> `xss = torch.rand(100,28,28)` # e.g., b&w images
+        >>> `yhatss = model(xss)`
+        >>> `yhatss.size()`
+        torch.Size([100, 10])
 
-    Forwards features (of a mini-batch of examples) through
-    the convolutional part of the model followed by the ful-
-    ly-connected part.
+        >>> `bn = ('before',{'momentum':0.9})`
+        >>> `model=ConvFFNet((28,28),8,(1,16),(100,),batchnorm=bn)`
+        >>> `xss = torch.rand(100,28,28)` # e.g., b&w images
+        >>> `yhatss = model(xss)`
+        >>> `yhatss.size()`
+        torch.Size([100, 8])
 
-    Args:
-      $xss$ (`Tensor`): The tensor to be forwarded.
+        >>> `print(model.short_repr(color=False))`
+        Conv.: channels 1 16 ReLU batchnorm:before dropout:0
+        Dense: widths 3136 100 8 ReLU dropout:0
 
-    Returns:
-      (`Tensor`). The forwarded tensor.
-    """
-    xss = self.conv(xss.unsqueeze(1))
-    xss = self.dense(xss.reshape(len(xss),-1))
-    if self.outfn: xss = self.outfn(xss)
-    return xss
+        >>> `model=ConvFFNet((28,28),8,(1,16),(),batchnorm=bn)`
+        >>> `print(model.short_repr(color=False))`
+        Conv.: channels 1 16 ReLU batchnorm:before dropout:0
+        Dense: widths 3136 8 ReLU dropout:0
+        """
+        du.utils._check_kwargs(
+             kwargs,
+             ['conv_kernels','pool_kernels','means', 'stdevs','outfn','nonlins','batchnorm','dropout'])
+        means = kwargs.get('means', None)
+        stdevs = kwargs.get('stdevs', None)
+        super().__init__(means = means, stdevs = stdevs)
+        self.outfn = kwargs.get('outfn', lambda xss: torch.log_softmax(xss,dim=1))
+        conv_kernels = kwargs.get('conv_kernels',(len(channels)-1)*[5])
+        pool_kernels = kwargs.get('pool_kernels',(len(channels)-1)*[2])
+        nonlins = kwargs.get('nonlins', (nn.ReLU(), nn.ReLU()))
+        dropout = kwargs.get('dropout', (0, 0))
+        batchnorm = kwargs.get('batchnorm', ('before',))
 
-  def short_repr(self, color=True):
-    """Return concise representaton string."""
-    return du.utils._markup(self.repr_, strip = not color)
+        assert len(in_size) == 2, \
+            du.utils._markup(f'The augument to `in_size` must have length 2 not {len(in_size)}')
+        assert 2 <=len(dropout) <=3, \
+            du.utils._markup(f'The argument to `dropout` must have length 2 or 3 not {len(dropout)}')
+        self.dropfeats = dropout[0] if len(dropout) == 3 else 0
+        dropout = dropout[-2:]
+
+        # build the convolutional part:
+        self.conv, out_size = convFFhidden(
+            channels, conv_kernels, pool_kernels, nonlins = nonlins[0],
+            batchnorm = batchnorm, dropout = dropout[0])
+        # build the dense part
+        n_inputs_dense = channels[-1]*(lambda x,y: x*y)(*out_size(*in_size))
+        self.dense = denseFFhidden(
+            n_inputs = n_inputs_dense, n_outputs = n_out, widths = widths,
+            nonlins = (nonlins[1],), dropout = dropout[1])
+
+        # build a short representation string
+        nonlins = list(map(lambda mo: repr(mo)[repr(mo).rfind('.')+1:-2], nonlins))
+        batchnorm = 'none' if len(batchnorm)==0 else batchnorm[0]
+        inputpart = f'Inputs: ~dropout~:`{self.dropfeats}`\n' if self.dropfeats else ''
+        convpart = functools.reduce(
+            lambda x, y: x + ' ' + y,
+            ['Conv.: ~channels~']+list(map(lambda x: '`'+str(x)+'`',channels))+['`'+nonlins[0]+'`']\
+            + ['~batchnorm~:'+ '`'+str(batchnorm)+'`'] + ['~dropout~:'+'`'+str(dropout[0])+'`'])
+        densepart = functools.reduce(
+            lambda x, y: x + ' ' + y,
+            ['\nDense: ~widths~'] \
+            + list(map(lambda x: '`'+str(x)+'`', (n_inputs_dense,) + tuple(widths) + (n_out,)))\
+            + ['`'+nonlins[1]+'`'] + ['~dropout~:'+'`'+str(dropout[1])+'`'])
+        self.repr_ = inputpart + convpart + densepart
+
+    def forward(self, xss):
+        """Forward inputs.
+
+        Forwards features (of a mini-batch of examples) through
+        the convolutional part of the model followed by the ful-
+        ly-connected part.
+
+        Args:
+          $xss$ (`Tensor`): The tensor to be forwarded.
+
+        Returns:
+          (`Tensor`). The forwarded tensor.
+        """
+        xss = self.conv(xss.unsqueeze(1))
+        if self.dropfeats:
+            xss = nn.Dropout(self.dropfeats)(xss)
+        xss = self.dense(xss.reshape(len(xss),-1))
+        if self.outfn:
+            xss = self.outfn(xss)
+        return xss
+
+    def short_repr(self, color=True):
+        """Return concise representaton string."""
+        return du.utils._markup(self.repr_, strip = not color)
 
 class OneMetaCNN(FFNet_):
   """One meta-layer CNN with a two fully-connected layers.
