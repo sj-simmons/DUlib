@@ -120,12 +120,15 @@ trained models.
 
   |cross_validate|
     ($model$, $crit$, $train_data$, $k$, $**kwargs$)
-     This is a helper function for `cv_train`; each epoch it it-
-     erates fold-wise, validating on the `k` possible test sets,
-     and returns the partially trained (for 1 epoch by default)
-     model; consider using `cv_train` instead of calling this di-
-     rectly; the parameters are essentially the same as those
-     of `cv_train` but without `bail_after`.
+     This is a helper function for `cv_train`; after partitioning
+     `train_data` into `k` disjoint 'folds', this function iterates
+     fold-wise validating, in turn, on each fold after training
+     (for 1 epoch, by default) on the union of the other `k`-1
+     folds; this returns the partially trained model along with
+     a tensor containing the `k` validations; consider using `cv_`
+     `train` instead of calling this directly; the parameters are
+     essentially the same as those of `cv_train` except with no
+     `bail_after`.
 
   |cv_train|       return `model`, cross-validate trained, tupled
                  with the mean (`float`) of `model`'s validations
@@ -159,13 +162,12 @@ trained models.
                  erride found gpu(s) and use the cpu.  Consider
                  just accepting the default here.
 
-  |cross_validate2|
-                 similar to `cross_validate`
+  |cross_validate2| analagous to `cross_validate`
 
-  |cv_train2|      similar to `cv_train` except that an agument to
-                 the parameter `train_data` is assumed to be an
-                 instance of `FoldedData`. Use this if you are
-                 augmenting your training data with transforms.
+  |cv_train2|     similar to `cv_train` except that an agument to
+                the parameter `train_data` is assumed to be an
+                instance of `FoldedData`. Use this if you are
+                augmenting your training data with transforms.
 
   |LearnParams_|  base class for defining learning parameters
     ($lr$ = `0.1`)  -we need at least a learning rate
@@ -1052,11 +1054,11 @@ class Data(torch.utils.data.Dataset):
 
     Simple example:
     >>> import pandas as pd
-    >>> data = {'number':list(range(12)),\
-                'letter':list('abcdefghijkl')}
+    >>> data = {'num':list(range(12)),'let':list('abcdefghijkl')}
     >>> df = pd.DataFrame(data)
-    >>> maps = (lambda df, idx: df.iloc[idx, 0],\
-                lambda df, idx: df.iloc[idx, 1])
+    >>> num_map = lambda df, idx: df.iloc[idx, 0]
+    >>> let_map = lambda df, idx: df.iloc[idx, 1]
+    >>> maps = (num_map, let_map)
     >>> id_ = lambda x: x
     >>> double = lambda x: x+x
     >>> dataset = Data(df, maps, id_, double)
@@ -1825,6 +1827,12 @@ class FoldedData:
     >>> for traindata, testdata in dataset:
     ...     print(list(traindata))
     ...     print(list(testdata))
+    [(4,), (5,), (6,), (7,), (8,), (9,), (10,)]
+    [(0,), (1,), (2,), (3,)]
+    [(0,), (1,), (2,), (3,), (8,), (9,), (10,)]
+    [(4,), (5,), (6,), (7,)]
+    [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,)]
+    [(8,), (9,), (10,)]
     """
     def __init__(self, df, maps, transforms, k, randomize=True):
         """
@@ -1887,9 +1895,6 @@ def cross_validate(model, crit, train_data, k, **kwargs):
   where k is the number of folds. The jth such step validates
   on the jth fold after training (for, by default, one epoch)
   on union of the remaining k-1 folds.
-
-  Rather than calling this directly, consider calling the func-
-  tion `cv_train` in this module.
 
   Args:
     $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
