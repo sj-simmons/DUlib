@@ -1203,28 +1203,7 @@ def _evaluate(model, dataloader, crit, device):
     #num_examples += len(minibatch[0])
   return accum_loss/len(dataloader)
 
-#def _batch2r2(yhats, yss, device=-2):
-#  assert len(yhats) == len(yss)
-#  return torch.square(yhats-yss)
-
-#def _mse(model, dataloader, device=-2):
-#  return _evaluate(model, dataloader, crit=nn.functional.mse_loss, device=device)
-
-#def _rmse(model, dataloader, device=-2):
-#  return _evaluate(
-#      model,
-#      dataloader,
-#      crit= lambda xss, yss: torch.sqrt(nn.functional.mse_loss(xss, yss)),
-#      device=device)
-
 _rmse = lambda xss, yss: torch.sqrt(nn.functional.mse_loss(xss, yss))
-
-# can be removed now
-#def _class_accuracy(model, dataloader, device=-2):
-#  """Return proportion correct.
-#
-#  """
-#  return _evaluate(model, dataloader, crit=_batch2class_accuracy, device=device)
 
 def train(model, crit, train_data, **kwargs):
   """Train a model.
@@ -1782,14 +1761,11 @@ def train(model, crit, train_data, **kwargs):
 class FoldedData:
     """Dataset factory for use in cross-validation.
 
-    If `k` = 1, then this essentially specializes to `du.lib.Data`
-    and so yields tuples of data accordingly. If `k` > 1, then each
-    tensor in such a tuple is coherently partitioned into k dis-
-    joint 'folds' and then two tuples are yielded: one with the
-    `k`th fold of each tensor left out and another consisting of
-    the omitted fold.
+    This is essentially a helper class for `cv_train2` though it
+    may prove useful elsewhere.
 
-    Simple example:
+    Simple examples and tests:
+
     >>> import pandas as pd
     >>> data = {'num':list(range(9)),'let':list('abcdefghi')}
     >>> df = pd.DataFrame(data)
@@ -2023,18 +1999,38 @@ def cross_validate(model, crit, train_data, k, **kwargs):
           verb=verb-1,
           gpu=(gpu,))
 
-      if cent_feats: xss_test, _ = center(xss_test, xss_train_means)
-      if norm_feats: xss_test, _ = normalize(xss_test, xss_train_stdevs)
-      if cent_targs: yss_test, _ = center(yss_test, yss_train_means)
-      if norm_targs: yss_test, _ = normalize(yss_test, yss_train_stdevs)
+      del xss_train; del yss_train
+
+      if cent_feats:
+          xss_test, _ = center(xss_test, xss_train_means)
+          del xss_train_means
+      if norm_feats:
+          xss_test, _ = normalize(xss_test, xss_train_stdevs)
+          del xss_train_stdevs
+      if cent_targs:
+          yss_test, _ = center(yss_test, yss_train_means)
+          del yss_train_means
+      if norm_targs:
+          yss_test, _ = normalize(yss_test, yss_train_stdevs)
+          del yss_train_stdevs
 
       if valid_metric is None:
           if isinstance(train_data[-1], FloatTensor):
-              valids[idx//chunklength] = explained_var(model, (xss_test, yss_test))
+              if verb > 1:
+                  print(du.utils._markup(f'Using `explained_variance` for validation.'))
+              valids[idx//chunklength] = explained_var(model, (xss_test, yss_test), gpu=gpu)
           if isinstance(train_data[-1], IntTensor):
-              valids[idx//chunklength] = class_accuracy(model, (xss_test, yss_test))
+              if verb > 1:
+                  print(du.utils._markup(f'Using `class_accuracy` for validation.'))
+              valids[idx//chunklength] = class_accuracy(model, (xss_test, yss_test), gpu=gpu)
       else:
-          valids[idx//chunklength] = valid_metric(model(xss_test), yss_test)
+          if verb > 1:
+              print(du.utils._markup(f'Using user provided metric for validation.'))
+          valids[idx//chunklength] = _evaluate(
+              model,
+              dataloader = _DataLoader((xss_test,yss_test), batch_size=10),
+              crit = valid_metric,
+              device = gpu)
 
   return model, valids
 
@@ -2069,11 +2065,11 @@ def cv_train(model, crit, train_data, k = 10, **kwargs):
         gauging the accuracy of the model on the `1/k`th of `train`
         `_data` that is used for validation data during a step of
         cross validation. If this `None`, then the validation me-
-        tric automatically becomes classification error if the
-        targets of `train_data` are integers, or 1 - explained
-        variance if those targets are floats. Alternatively,
-        one can put any metric that maps (yhatss, yss)-> float
-        for which lower is better. Default: `None`.
+        tric automatically becomes ~classification error~ if the
+        targets of `train_data` are integers, or ~1 - explained~
+        ~variance~ if those targets are floats. Alternatively,
+        one can put any metric that maps like ~(yhatss, yss)->~
+        ~float~ for which lower is better. Default: `None`.
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the features and the second
         entry determining whether to normalize the features
