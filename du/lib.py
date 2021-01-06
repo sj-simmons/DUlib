@@ -1413,7 +1413,7 @@ def train(model, crit, train_data, **kwargs):
 
   Returns:
     `nn.Module`. The trained model (still on the device determin-
-        ed by `gpu`).
+        ed by `gpu`) and in evaluation mode.
   """
   # this is train
   # check and process kwargs
@@ -1756,7 +1756,7 @@ def train(model, crit, train_data, **kwargs):
     plt.show()
 
   #model = model.to('cpu')
-  return model
+  return model.eval()
 
 class FoldedData:
     """Dataset factory for use in cross-validation.
@@ -1918,8 +1918,8 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         ples before each backpropagation). Default: `-1`.
     $epochs$ (`int`): The number of epochs to train over for each
         validation step. Default: `1`.
-    $verb$ (`int`): The verbosity. 0: silent, 1: more, 2: all. De-
-        fault: `2`.
+    $verb$ (`int`): The verbosity. 0: silent, 1: more, 2: yet more,
+        3: even more. Default: `2`.
     $gpu$ (`int`): Which gpu to use in the presence of one or more
         gpus, where -1 means to use the last gpu found, and -2
         means to override using a found gpu and use the cpu.
@@ -2001,36 +2001,38 @@ def cross_validate(model, crit, train_data, k, **kwargs):
 
       del xss_train; del yss_train
 
-      if cent_feats:
-          xss_test, _ = center(xss_test, xss_train_means)
-          del xss_train_means
-      if norm_feats:
-          xss_test, _ = normalize(xss_test, xss_train_stdevs)
-          del xss_train_stdevs
-      if cent_targs:
-          yss_test, _ = center(yss_test, yss_train_means)
-          del yss_train_means
-      if norm_targs:
-          yss_test, _ = normalize(yss_test, yss_train_stdevs)
-          del yss_train_stdevs
+      with torch.no_grad():
 
-      if valid_metric is None:
-          if isinstance(train_data[-1], FloatTensor):
+          if cent_feats:
+              xss_test, _ = center(xss_test, xss_train_means)
+              del xss_train_means
+          if norm_feats:
+              xss_test, _ = normalize(xss_test, xss_train_stdevs)
+              del xss_train_stdevs
+          if cent_targs:
+              yss_test, _ = center(yss_test, yss_train_means)
+              del yss_train_means
+          if norm_targs:
+              yss_test, _ = normalize(yss_test, yss_train_stdevs)
+              del yss_train_stdevs
+
+          if valid_metric is None:
+              if isinstance(train_data[-1], FloatTensor):
+                  if verb > 1:
+                      print(du.utils._markup(f'Using `explained_variance` for validation.'))
+                  valids[idx//chunklength] = explained_var(model, (xss_test, yss_test), gpu=gpu)
+              if isinstance(train_data[-1], IntTensor):
+                  if verb > 1:
+                      print(du.utils._markup(f'Using `class_accuracy` for validation.'))
+                  valids[idx//chunklength] = class_accuracy(model, (xss_test, yss_test), gpu=gpu)
+          else:
               if verb > 1:
-                  print(du.utils._markup(f'Using `explained_variance` for validation.'))
-              valids[idx//chunklength] = explained_var(model, (xss_test, yss_test), gpu=gpu)
-          if isinstance(train_data[-1], IntTensor):
-              if verb > 1:
-                  print(du.utils._markup(f'Using `class_accuracy` for validation.'))
-              valids[idx//chunklength] = class_accuracy(model, (xss_test, yss_test), gpu=gpu)
-      else:
-          if verb > 1:
-              print(du.utils._markup(f'Using user provided metric for validation.'))
-          valids[idx//chunklength] = _evaluate(
-              model,
-              dataloader = _DataLoader((xss_test,yss_test), batch_size=10),
-              crit = valid_metric,
-              device = gpu)
+                  print(du.utils._markup(f'Using user provided metric for validation.'))
+              valids[idx//chunklength] = _evaluate(
+                  model,
+                  dataloader = _DataLoader((xss_test, yss_test), batch_size=10),
+                  crit = valid_metric,
+                  device = gpu)
 
   return model, valids
 
@@ -2089,7 +2091,8 @@ def cv_train(model, crit, train_data, k = 10, **kwargs):
         before each backpropagation). Default: `-1`.
     $epochs$ (`int`): The number of epochs to train over for each
         cross validation step. Default: `1`.
-    $verb$ (`int`): The verbosity. 0: silent; or 1. Default: `1`.
+    $verb$ (`int`): The verbosity. 0: silent; or 1, 2, or 3 for in-
+        increasingly more info during training. Default: `1`.
     $gpu$ (`int`): Which gpu to use in the presence of one or more
         gpus, where -1 means to use the last gpu found, and -2
         means to override using a found gpu and use the cpu.
@@ -2264,17 +2267,18 @@ def cross_validate2(model, crit, train_data, **kwargs):
           verb = verb-1,
           gpu = (gpu,))
 
-      if valid_metric is None:
-          if isinstance(train_dataset[0][-1], FloatTensor):
-              valids.append(explained_var(model, valid_loader, gpu=gpu))
-          elif isinstance(train_dataset[0][-1], IntTensor):
-              valids.append(class_accuracy(model, valid_loader, gpu=gpu))
+      with torch.no_grad():
+          if valid_metric is None:
+              if isinstance(train_dataset[0][-1], FloatTensor):
+                  valids.append(explained_var(model, valid_loader, gpu=gpu))
+              elif isinstance(train_dataset[0][-1], IntTensor):
+                  valids.append(class_accuracy(model, valid_loader, gpu=gpu))
+              else:
+                  raise RuntimeError(du.utils._markup(
+                      'from `train`: please use the `valid_metric` paramter to pass a function'
+                      'for use when validating'))
           else:
-              raise RuntimeError(du.utils._markup(
-                  'from `train`: please use the `valid_metric` paramter to pass a function'
-                  'for use when validating'))
-      else:
-          valids.append(_evaluate(model, dataloader=valid_loader, crit=valid_metric, device=gpu))
+              valids.append(_evaluate(model, dataloader=valid_loader, crit=valid_metric, device=gpu))
 
   return model, torch.tensor(valids)
 
