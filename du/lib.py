@@ -292,6 +292,7 @@ trained models.
 #    testing data. DON"T DO THIS so that training without graph
 #    will be fast.
 
+import functools
 import time
 import math
 import tkinter
@@ -1755,7 +1756,6 @@ def train(model, crit, train_data, **kwargs):
     #plt.show(block = True)
     plt.show()
 
-  #model = model.to('cpu')
   return model.eval()
 
 class FoldedData:
@@ -1902,10 +1902,10 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         variance, if those targets are floats.
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the features; and the sec-
-        ond, whether to normalize them. Default: `(True, True)`.
+        ond, whether to normalize them. Default: `(False, False)`.
     $cent_norm_targs$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the targets, and the second,
-        whether to normalize them. Default: `(True, True)`.
+        whether to normalize them. Default: `(False, False)`.
     $learn_params$
         (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
         The training or 'learning' hyperparameters in the form
@@ -1947,8 +1947,8 @@ def cross_validate(model, crit, train_data, k, **kwargs):
   assert len(feats) == len(targs),\
       f'Number of features ({len(feats)}) must equal number of targets ({len(targs)}).'
   assert not feats_lengths, 'variable length not implemented yet'
-  cent_feats, norm_feats = kwargs.get('cent_norm_feats',(True, True))
-  cent_targs, norm_targs = kwargs.get('cent_norm_targs',(True, True))
+  cent_feats, norm_feats = kwargs.get('cent_norm_feats',(False, False))
+  cent_targs, norm_targs = kwargs.get('cent_norm_targs',(False, False))
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
   bs = kwargs.get('bs', -1)
   epochs = kwargs.get('epochs', 1)
@@ -2075,10 +2075,10 @@ def cv_train(model, crit, train_data, k = 10, **kwargs):
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the features and the second
         entry determining whether to normalize the features
-        when cross-validate training. Default: `(True, True)`.
+        when cross-validate training. Default: `(False, False)`.
     $cent_norm_targs$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the targets, and the second,
-        whether to normalize them. Default: `(True, True)`.
+        whether to normalize them. Default: `(False, False)`.
     $learn_params$
         (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
         The training (or 'learning') hyper-parameters in the
@@ -2117,8 +2117,8 @@ def cv_train(model, crit, train_data, k = 10, **kwargs):
   assert len(feats) == len(targs),\
       f'Number of features ({len(feats)}) must equal number of targets ({len(targs)}).'
   assert not feats_lengths, 'variable length not implemented yet'
-  cent_norm_feats = kwargs.get('cent_norm_feats',(True, True))
-  cent_norm_targs = kwargs.get('cent_norm_targs',(True, True))
+  cent_norm_feats = kwargs.get('cent_norm_feats',(False, False))
+  cent_norm_targs = kwargs.get('cent_norm_targs',(False, False))
   learn_params = kwargs.get('learn_params', {'lr': 0.1})
   bs = kwargs.get('bs', -1)
   epochs = kwargs.get('epochs', 1)
@@ -2178,233 +2178,232 @@ def cv_train(model, crit, train_data, k = 10, **kwargs):
   return best_model, best_valids.mean()
 
 def cross_validate2(model, crit, train_data, **kwargs):
-  """Perform one round of cross-validation.
+    """Perform one round of cross-validation.
 
-  Here a 'round of cross-validation' entails k training steps
-  where k is the number of folds. The jth such step validates
-  on the jth fold after training (for, by default, one epoch)
-  on union of the remaining k-1 folds.
+    Here a 'round of cross-validation' entails k training steps
+    where k is the number of folds. The jth such step validates
+    on the jth fold after training (for, by default, one epoch)
+    on union of the remaining k-1 folds.
 
-  Rather than calling this directly, consider calling the func-
-  tion `cv_train2` in this module.
+    Rather than calling this directly, consider calling the func-
+    tion `cv_train2` in this module.
 
-  Args:
-    $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
-    $crit$ (`nn.modules.loss`): The loss function when training.
-    $train_data$ (`FoldedData`):
+    Args:
+      $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
+      $crit$ (`nn.modules.loss`): The loss function when training.
+      $train_data$ (`FoldedData`):
 
-  Kwargs:
-    $valid_metric$ (`nn.Module`): The validation metric to use when
-        gauging the accuracy of the model on the `1/k`th of `train`
-        `_data` that is used for validation data during a step of
-        cross validation. If this `None`, then the validation me-
-        tric automatcally becomes classification accuracy, if
-        the targets of `train_data` are integers, or explained
-        variance, if those targets are floats.
-    $learn_params$
-        (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
-        The training or 'learning' hyperparameters in the form
-        of an instance of the class `LearnParams_`; or, for bas-
-        ic functionality, a `dict` whose keys map the string
-        'lr', and optionally 'mo', to `float`s; or an instance of
-        `torch.optim.Optimizer`. Default: `{'lr': 0.1}`.
-    $bs$ (`int`): The mini-batch size where -1 forces batch grad-
-        ient descent (i.e. feed-forwarding all training exam-
-        ples before each backpropagation). Default: `-1`.
-    $epochs$ (`int`): The number of epochs to train over for each
-        validation step. Default: `1`.
-    $verb$ (`int`): The verbosity. 0: silent, 1: more, 2: all. De-
-        fault: `2`.
-    $gpu$ (`int`): Which gpu to use in the presence of one or more
-        gpus, where -1 means to use the last gpu found, and -2
-        means to override using a found gpu and use the cpu.
-        Default: `-1`.
-    $warn$ (`bool`): Issue descriptive warning if $k$ does not div-
-        ide the number of training examples. Default: `False`.
+    Kwargs:
+      $valid_metric$ (`nn.Module`): The validation metric to use when
+          gauging the accuracy of the model on the `1/k`th of `train`
+          `_data` that is used for validation data during a step of
+          cross validation. If this `None`, then the validation me-
+          tric automatcally becomes classification accuracy, if
+          the targets of `train_data` are integers, or explained
+          variance, if those targets are floats.
+      $learn_params$
+          (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
+          The training or 'learning' hyperparameters in the form
+          of an instance of the class `LearnParams_`; or, for bas-
+          ic functionality, a `dict` whose keys map the string
+          'lr', and optionally 'mo', to `float`s; or an instance of
+          `torch.optim.Optimizer`. Default: `{'lr': 0.1}`.
+      $bs$ (`int`): The mini-batch size where -1 forces batch grad-
+          ient descent (i.e. feed-forwarding all training exam-
+          ples before each backpropagation). Default: `-1`.
+      $epochs$ (`int`): The number of epochs to train over for each
+          validation step. Default: `1`.
+      $verb$ (`int`): The verbosity. 0: silent, 1: more, 2: all. De-
+          fault: `2`.
+      $gpu$ (`int`): Which gpu to use in the presence of one or more
+          gpus, where -1 means to use the last gpu found, and -2
+          means to override using a found gpu and use the cpu.
+          Default: `-1`.
+      $warn$ (`bool`): Issue descriptive warning if $k$ does not div-
+          ide the number of training examples. Default: `False`.
 
-  Returns:
-    `(nn.Module, Tensor)`. Returns `model` which has been part-
-        ially trained along with a tensor holding its `k` valid-
-        ations.
-  """
-  #_this is cross_validate2
-  du.utils._check_kwargs(kwargs,[
-      'valid_metric','learn_params','bs','epochs','gpu','verb','warn','num_workers','pin_memory'])
-  du.utils._catch_sigint()
-  valid_metric = kwargs.get('valid_metric', None)
-  learn_params = kwargs.get('learn_params', {'lr': 0.1})
-  bs = kwargs.get('bs', -1)
-  epochs = kwargs.get('epochs', 1)
-  verb = kwargs.get('verb', 2)
-  gpu = kwargs.get('gpu', -1)
-  warn = kwargs.get('warn', False)
-  num_workers = kwargs.get('num_workers', 1)
-  pin_memory = kwargs.get('pin_memory', True)
-  assert isinstance(model, nn.Module)
-  assert isinstance(train_data, FoldedData),du.utils._markup(
-      f'$error$ from `cross_validate2`:'
-      f'`train_data` |should be an instance of| `du.lib.FoldedData` |not| {type(train_data)}')
+    Returns:
+      `(nn.Module, Tensor)`. Returns `model` which has been part-
+          ially trained along with a tensor holding its `k` valid-
+          ations.
+    """
+    #_this is cross_validate2
+    du.utils._check_kwargs(kwargs,[
+        'valid_metric','learn_params','bs','epochs','gpu','verb','warn','num_workers','pin_memory'])
+    du.utils._catch_sigint()
+    valid_metric = kwargs.get('valid_metric', None)
+    learn_params = kwargs.get('learn_params', {'lr': 0.1})
+    bs = kwargs.get('bs', -1)
+    epochs = kwargs.get('epochs', 1)
+    verb = kwargs.get('verb', 2)
+    gpu = kwargs.get('gpu', -1)
+    warn = kwargs.get('warn', False)
+    num_workers = kwargs.get('num_workers', 1)
+    pin_memory = kwargs.get('pin_memory', True)
+    assert isinstance(model, nn.Module)
+    assert isinstance(train_data, FoldedData),du.utils._markup(
+        f'$error$ from `cross_validate2`:'
+        f'`train_data` |should be an instance of| `du.lib.FoldedData` |not| {type(train_data)}')
 
-  valids = []
+    valids = []
 
-  for train_dataset, valid_dataset in train_data:
+    for train_dataset, valid_dataset in train_data:
 
-      #!!!!!!!!!!!!  put more stuff for these dataloaders
-      train_loader = torch.utils.data.DataLoader(
-          train_dataset, batch_size=bs, num_workers=num_workers, pin_memory=pin_memory)
-      valid_loader = torch.utils.data.DataLoader(
-          valid_dataset, batch_size=bs, num_workers=num_workers, pin_memory=pin_memory)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=bs, num_workers=num_workers, pin_memory=pin_memory)
+        valid_loader = torch.utils.data.DataLoader(
+            valid_dataset, batch_size=bs, num_workers=num_workers, pin_memory=pin_memory)
 
-      model = train(
-          model = model,
-          crit = crit,
-          train_data = train_loader,
-          valid_data = valid_loader,
-          valid_metric = valid_metric,
-          learn_params = learn_params,
-          bs = bs,
-          epochs = epochs,
-          verb = verb-1,
-          gpu = (gpu,))
+        model = train(
+            model = model,
+            crit = crit,
+            train_data = train_loader,
+            valid_data = valid_loader,
+            valid_metric = valid_metric,
+            learn_params = learn_params,
+            bs = bs,
+            epochs = epochs,
+            verb = verb-1,
+            gpu = (gpu,))
 
-      with torch.no_grad():
-          if valid_metric is None:
-              if isinstance(train_dataset[0][-1], FloatTensor):
-                  valids.append(explained_var(model, valid_loader, gpu=gpu))
-              elif isinstance(train_dataset[0][-1], IntTensor):
-                  valids.append(class_accuracy(model, valid_loader, gpu=gpu))
-              else:
-                  raise RuntimeError(du.utils._markup(
-                      'from `train`: please use the `valid_metric` paramter to pass a function'
-                      'for use when validating'))
-          else:
-              valids.append(_evaluate(model, dataloader=valid_loader, crit=valid_metric, device=gpu))
+        with torch.no_grad():
+            if valid_metric is None:
+                if isinstance(train_dataset[0][-1], FloatTensor):
+                    valids.append(explained_var(model, valid_loader, gpu=gpu))
+                elif isinstance(train_dataset[0][-1], IntTensor):
+                    valids.append(class_accuracy(model, valid_loader, gpu=gpu))
+                else:
+                    raise RuntimeError(du.utils._markup(
+                        'from `train`: please use the `valid_metric` paramter to pass a function'
+                        'for use when validating'))
+            else:
+                valids.append(_evaluate(model, dataloader=valid_loader, crit=valid_metric, device=gpu))
 
-  return model, torch.tensor(valids)
+    return model, torch.tensor(valids)
 
 def cv_train2(model, crit, train_data, **kwargs):
-  """Cross-validate train a model.
+    """Cross-validate train a model.
 
-  This is similar to `cv_train` except that `train_data` is assumed
-  to be an instance of `FoldedData`. Moreover, this function, un-
-  like `cv_train`, does not (optionally) center or normalize dur-
-  ing cross-validation training. So take care of that, if
-  warranted, when instancing `FoldedData1`.
+    This is similar to `cv_train` except that `train_data` is assumed
+    to be an instance of `FoldedData`. Moreover, this function, un-
+    like `cv_train`, does not (optionally) center or normalize dur-
+    ing cross-validation training. So take care of that, if
+    warranted, when instancing `FoldedData1`.
 
-  Args:
-    $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
-    $crit$ (`nn.modules.loss`): The loss function when training.
-    $train_data$ (`du.lib.FoldedData`): An instance of `FoldedData`
-        yielding train_data/valid_data pairs of instances of
-        `du.lib.Data` suitable as arguments to the corresponding
-        parameters of `du.lib.train`.
-    $bail_after$ (`int`): The number of steps of cross_validation
-        training after which to bail if no improvement is seen.
-        Default: `10`.
+    Args:
+      $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
+      $crit$ (`nn.modules.loss`): The loss function when training.
+      $train_data$ (`du.lib.FoldedData`): An instance of `FoldedData`
+          yielding train_data/valid_data pairs of instances of
+          `du.lib.Data` suitable as arguments to the corresponding
+          parameters of `du.lib.train`.
+      $bail_after$ (`int`): The number of steps of cross_validation
+          training after which to bail if no improvement is seen.
+          Default: `10`.
 
-  Kwargs:
-    $valid_metric$ (`nn.Module`): The validation metric to use when
-        gauging the accuracy of the model on the `1/k`th of `train`
-        `_data` that is used for validation data during a step of
-        cross validation. If this `None`, then the validation me-
-        tric automatcally becomes classification error if the
-        targets of `train_data` are integers, or 1 - explained
-        variance if those targets are floats. Alternatively,
-        one can put any metric that maps (yhatss, yss)-> float
-        for which lower is better. Default: `None`.
-    $learn_params$
-        (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
-        The training (or 'learning') hyper-parameters in the
-        form of an instance of the class `LearnParams_`; or, for
-        basic functionality, a `dict` whose keys map the string
-        'lr', and optionally 'mo', to `float`s; or an instance of
-        `torch.optim.Optimizer`. Default: `{'lr':0.1}`.
-    $bs$ (`int`): The mini-batch size where -1 forces batch gradi-
-        ent descent (i.e. feed-forwarding all training examples
-        before each backpropagation). Default: `-1`.
-    $epochs$ (`int`): The number of epochs to train over for each
-        cross validation step. Default: `1`.
-    $num_workers$ (`int`): Used when instancing DataLoaders for
-        training and validating. Default: `1`.
-    $pin_memory$ (`bool`): Used when instancing DataLoaders for
-        training and validating. Default: `True`.
-    $verb$ (`int`): The verbosity. 0: silent; or 1. Default: `1`.
-    $gpu$ (`int`): Which gpu to use in the presence of one or more
-        gpus, where -1 means to use the last gpu found, and -2
-        means to override using a found gpu and use the cpu.
-        Default: `-1`.
+    Kwargs:
+      $valid_metric$ (`nn.Module`): The validation metric to use when
+          gauging the accuracy of the model on the `1/k`th of `train`
+          `_data` that is used for validation data during a step of
+          cross validation. If this `None`, then the validation me-
+          tric automatcally becomes classification error if the
+          targets of `train_data` are integers, or 1 - explained
+          variance if those targets are floats. Alternatively,
+          one can put any metric that maps (yhatss, yss)-> float
+          for which lower is better. Default: `None`.
+      $learn_params$
+          (`Union[dict,LearnParams_,torch.optim.Optimizer]`):
+          The training (or 'learning') hyper-parameters in the
+          form of an instance of the class `LearnParams_`; or, for
+          basic functionality, a `dict` whose keys map the string
+          'lr', and optionally 'mo', to `float`s; or an instance of
+          `torch.optim.Optimizer`. Default: `{'lr':0.1}`.
+      $bs$ (`int`): The mini-batch size where -1 forces batch gradi-
+          ent descent (i.e. feed-forwarding all training examples
+          before each backpropagation). Default: `-1`.
+      $epochs$ (`int`): The number of epochs to train over for each
+          cross validation step. Default: `1`.
+      $num_workers$ (`int`): Used when instancing DataLoaders for
+          training and validating. Default: `1`.
+      $pin_memory$ (`bool`): Used when instancing DataLoaders for
+          training and validating. Default: `True`.
+      $verb$ (`int`): The verbosity. 0: silent; or 1. Default: `1`.
+      $gpu$ (`int`): Which gpu to use in the presence of one or more
+          gpus, where -1 means to use the last gpu found, and -2
+          means to override using a found gpu and use the cpu.
+          Default: `-1`.
 
-  Returns:
-    `(nn.Module, float)`. The trained 'best' `model` along with the
-        average of that model's `k` validations.
-  """
-  #_this is cv_train2
-  du.utils._check_kwargs(kwargs,['bail_after','valid_metric','learn_params','bs','epochs',
-      'verb','gpu','num_workers','pin_memory'])
-  valid_metric = kwargs.get('valid_metric', None)
-  bail_after = kwargs.get('bail_after', 10)
-  learn_params = kwargs.get('learn_params', {'lr': 0.1})
-  bs = kwargs.get('bs', -1)
-  epochs = kwargs.get('epochs', 1)
-  num_workers = kwargs.get('num_workers', 1)
-  pin_memory = kwargs.get('pin_memory', True)
-  verb = kwargs.get('verb', 1)
-  gpu = kwargs.get('gpu', -1)
+    Returns:
+      `(nn.Module, float)`. The trained 'best' `model` along with the
+          average of that model's `k` validations.
+    """
+    #_this is cv_train2
+    du.utils._check_kwargs(kwargs,['bail_after','valid_metric','learn_params','bs','epochs',
+        'verb','gpu','num_workers','pin_memory'])
+    valid_metric = kwargs.get('valid_metric', None)
+    bail_after = kwargs.get('bail_after', 10)
+    learn_params = kwargs.get('learn_params', {'lr': 0.1})
+    bs = kwargs.get('bs', -1)
+    epochs = kwargs.get('epochs', 1)
+    num_workers = kwargs.get('num_workers', 1)
+    pin_memory = kwargs.get('pin_memory', True)
+    verb = kwargs.get('verb', 1)
+    gpu = kwargs.get('gpu', -1)
 
-  assert isinstance(model, nn.Module)
-  assert isinstance(train_data, FoldedData),du.utils._markup(
-      f'$error$ from `cv_train2`:'
-      f'`train_data` |should be an instance of| `du.lib.FoldedData` |not| {type(train_data)}')
+    assert isinstance(model, nn.Module)
+    assert isinstance(train_data, FoldedData),du.utils._markup(
+        f'$error$ from `cv_train2`:'
+        f'`train_data` |should be an instance of| `du.lib.FoldedData` |not| {type(train_data)}')
 
-  no_improvement = 0
-  best_valids_mean = 1e15
-  total_epochs = 0
-  warn = True
+    no_improvement = 0
+    best_valids_mean = 1e15
+    total_epochs = 0
+    warn = True
 
-  while no_improvement < bail_after:
+    while no_improvement < bail_after:
 
-      model, valids = cross_validate2(
-          model = model,
-          crit = crit,
-          train_data = train_data,
-          valid_metric = valid_metric,
-          epochs = epochs,
-          learn_params = learn_params,
-          bs = bs,
-          verb = verb,
-          gpu = gpu,
-          num_workers = num_workers,
-          pin_memory = pin_memory,
-          warn = warn)
+        model, valids = cross_validate2(
+            model = model,
+            crit = crit,
+            train_data = train_data,
+            valid_metric = valid_metric,
+            epochs = epochs,
+            learn_params = learn_params,
+            bs = bs,
+            verb = verb,
+            gpu = gpu,
+            num_workers = num_workers,
+            pin_memory = pin_memory,
+            warn = warn)
 
-      total_epochs += len(valids)*epochs
+        total_epochs += len(valids)*epochs
 
-      # both automatic metrics are 'larger is better'
-      if valid_metric is None:
-          valids = torch.tensor([1 - valid for valid in valids])
+        # both automatic metrics are 'larger is better'
+        if valid_metric is None:
+            valids = torch.tensor([1 - valid for valid in valids])
 
-      if valids.mean().item() < best_valids_mean:
-          best_model = copy.deepcopy(model)
-          best_valids = valids
-          best_valids_mean = best_valids.mean()
-          no_improvement = 0
-      else:
-          no_improvement += 1
+        if valids.mean().item() < best_valids_mean:
+            best_model = copy.deepcopy(model)
+            best_valids = valids
+            best_valids_mean = best_valids.mean()
+            no_improvement = 0
+        else:
+            no_improvement += 1
 
-      if valids.mean().item() == 0.0:
-          no_improvement = bail_after
+        if valids.mean().item() == 0.0:
+            no_improvement = bail_after
 
-      if verb > 0:
-          print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
-              format(valids.mean().item(),valids.std().item(),best_valids.mean().\
-              item(),total_epochs)+' '+str(no_improvement)+"/"+str(bail_after))
-      warn = False
+        if verb > 0:
+            print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
+                format(valids.mean().item(),valids.std().item(),best_valids.mean().\
+                item(),total_epochs)+' '+str(no_improvement)+"/"+str(bail_after))
+        warn = False
 
-  if verb > 0:
-      print("best valid:  mean={0:.5g}  stdev={1:.5g}".\
-          format(best_valids.mean().item(),best_valids.std().item()))
+    if verb > 0:
+        print("best valid:  mean={0:.5g}  stdev={1:.5g}".\
+            format(best_valids.mean().item(),best_valids.std().item()))
 
-  return best_model, best_valids.mean()
+    return best_model, best_valids.mean()
 
 def _batch2class_accuracy(probdists, yss):
   """Return the proportion correctly classified.
