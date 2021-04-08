@@ -1436,7 +1436,7 @@ def train(model, crit, train_data, **kwargs):
   verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
   epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
-  valid_metric = kwargs.get('valid_metric', True)
+  valid_metric = kwargs.get('valid_metric', False)
   learn_params = kwargs.get( 'learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
           'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
@@ -1512,12 +1512,6 @@ def train(model, crit, train_data, **kwargs):
         learn_params must be a dict or an instance of a subclass of
         LearnParams_, not a {type(learn_params)}.""")
     learn_params.set_device(model_dev) # set the device for learn params
-    #if verb > 1: print(learn_params, end=', ')
-    #if verb > 1: print('batchsize:', bs)
-
-  #else:
-  #  #assert isinstance(valid_metric, FunctionType)
-  #  valid_metric = _evaluate(model, dataloader, crit=valid_metric , device=device)
 
   if graph:
     import matplotlib.pyplot as plt # Don't import these until now in case
@@ -1531,6 +1525,7 @@ def train(model, crit, train_data, **kwargs):
     xlim_start = 1
 
     # parse valid_metric and setup v_dation_train
+    valid_metric_same_as_crit = False
     if isinstance(valid_metric, bool):
       if valid_metric:
         # Setup valid_metric according to whether this looks like a regression
@@ -1554,6 +1549,11 @@ def train(model, crit, train_data, **kwargs):
                 'from `train`: please use the `valid_metric` paramter to pass a function'
                 'for use when validating'))
           break
+      else:                               # then we want to use crit for validating
+        valid_metric_same_as_crit = True  # but we don't want duplicate graphs
+        valid_metric = lambda yhatss, yss: crit(yhatss,yss)
+        v_dation_train = lambda model: _evaluate(model, dataloader=train_data,
+            crit=valid_metric, device=valid_dev)
     elif isinstance(valid_metric, FunctionType):
       # this maps: model -> float
       v_dation_train = lambda model: _evaluate(model, dataloader=train_data,
@@ -1563,9 +1563,11 @@ def train(model, crit, train_data, **kwargs):
 
     # these will hold the losses and validations for train data
     losses = []
-    if valid_metric: v_dations = []
+    if graph: v_dations = []
+    #if valid_metric: v_dations = []
 
-    if valid_data and valid_metric:
+    #if valid_data and valid_metric:
+    if valid_data and graph:
       # parse the valid_data
       if isinstance(valid_data, torch.utils.data.DataLoader):
         if len(valid_data.dataset) == 0: valid_data = None
@@ -1660,7 +1662,7 @@ def train(model, crit, train_data, **kwargs):
       ######### below are from https://99designs.com/blog/creative-inspiration/color-combinations/
       #fc_color1 = '#829079'; fc_color2 = '#b9925e' # olive / tan
       #fc_color1 = '#e7e8d1'; fc_color2 = '#a7beae' # light olive / light teal
-      fc_color1 = '#a2a595'; fc_color2 = '#b4a284' # slate / khaki
+      #fc_color1 = '#a2a595'; fc_color2 = '#b4a284' # slate / khaki
       #fc_color1 = '#e3b448'; fc_color2 = '#cbd18f' # mustard / sage
       #fc_color1 = '#e1dd72'; fc_color2 = '#a8c66c' # yellow-green / olive
       #fc_color1 = '#edca82'; fc_color2 = '#097770' # sepia / teal
@@ -1668,7 +1670,7 @@ def train(model, crit, train_data, **kwargs):
       #fc_color1 = '#316879'; fc_color2 = '#f47a60' # teal / coral
       #fc_color1 = '#1d3c45'; fc_color2 = '#d2601a' # deep pine green / orange
       #fc_color1 = '#c4a35a'; fc_color2 = '#c66b3d' # ochre / burnt sienna
-      #fc_color1 = '#d72631'; fc_color2 = '#077b8a' # red / jade
+      fc_color1 = '#d72631'; fc_color2 = '#077b8a' # red / jade
 
       model.eval()
 
@@ -1704,7 +1706,7 @@ def train(model, crit, train_data, **kwargs):
         ax2.set_ylabel('validation',size='larger')
         xlim = range(xlim_start,len(losses)+1)
         loss_ys = np.array(losses[xlim_start-1:], dtype=float)
-        if valid_metric:
+        if valid_metric and valid_data:
           v_dation_ys = np.array(v_dations[xlim_start-1:], dtype=float)
         if valid_data:
           losstest_ys = np.array(losses_valid[xlim_start-1:], dtype=float)
@@ -1724,8 +1726,8 @@ def train(model, crit, train_data, **kwargs):
           ax2.legend(fancybox=True, loc=2, framealpha=0.8, prop={'size': 9})
         else:
           ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
-          ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
-          if valid_metric:
+          if valid_metric and valid_data:
+            ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
             ax2.plot(xlim,v_dation_ys,color=fc_color1,lw=1.2,label='validation')
             ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
         len_valid_data = len(valid_data.dataset) if valid_data is not None else 0
