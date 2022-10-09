@@ -1260,13 +1260,13 @@ def train(model, crit, train_data, **kwargs):
 
   You can set `graph` to be positive (and forego validation) in
   order to real-time graph the losses per epoch at cost in time
-  but at no cost in VRAM (assuming you have GPU(s)) if you set
+  but at no cost in VRAM (assuming you have GPU(s)) by setting
   `gpu = (-1, -2)`. Here the -1 leads to training on the GPU and
   the -2 causes validation during training to take place on the
   CPU.  Moreover, the training data, for the purpose of valida-
-  remains on the CPU, thus freeing VRAM for training (at the
-  expense of time efficiency since validation is likely slower
-  on a CPU).
+  tion, remains on the CPU, thus freeing VRAM for training (at
+  the expense of time efficiency since validation is likely slo-
+  wer on a CPU).
 
   By default, any provided `valid_data` resides on the device on
   which training occurs. In a bind (such as running out of VRAM
@@ -1340,14 +1340,14 @@ def train(model, crit, train_data, **kwargs):
         output an average per example on batches.
         For a regression problem, one could put
           `valid_metric=torch.nn.functional.mse_loss`, or
-          `valid_metric=du.lib._rmse_loss`.
+          `valid_metric=du.lib._rmse`.
         The last option is equivalent to
           `valid_metric=lambda xss, yss: torch.sqrt(`
                `torch.nn.functional.mse_loss(xss, yss))`.
         Note that:
         - ~expected variation~ (the automatic metric for a reg-
           ression problem) may not be the best choice though,
-          for an OLS model it is ~r-squared~, the coefficient of
+          for an OLS model, it is ~r-squared~, the coefficient of
           determination.
         - to simply train the model as efficiently as possible,
           set `graph = 0` which disables all validation;
@@ -1388,12 +1388,11 @@ def train(model, crit, train_data, **kwargs):
         also print device notes; 3, add loss per epoch. Def.:`3`.
     $gpu$ (`Tuple[int]`): Tuple of `int`s of length 1 or 2 where the
         first entry determines the device to which the model is
-        moved and, in fact, on which the forwarding and back-
-        propagation through the model takes place during train-
-        ing.
+        moved and on which forwarding and backpropagation takes
+        place during training.
         The second entry determines the device to which the mo-
         del is deep copied (if necessary) for the purpose of
-        validation including validation agaisnt any test data
+        validation including validation against any test data
         provided. If this is a length 1 tuple, then that number
         is used to determine both devices.
         If no GPUs are present, then accept the default. Other-
@@ -1436,7 +1435,7 @@ def train(model, crit, train_data, **kwargs):
   verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
   epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
-  valid_metric = kwargs.get('valid_metric', False)
+  valid_metric = kwargs.get('valid_metric', True)
   learn_params = kwargs.get( 'learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
           'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
@@ -1653,6 +1652,7 @@ def train(model, crit, train_data, **kwargs):
     if graph:
       # set some facecolors:
       #fc_color1 = 'tab:blue'; fc_color2 = 'tab:red'  # primary
+      fc_color1 = '#73879c'; fc_color2 = '#c25b56' # light slate grey / something like firebrick red
       #fc_color1 = '#799FCB'; fc_color2 = '#F9665E'    # pastel
       #fc_color1 = '#95B4CC'; fc_color2 = '#FEC9C9'    # more pastel
       #fc_color1 = '#AFC7D0'; fc_color2 = '#EEF1E6'    # more
@@ -1670,7 +1670,7 @@ def train(model, crit, train_data, **kwargs):
       #fc_color1 = '#316879'; fc_color2 = '#f47a60' # teal / coral
       #fc_color1 = '#1d3c45'; fc_color2 = '#d2601a' # deep pine green / orange
       #fc_color1 = '#c4a35a'; fc_color2 = '#c66b3d' # ochre / burnt sienna
-      fc_color1 = '#d72631'; fc_color2 = '#077b8a' # red / jade
+      #fc_color1 = '#d72631'; fc_color2 = '#077b8a' # red / jade
 
       model.eval()
 
@@ -2744,7 +2744,8 @@ def optimize_ols(feats, **kwargs):
 
   design_mat = feats.transpose(0,1).mm(feats)
   if verb > 1: print(design_mat)
-  eigs, _ = torch.symeig(design_mat)
+  ##eigs, _ = torch.symeig(design_mat)
+  eigs = torch.linalg.eigvalsh(design_mat)
   if not all(map(lambda x: x >= 0.0, eigs.tolist())):
     if verb:
       print('  warning: negative eigenvalues (most negative is {:.3g})'.\
