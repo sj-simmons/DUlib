@@ -1706,7 +1706,8 @@ def train(model, crit, train_data, **kwargs):
         ax2.set_ylabel('validation',size='larger')
         xlim = range(xlim_start,len(losses)+1)
         loss_ys = np.array(losses[xlim_start-1:], dtype=float)
-        if valid_metric and valid_data:
+        #if valid_metric and valid_data:
+        if valid_metric:
           v_dation_ys = np.array(v_dations[xlim_start-1:], dtype=float)
         if valid_data:
           losstest_ys = np.array(losses_valid[xlim_start-1:], dtype=float)
@@ -1726,7 +1727,8 @@ def train(model, crit, train_data, **kwargs):
           ax2.legend(fancybox=True, loc=2, framealpha=0.8, prop={'size': 9})
         else:
           ax1.plot(xlim,loss_ys,color='black',lw=1.2,label='loss')
-          if valid_metric and valid_data:
+          #if valid_metric and valid_data:
+          if valid_metric:
             ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
             ax2.plot(xlim,v_dation_ys,color=fc_color1,lw=1.2,label='validation')
             ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
