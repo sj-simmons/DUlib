@@ -1353,7 +1353,9 @@ def train(model, crit, train_data, **kwargs):
           set `graph = 0` which disables all validation;
         - or, set `valid_metric=False`, to disable all validation
           and just graph (if, e.g., `graph = 1`) the loss.
-        Default: `True`.
+        The default is: `True if valid_data else False`.
+        One can graph validation while training on all data by
+        setting `valid_data = None` and `valid_metric = True`.
     $learn_params$
         (`Union[dict,LearnParam_, torch.optim.Optimizer]`): The
         training, or 'learning', hyperparameters in the form of
@@ -1435,7 +1437,7 @@ def train(model, crit, train_data, **kwargs):
   verb = kwargs.get('verb', 3 if not hasattr(args,'verb') else args.verb)
   gpu = kwargs.get('gpu', (-1,) if not hasattr(args,'gpu') else args.gpu)
   epochs=kwargs.get('epochs', 10 if not hasattr(args,'epochs') else args.epochs)
-  valid_metric = kwargs.get('valid_metric', True)
+  valid_metric = kwargs.get('valid_metric', True if valid_data else False)
   learn_params = kwargs.get( 'learn_params',
       {'lr': 0.1 if not hasattr(args,'lr') else args.lr,
           'mo': 0.0 if not hasattr(args,'mo') else args.mo} if \
@@ -1519,14 +1521,14 @@ def train(model, crit, train_data, **kwargs):
     fig, ax1 = plt.subplots()
     ax1.set_xlabel('epoch', size='larger')
     ax1.set_ylabel('average loss',size='larger')
-    ax2 = ax1.twinx()
-    ax2.set_ylabel('validation',size='larger');
     xlim_start = 1
 
     # parse valid_metric and setup v_dation_train
     valid_metric_same_as_crit = False
     if isinstance(valid_metric, bool):
       if valid_metric:
+        ax2 = ax1.twinx()
+        ax2.set_ylabel('validation',size='larger');
         # Setup valid_metric according to whether this looks like a regression
         # or a classification problem.
         for minibatch in train_data:
@@ -1548,7 +1550,7 @@ def train(model, crit, train_data, **kwargs):
                 'from `train`: please use the `valid_metric` paramter to pass a function'
                 'for use when validating'))
           break
-      else:                               # then we want to use crit for validating
+      elif valid_data:                    # we want to use crit for validating
         valid_metric_same_as_crit = True  # but we don't want duplicate graphs
         valid_metric = lambda yhatss, yss: crit(yhatss,yss)
         v_dation_train = lambda model: _evaluate(model, dataloader=train_data,
@@ -1697,17 +1699,17 @@ def train(model, crit, train_data, **kwargs):
         if epoch > epochs - graph:
           xlim_start += 1
         ax1.clear()
-        ax2.clear()
         ax1.set_xlabel('epoch', size='larger')
         if valid_data:
           ax1.set_ylabel('average loss (stippled)',size='larger')
         else:
           ax1.set_ylabel('average loss',size='larger')
-        ax2.set_ylabel('validation',size='larger')
         xlim = range(xlim_start,len(losses)+1)
         loss_ys = np.array(losses[xlim_start-1:], dtype=float)
         #if valid_metric and valid_data:
         if valid_metric:
+          ax2.clear()
+          ax2.set_ylabel('validation',size='larger')
           v_dation_ys = np.array(v_dations[xlim_start-1:], dtype=float)
         if valid_data:
           losstest_ys = np.array(losses_valid[xlim_start-1:], dtype=float)
@@ -1730,7 +1732,7 @@ def train(model, crit, train_data, **kwargs):
           #if valid_metric and valid_data:
           if valid_metric:
             ax1.legend(fancybox=True, loc=8, framealpha=0.8, prop={'size': 9})
-            ax2.plot(xlim,v_dation_ys,color=fc_color1,lw=1.2,label='validation')
+            ax2.plot(xlim, v_dation_ys, color=fc_color1, lw=1.2, label='validation')
             ax2.legend(fancybox=True, loc=9, framealpha=0.8, prop={'size': 9})
         len_valid_data = len(valid_data.dataset) if valid_data is not None else 0
         plt.title('training on {} ({:.1f}%) of {} examples'.format( num_examples,
