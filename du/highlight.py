@@ -55,9 +55,15 @@ your command-line:
 
   pd du.highlight
 
-Now, if you in fact already were using the command-line and yet
-still experiencing char escape hell, then try manually setting
-the PAGER and/or the TERM environment variables.
+Another basic problem might stem from running the command above
+from PowerShell in Windows. As of 2022, straight PowerShell
+does not have a high quality terminal. Instead, download Wind-
+ows Terminal from the MicroSoft App Store.
+
+If you are already using the command-line in some flavor of
+Linux or on a Mac and yet still experiencing char escape hell,
+then try manually setting the PAGER and/or the TERM environ-
+ment variables.
 
 A great value for PAGER is the value: less -r. You can set the
 PAGER environment variable on Linux-like systems (and this in-
