@@ -12,53 +12,53 @@ The |module| structure, along with the (non-helper) $functions$ and
 $classes$ are, as of this release,
 
   |du|
-  ├─ |lib| !the core library!
-  │  │  ~data:~
-  │  ├─ $coh_split$       split data
-  │  ├─ $split_df$        split a dataframe
-  │  ├─ $center$          mean-center some data
-  │  ├─ $normalize$       normalize data
-  │  ├─ $standardize$     mean-center and normalize
-  │  ├─ $online_means_stdevs$ online compute means and st devs
-  │  ├─ $Data$            easily augment data
-  │  ├─ $FoldableData$    cross-validation with DataLoaders
-  │  │  ~training:~
-  │  ├─ $train$           train a model
-  │  ├─ $cv_train$        cv (cross-validate) train a model
-  │  ├─ $cv_train2$       cv train a model on augmented data
-  │  ├─ $LearnParams_$    class to add training parameters
-  │  ├─ $Momentum$        add momentum to SGD
-  │  ├─ $optimize_ols$    optimize learning rate and momentum
-  │  │  ~metrics:~
-  │  ├─ $explained_var$   compute the explained variance
-  │  └─ $class_accuracy$  compute accuracy of classification
-  │                     (optionally, displays confusion mat.)
-  ├─ |models| !functions and classes for feed-forward nets!
-  │  ├─ $denseFFhidden$   compose dense layers
-  │  ├─ $polyize$         for making polynomials
-  │  │  ~model classes:~
-  │  ├─ $FFNet_$          base class for feed-forward nets
-  │  ├─ $SimpleLinReg$    fit polys to 2d point clouds
-  │  └─ $DenseFFNet$      factory for dense FF nets
-  ├─ |examples|
-  ├─ |conv| !convolutional tools for images and more!
-  │  ├─ |models|
-  │  │  ├─ $metalayer$    make a conv2d plus max_pooling layer
-  │  │  ├─ $convFFhidden$ make a composition of metalayers
-  │  │  ├─ $ConvFFNet$    factory for convolutional nets
-  │  │  ├─ $OneMetaCNN$   one metalayer, one dense conv net
-  │  │  └─ $TwoMetaCNN$   two metalayer, two dense conv net
-  │  └─ |examples|
-  ├─ |rec| !recurrence and natural language processing!
-  │  ├─ |lib|
-  │  │  ├─ |ngrams|       model n-grams for a word corpus
-  │  │  └─ |cbow|         model CBOW wordvecs given a corpus
-  │  ├─ |models|
-  │  └─ |examples|
-  ├─ |utils| !potentially helpful utilites!
-  │  ├─ $standard_args$   easily set command-line options
-  │  └─ $args2string$     easily make a logging string
-  └─ |highlight|          highlighting conventions for docs
+     |lib| !the core library!
+        ~data:~
+        $coh_split$       split data
+        $split_df$        split a dataframe
+        $center$          mean-center some data
+        $normalize$       normalize data
+        $standardize$     mean-center and normalize
+        $online_means_stdevs$ online compute means and st devs
+        $Data$            easily augment data
+        $FoldableData$    cross-validation with DataLoaders
+        ~training:~
+        $train$           train a model
+        $cv_train$        cv (cross-validate) train a model
+        $cv_train2$       cv train a model on augmented data
+        $LearnParams_$    class to add training parameters
+        $Momentum$        add momentum to SGD
+        $optimize_ols$    optimize learning rate and momentum
+        ~metrics:~
+        $explained_var$   compute the explained variance
+        $class_accuracy$  compute accuracy of classification
+                        (optionally, displays confusion mat.)
+     |models| !functions and classes for feed-forward nets!
+        $denseFFhidden$   compose dense layers
+        $polyize$         for making polynomials
+        ~model classes:~
+        $FFNet_$          base class for feed-forward nets
+        $SimpleLinReg$    fit polys to 2d point clouds
+        $DenseFFNet$      factory for dense FF nets
+     |examples|
+     |conv| !convolutional tools for images and more!
+        |models|
+           $metalayer$    make a conv2d plus max_pooling layer
+           $convFFhidden$ make a composition of metalayers
+           $ConvFFNet$    factory for convolutional nets
+           $OneMetaCNN$   one metalayer, one dense conv net
+           $TwoMetaCNN$   two metalayer, two dense conv net
+        |examples|
+     |rec| !recurrence and natural language processing!
+        |lib|
+           |ngrams|       model n-grams for a word corpus
+           |cbow|         model CBOW wordvecs given a corpus
+        |models|
+        |examples|
+     |utils| !potentially helpful utilites!
+        $standard_args$   easily set command-line options
+        $args2string$     easily make a logging string
+     |highlight|          highlighting conventions for docs
 
 !Quick Start!
 
