@@ -34,7 +34,7 @@ pip3 install DUlib --user
 
 Or, install the latest development release with, e.g.:
 ```shell
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.4  --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.5  --user
 ```
 Notes
 * Safest practice is to replace **pip3** in the commands above (and below) with
@@ -413,7 +413,7 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
 <a id="latest"></a>
 ####
 
-**Version 0.9.4** (now on Github)
+**Version 0.9.4**
   * The class **du.lib.Data** has been added; this is a sensible way to organize
     augmentation of Data.
   * In **du.lib**, **cross_validation** is now called, more correctly, **cv_train**;
@@ -423,6 +423,11 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
     functions employ the newly added class **du.lib.FoldedData**. See
     [here](https://github.com/sj-simmons/data-augmentation/blob/master/README.md#cross-validating-with-dataloaders)
     for example usage.
+
+**Version 0.9.5**
+  * Fix deprecation warnings for e.g.**linalg**.
+  * Documentation fixes.
+  * Better control over graphing options.
 
 ## Modifying DUlib
 

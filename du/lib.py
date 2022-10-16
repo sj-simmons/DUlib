@@ -307,11 +307,11 @@ from textwrap import dedent
 import du.utils
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.4'
+__version__ = '0.9.5'
 __status__ = 'Development'
-__date__ = '12/27/20'
+__date__ = '10/15/22'
 __copyright__ = """
-  Copyright 2019-2021 Scott Simmons
+  Copyright 2019-2022 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
