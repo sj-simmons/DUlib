@@ -213,7 +213,7 @@ trained models.
     ($model$,     -a (partially) trained model
      $data$,      -a tuple of tensors or a dataloader
      $return_error$ = `False`,
-                -return the 1-explained_var if True
+                -return 1-explained_var, if True
      $gpu$ = `-1`)  -run on the fastest device, by default
                     _____________________
 """
@@ -235,7 +235,7 @@ trained models.
 #    for speed and about then no need to set classes.
 #  - try to speed up evaluation by using model.eval() but be care
 #    ful the dropout etc.
-#  - Add notes to docstring about only fooling with testdate if
+#  - Add notes to docstring about only fooling with testdata if
 #    graphing, and doing so for speed.  <--IMPORTANT
 #  - Fix the packing issue for minibatch in rec nets - graphing
 #    against test loss on rec nets doesn't naturally work until
@@ -891,7 +891,7 @@ def coh_split(prop, *args, **kwargs):
   >>> `coh_split(0.6, rand(2,3), rand(3,3))`
   Traceback (most recent call last):
     ...
-  AssertionError: all tensors must have same size in first dim
+  AssertionError: All tensors must have same size in first axis.
   >>> `xss=rand(4, 2); xss_lengths=rand(4); yss=rand(4, 3)`
   >>> `len(coh_split(0.6, xss, xss_lengths, yss))`
   6
@@ -901,12 +901,11 @@ def coh_split(prop, *args, **kwargs):
   """
   du.utils._check_kwargs(kwargs,['randomize'])
   randomize = kwargs.get('randomize',True)
-  assert 0 <= prop <= 1, dedent("""\
-      Arg prop ({}) must be between 0 and 1, inclusive.
-  """.format(prop))
+  assert 0 <= prop <= 1,\
+      f"Arg prop ({prop}) must be between 0 and 1, inclusive."
   len_ = list(map(len, args))
-  assert all(len_[0] == x for x in len_), "all tensors must have same size "+\
-      "in first dim"
+  assert all(len_[0] == x for x in len_),\
+      "All tensors must have same size in first axis."
   if randomize:
     indices = torch.randperm(len_[0])
     args = [tensor.index_select(0, indices) for tensor in args]
@@ -930,7 +929,7 @@ def copy_parameters(model):
       `List[tensor]`: A list with the structure that matches exac-
           tly that of `model.parameters()` (except that it's a
           list instead of a generator) but with its tensors ini-
-          tialized to be all zeros.
+          tialized to all zeros.
     """
     params = []
     for param in model.parameters():
@@ -1692,11 +1691,13 @@ def train(model, crit, train_data, **kwargs):
           #  loss=crit(model_copy(test_feats,test_feats_lengths),test_targs).item()
           #else:
           #  loss = crit(model_copy(test_feats), test_targs).item()
-          losses_valid.append(loss_valid(model_copy))
+          losses_valid.append(loss_valid(model_copy).item())
           v_dations_valid.append(v_dation_valid(model_copy))
 
         # (re)draw the actual graphs
-        if epoch > epochs - graph:
+        #if epoch > epochs - graph:
+        #  xlim_start += 1
+        if epoch > graph and xlim_start < graph:
           xlim_start += 1
         ax1.clear()
         ax1.set_xlabel('epoch', size='larger')
@@ -1903,9 +1904,9 @@ def cross_validate(model, crit, train_data, k, **kwargs):
         gauging the accuracy of the model on the `1/k`th of `train`
         `_data` that is used for validation data during a step of
         cross validation. If this `None`, then the validation me-
-        tric automatcally becomes classification accuracy, if
+        tric automatically becomes classification accuracy, if
         the targets of `train_data` are integers, or explained
-        variance, if those targets are floats.
+        variance, if those targets are floats. Default: `None`.
     $cent_norm_feats$ (`Tuple[bool]`): Tuple with first entry det-
         ermining whether to center the features; and the sec-
         ond, whether to normalize them. Default: `(False, False)`.
@@ -2172,7 +2173,7 @@ def cv_train(model, crit, train_data, k = 10, **kwargs):
           no_improvement = bail_after
 
       if verb > 0:
-          print("epoch {3}; valids: mean={0:<7g} std={1:<7g}; best={2:<7g}".\
+          print("epoch {3}; valids: mean={0:4f} std={1:4f}; best={2:4f}".\
               format(valids.mean().item(),valids.std().item(),best_valids.mean().\
               item(),total_epochs)+' '+str(no_improvement)+"/"+str(bail_after))
       warn = False
