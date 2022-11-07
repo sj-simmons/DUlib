@@ -174,6 +174,8 @@ backend needs to be adjusted. We do this by editing the file
   >>> matplotlib.matplotlib_fname()
   ```
 * We want to edit that file.  Find the line **#backend: agg** or **backend: agg**.
+* In Fall '22, Jace and Levi reported success with the TkAgg backend on their MacBooks.
+  Levi first upgraded his machine to macOS 13.0.
 * In September '20, a DUlib user reported that the following
   worked on their machine:
   * At the commandline:
