@@ -64,7 +64,6 @@ dense part of, say, a convoutional net.
 from textwrap import dedent
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import du.utils
 
 __author__ = 'Scott Simmons'

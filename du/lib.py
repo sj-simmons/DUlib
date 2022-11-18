@@ -1249,6 +1249,9 @@ def train(model, crit, train_data, **kwargs):
 
   !Note on validation and efficiency!
 
+  Important: validation by passing in out-of-sample data via
+  `valid_data` assumes that `train_data` is mean_centered.
+
   In order to provide an option that trains as efficiently as
   possible, unless `graph` is positive, any validation data that
   may have been passed as an argument of `valid_data` is ignored;
@@ -1556,6 +1559,8 @@ def train(model, crit, train_data, **kwargs):
             crit=valid_metric, device=valid_dev)
     elif isinstance(valid_metric, FunctionType):
       # this maps: model -> float
+      ax2 = ax1.twinx()
+      ax2.set_ylabel('validation',size='larger');
       v_dation_train = lambda model: _evaluate(model, dataloader=train_data,
           crit=valid_metric, device=valid_dev)
     else:
@@ -1584,10 +1589,10 @@ def train(model, crit, train_data, **kwargs):
             _evaluate, dataloader=valid_data, crit=valid_metric, device=valid_dev)
       else:  # then valid_metric is output of _explained_var
         if valid_metric == 'regression':
-          v_dation_valid = lambda model: 1-len(valid_data)*_evaluate(
+          v_dation_valid = lambda model: 1 - len(valid_data) * _evaluate(
               model,
               dataloader=valid_data,
-              crit=_explained_var(valid_data, device=valid_dev),
+              crit=_explained_var(valid_data, device=valid_dev, mean_zero=False),
               device=valid_dev)
         else:
           v_dation_valid = lambda model: _evaluate(
@@ -2027,7 +2032,11 @@ def cross_validate(model, crit, train_data, k, **kwargs):
               if isinstance(train_data[-1], FloatTensor):
                   if verb > 1:
                       print(du.utils._markup(f'Using `explained_variance` for validation.'))
-                  valids[idx//chunklength] = explained_var(model, (xss_test, yss_test), gpu=gpu)
+                  valids[idx//chunklength] = explained_var(
+                          model,
+                          (xss_test, yss_test),
+                          gpu = gpu,
+                          mean_zero = True)
               if isinstance(train_data[-1], IntTensor):
                   if verb > 1:
                       print(du.utils._markup(f'Using `class_accuracy` for validation.'))
@@ -2044,7 +2053,13 @@ def cross_validate(model, crit, train_data, k, **kwargs):
   return model, valids
 
 def cv_train(model, crit, train_data, k = 10, **kwargs):
-  """Cross-validate a model.
+  """Cross-validate train a model.
+
+  This essentially trains a model employing early stopping
+  based a cross validation metric.
+
+  Consider passing in uncentered and unnormalized data and
+  then setting `cent_norm_feats` and `cent_norm_targs`.
 
   Args:
     $model$ (`nn.Module`): The instance of `nn.Module` to be trained.
@@ -2581,24 +2596,8 @@ def class_accuracy(model, data, **kwargs):
       accuracy = torch.trace(cm_pcts).item()
   return accuracy
 
-# change this to explained_var and change throughout
 def _explained_var(loader, device, mean_zero = False):
   """Helper to compute the explained variation (variance).
-
-  Under certain conditions (e.g., poly lin regression), one has
-  the ANOVA decomposition
-                       TSS = RSS + ESS
-  where
-  TSS = (yss - yss.mean(0)).pow(2).sum()  #total sum of squares
-  RSS = (yss - yhats).pow(2).sum()    # residual sum of squares
-  ESS=(yhats-yss.mean(0)).pow(2).sum()#explained sum of squares.
-
-  So, under preferred conditions, one computes the explained
-  variance, resp. unexplained variance as a proportion of tot-
-  al  variance: ESS/TSS or RSS/TSS.
-
-  However, absent preferential conditions one can use 1-RSS/TSS
-  for explained variance.
 
   This is a helper function for computing explained variance.
   Both `train_loader` and `test_loader` are assumed to be in-
@@ -2606,9 +2605,9 @@ def _explained_var(loader, device, mean_zero = False):
   of tensors.
 
   Args:
-    $loader$ (`Dataloader`)
-    $device$
-    $mean_zero$
+    $loader$ (`Dataloader`).
+    $device$ (`torch.device`).
+    $mean_zero$ (`bool`).
 
   Returns:
     `function`. Function that maps a pair of tensors to a float.
@@ -2619,22 +2618,58 @@ def _explained_var(loader, device, mean_zero = False):
   >>> `1 - _explained_var(loader, 'cpu')(yhatss, yss)`
   0.09333...
   """
+  TSS = 0
   if mean_zero:
     yss_mean = torch.tensor(0.)
+    for minibatch in loader:
+      TSS += minibatch[1].pow(2).sum().item()
   else:
     yss_mean = online_means_stdevs(loader)[1][0]
-  TSS = 0
-  for minibatch in loader:
-    TSS += (minibatch[1]-yss_mean).pow(2).sum().item()
+    for minibatch in loader:
+      TSS += (minibatch[1]-yss_mean).pow(2).sum().item()
   return lambda yhats, yss: (yhats-yss).pow(2).sum().item()/TSS
 
 def explained_var(model, data, **kwargs):
   """Compute the explained variance.
 
-  Returns the coefficient of determination of two 2-d tensors
-  (where the first dimension in each indexes the examples), one
-  holding the `yhatss` (the predicted outputs) and the other hol-
-  ding the true outputs, `yss`.
+  Under certain conditions - e.g., simple (polynomial) linear
+  regression -- one has the ANOVA decomposition TSS = RSS + ESS
+  where
+
+  TSS = (yss - yss.mean(0)).pow(2).sum()  #total sum of squares
+  RSS = (yss - yhats).pow(2).sum()    # residual sum of squares
+  ESS = (yhats-yss.mean(0)).pow(2).sum() # explained sum squares.
+
+  So, under preferred conditions, one computes the explained
+  variance, resp. unexplained variance as a proportion of tot-
+  al variance: ESS/TSS or RSS/TSS.
+
+  In fact, for simple linear regression, this returns the ~coeffi~
+  ~cient of determination~, aka ~r-squared~.
+
+  When using this function on out-of-sample (e.g. test) data,
+  preferential conditions typically do not hold since `data` was
+  not even seen during training.
+
+  Absent preferential conditions, TSS may not equal RSS+ESS. how-
+  ever, if we modify TSS, one may still use 1-RSS/TSS to gauge
+  performance against the simplest possible model.
+
+  If yss.mean(0) in the formula above for TSS is replaced with
+  the mean of the training targets. then one may think of RSS/TSS
+  or 1-RSS/TSS as comparing the trained model against the simpl-
+  est baseline model.
+
+  Usually the training data has been mean-centered. Any out-of-
+  sample test data, yss, must also be centered w/r to the means
+  of the original training data. In practice the yss.means(0) is
+  non-zero.  One can force zero by setting `mean_zero = True`.
+
+  With the caveats above, this returns the "explained variance"
+  of two 2-d tensors (where the first axis in each indexes the
+  examples) where one tensors holds the ~yhatss~ (the predicted
+  outputs) and the other holds the true outputs, ~yss~; or a
+  `DataLoader` yielding such 2-d tensors.
 
   Args:
     $model$ (`nn.Module`): The trained model.
@@ -2645,6 +2680,10 @@ def explained_var(model, data, **kwargs):
         `er` that yields such tuples.
 
   Kwargs:
+    $mean_zero$ (`bool`): The mean to use for the baseline model to
+        compare with. The default is `False`, which leads
+        to $baseline_mean$ being set to the mean of the features
+        of $data$.  For nonlinear models, consider putting
     $return_error$ (`bool`): If `False`, return the proportion of the
         variation explained by the regression line. If `True`,
         return 1 minus that proportion. Default: `False`.
@@ -2661,7 +2700,8 @@ def explained_var(model, data, **kwargs):
         nus that proportion (i.e., the proportion unexplained).
   """
   # this is explained_var
-  du.utils._check_kwargs(kwargs,['return_error','gpu'])
+  du.utils._check_kwargs(kwargs,['return_error','gpu','mean_zero'])
+  mean_zero = kwargs.get('mean_zero', False)
   return_error = kwargs.get('return_error', False)
   gpu = kwargs.get('gpu', -1)
   device = gpu if isinstance(gpu, torch.device) else du.utils.get_device(gpu)
@@ -2671,8 +2711,12 @@ def explained_var(model, data, **kwargs):
       data = _DataLoader(data, batch_size = len(data[0]))
   else:
       assert isinstance(data,(torch.utils.data.DataLoader,_DataLoader))
-  error = len(data)*_evaluate(
-      model, dataloader=data, crit=_explained_var(data,device=gpu), device=device)
+  error = len(data) * _evaluate(
+      model,
+      dataloader=data,
+      crit=_explained_var( data, device=gpu, mean_zero=mean_zero),
+      device=device
+  )
   return error if return_error else 1-error
 
 #  if not isinstance(yhatss, torch.Tensor):
