@@ -132,7 +132,7 @@ def standard_args(desc = '', **kwargs):
         over which train. Default: `False`.
     $props$ (`Union[bool,Tuple[float]]`): Similar to above, but
         for the proportions on which to train, validate, and/or
-        validate. Default: `False`.
+        test. Default: `False`.
     $dropout$ ('Union[bool,Tuple[float]]'): As above, useful for
         controlling dropout in your model. Default: `False`.
     $gpu$ (`Union[bool,Tuple[int]]`): Add a `gpu` switch. with a note

@@ -864,10 +864,13 @@ def coh_split(prop, *args, **kwargs):
   """Coherently randomize and split tensors.
 
   This splits each tensor in `*args` with respect to the first
-  dimension. First, the tensors are randomized with the respect
-  to their first dimension. The same random permutation is app-
-  lied to each tensor (hence the word 'coherent' in this func-
-  tions name).
+  axis. First, the tensors are randomized with the respect to
+  their first dimension. The same random permutation is applied
+  to each tensor (hence the word 'coherent').
+
+  Basic usage:
+
+  xss_train,xss_test,yss_train,yss_test = coh_split(.8,xss,yss)
 
   Args:
     $prop$ (`float`): The proportion to split out. Suppose this is
@@ -887,17 +890,24 @@ def coh_split(prop, *args, **kwargs):
         and holding, in turn, pairs, each of which is a tensor
         in `args` split according to `prop`.
 
+
   >>> `from torch import rand`
+  >>> `xss=rand(40, 2); yss=rand(40, 3)`
+  >>> `xss_train, xss_test, *_ = coh_split(0.75, xss, yss)`
+  >>> `xss_train.size(); xss_test.size()`
+  torch.Size([30, 2])
+  torch.Size([10, 2])
+
+  >>> `xss=rand(4, 2); xss_lengths=rand(4); yss=rand(4, 3)`
+  >>> `len(coh_split(0.6, xss, xss_lengths, yss))`
+  6
+
+  This correctly throws an error:
+
   >>> `coh_split(0.6, rand(2,3), rand(3,3))`
   Traceback (most recent call last):
     ...
   AssertionError: All tensors must have same size in first axis.
-  >>> `xss=rand(4, 2); xss_lengths=rand(4); yss=rand(4, 3)`
-  >>> `len(coh_split(0.6, xss, xss_lengths, yss))`
-  6
-  >>> `xss_train, xss_test, *_ = coh_split(0.75, xss, yss)`
-  >>> `xss_train.size()`
-  torch.Size([3, 2])
   """
   du.utils._check_kwargs(kwargs,['randomize'])
   randomize = kwargs.get('randomize',True)
@@ -1530,7 +1540,7 @@ def train(model, crit, train_data, **kwargs):
     if isinstance(valid_metric, bool):
       if valid_metric:
         ax2 = ax1.twinx()
-        ax2.set_ylabel('validation',size='larger');
+        ax2.set_ylabel('validation', size='larger');
         # Setup valid_metric according to whether this looks like a regression
         # or a classification problem.
         for minibatch in train_data:
@@ -1714,7 +1724,8 @@ def train(model, crit, train_data, **kwargs):
         loss_ys = np.array(losses[xlim_start-1:], dtype=float)
         #if valid_metric and valid_data:
         if valid_metric:
-          ax2.clear()
+          ax2.cla()
+          #ax2.clear()
           ax2.set_ylabel('validation',size='larger')
           v_dation_ys = np.array(v_dations[xlim_start-1:], dtype=float)
         if valid_data:

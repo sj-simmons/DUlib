@@ -167,7 +167,14 @@ class FFNet_(Net_):
   """A base class for feed-forward neural nets.
 
   This simply adds to `nn.Module` attributes called `means` and `st`
-  `devs`.
+  `devs`. Those can be useful when serializing a model since one
+  can store, along with the trained weights, the means and stan-
+  dard deviations with which one must standardize when making
+  predictions.
+
+  Note: when unserializing, one re-instantiates the same model
+  that was used for training. When doing so, pass any tensors
+  of the correct size to `means` and `stdevs`.
   """
   def __init__(self, means = None, stdevs = None):
     """Constructor.
