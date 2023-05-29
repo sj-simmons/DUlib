@@ -1540,7 +1540,8 @@ def train(model, crit, train_data, **kwargs):
     if isinstance(valid_metric, bool):
       if valid_metric:
         ax2 = ax1.twinx()
-        ax2.set_ylabel('validation', size='larger');
+        #ax2.set_ylabel('validation', size='larger')
+        ax2.secondary_yaxis('right').set_ylabel('validation', size='larger')
         # Setup valid_metric according to whether this looks like a regression
         # or a classification problem.
         for minibatch in train_data:
@@ -1570,7 +1571,8 @@ def train(model, crit, train_data, **kwargs):
     elif isinstance(valid_metric, FunctionType):
       # this maps: model -> float
       ax2 = ax1.twinx()
-      ax2.set_ylabel('validation',size='larger');
+      #ax2.set_ylabel('validation',size='larger');
+      ax2.secondary_yaxis('right').set_ylabel('validation', size='larger')
       v_dation_train = lambda model: _evaluate(model, dataloader=train_data,
           crit=valid_metric, device=valid_dev)
     else:
@@ -1673,9 +1675,6 @@ def train(model, crit, train_data, **kwargs):
       #fc_color1 = '#95B4CC'; fc_color2 = '#FEC9C9'    # more pastel
       #fc_color1 = '#AFC7D0'; fc_color2 = '#EEF1E6'    # more
       #fc_color1 = '#c4cfcf'; fc_color2 = '#cfc4c4'
-      #fc_color1 = '#c4cfcf'; fc_color2 = '#cfc4c4'
-
-      ######### below are from https://99designs.com/blog/creative-inspiration/color-combinations/
       #fc_color1 = '#829079'; fc_color2 = '#b9925e' # olive / tan
       #fc_color1 = '#e7e8d1'; fc_color2 = '#a7beae' # light olive / light teal
       #fc_color1 = '#a2a595'; fc_color2 = '#b4a284' # slate / khaki
@@ -1724,9 +1723,10 @@ def train(model, crit, train_data, **kwargs):
         loss_ys = np.array(losses[xlim_start-1:], dtype=float)
         #if valid_metric and valid_data:
         if valid_metric:
-          ax2.cla()
-          #ax2.clear()
-          ax2.set_ylabel('validation',size='larger')
+          #ax2.cla()
+          ax2.clear()
+          #ax2.set_ylabel('validation',size='larger')
+          ax2.secondary_yaxis('right').set_ylabel('validation', size='larger')
           v_dation_ys = np.array(v_dations[xlim_start-1:], dtype=float)
         if valid_data:
           losstest_ys = np.array(losses_valid[xlim_start-1:], dtype=float)
