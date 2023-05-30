@@ -740,7 +740,7 @@ def poly_string(coeffs):
     if i < degree - 1:
       string_rep += '{}x^{}+'.format(coeff, degree - i)
     elif i < degree:
-      string_rep += '{}x+'.format(coeff)
+      string_rep += f'{coeff}x + '
     else:
       string_rep += str(coeff)
   return string_rep
@@ -767,11 +767,12 @@ def simple_polynomial_regression_animate():
   parser.add_argument('-gr',type=int,help='1 to show loss',default=0)
   parser.add_argument('-show_opt',\
       help='show optimal learning parameters and quit',action='store_true')
+  parser.add_argument('-standardize', help='center and normalize',action='store_true')
   args = parser.parse_args()
 
   degree = args.deg
   xss = du.models.polyize(xss, degree)
-  print('degree is',degree)
+  print('degree is', degree)
 
   if args.show_opt:
     print(dulib.optimize_ols(xss, verb=2))

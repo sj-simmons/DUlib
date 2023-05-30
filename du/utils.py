@@ -23,6 +23,7 @@ import argparse
 import re
 import signal
 import inspect
+import math
 
 __author__ = 'Scott Simmons'
 __version__ = '0.9.7'
@@ -444,7 +445,7 @@ def print_devices():
           return string
       print(aboutCudaDevices())
 
-def format_num(number):
+def format_num(number, digits=3):
   """Format a small or a large number nicely.
 
   Args:
@@ -461,9 +462,9 @@ def format_num(number):
   1M
   """
   if number < .005:
-    string = '{:.4g}'.format(number)
+    string = f'{number:.{digits}g}'
   elif number < 0:
-    string = '{:.5g}'.format(number)
+    string = f'{number:.{digits+1}g}'
   elif number > 999:
     number = float('{:.3g}'.format(number))
     mag = 0
@@ -472,7 +473,7 @@ def format_num(number):
         number /= 1000.0
     string='{}{}'.format('{:f}'.format(number).rstrip('0').rstrip('.'),['','K','M','B','T'][mag])
   else:
-    string = str(number)
+    string = f'{number:.3g}'
   return string
 
 def _check_kwargs(passed, valid_keywords):
