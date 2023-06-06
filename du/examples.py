@@ -328,9 +328,8 @@ Another way to validate the trained model above is to compute
 r^2, the ~coefficient of determination~. For the current demon-
 stration, r^2 can be computed with
 
->>> `from du.lib import r_squared`
->>> `yhatss = model(feats)`
->>> `0.96 < r_squared(yhatss, targs) < 0.985`
+>>> `from du.lib import explained_var`
+>>> `0.96 < explained_var(model, (feats, targs)) < 0.985`
 $True$
 
 This means that about 97% of the variation in the data is ex-
@@ -419,7 +418,7 @@ Let us now compute r^2 for regression polynomial found by the
 model, though we should ask ourselves if using r^2 is appropr-
 iate in this scenario.
 
->>> `r_squared(model(feats), targs)` #doctest:+SKIP
+>>> `explained_var(model(feats), targs)` #doctest:+SKIP
 
 We can also pick 20 test points not seen during training.
 
@@ -427,7 +426,7 @@ We can also pick 20 test points not seen during training.
 >>> `xss_test = xss.unsqueeze(1)`
 >>> `yss = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)`
 >>> `yss_test = yss.unsqueeze(1)`
->>> `r_squared(model(xss_test), yss_test)` #doctest:+SKIP
+>>> `explained_var(model(xss_test), yss_test)` #doctest:+SKIP
 
 These r^2 values jump around, over multiple runs of the code
 above. Sometimes r^2 is around 0.5 which means that the reqres-
@@ -495,15 +494,13 @@ Or, equivalently, using `DUlib`:
 ...     `graph = 0,`
 ...     `verb = 0)`
 
->>> `r_squared(model(feats), targs)`
+>>> `explained_var(model, (feats, targs))` #doctest:+SKIP
 
 >>> `xss = 40*torch.rand(20)-80/3`
 >>> `xss_test = xss.unsqueeze(1)`
 >>> `yss = torch.normal(2*xss*torch.cos(xss/10)-5, 10.0)`
 >>> `yss_test = yss.unsqueeze(1)`
->>> `r_squared(model(xss_test), yss_test)`
-
-#doctest:+SKIP
+>>> `explained_var(model, (xss_test, yss_test))` #doctest:+SKIP
 
 '''
 import os
@@ -589,11 +586,11 @@ def simple_linear_regression():
     print('no X server running')
 
   print('r^2 for the original data: {}'.\
-      format(dulib.r_squared(model(xss),yss)))
+      format(dulib.explained_var(model(xss),yss)))
   xs = 100*torch.rand(40); ys = torch.normal(2*xs+9, 20.0)
   xss_test = xs.unsqueeze(1); yss_test = ys.unsqueeze(1)
   print('r^2 on 20 new test points: {}'.\
-      format(dulib.r_squared(model(xss_test),yss_test)))
+      format(dulib.explained_var(model(xss_test),yss_test)))
 
 def simple_linear_regression_animate():
   """Program that plays a regression line animation."""
@@ -709,14 +706,14 @@ def simple_polynomial_regression():
   else:
     print('no X server running')
 
-  print('r^2 on the original data: {}'.format(dulib.r_squared(model(xss),yss)))
+  print('r^2 on the original data: {}'.format(dulib.explained_var(model(xss),yss)))
   xs = 40*torch.rand(20)-80/3
   xss_test = xs.unsqueeze(1)
   ys = torch.normal(2*xs*torch.cos(xs/10)-5, 10.0)
   yss_test = ys.unsqueeze(1)
   print('r^2 on 20 new test points: {}'.\
       format(
-          dulib.r_squared(model(du.models.polyize(xss_test,degree)),yss_test)))
+          dulib.explained_var(model(du.models.polyize(xss_test,degree)),yss_test)))
 
 def poly_string(coeffs):
   """Rudimentary poly string representation
@@ -729,7 +726,7 @@ def poly_string(coeffs):
     `str`.
 
   >>> `print(poly_string([-5,2,3]))`
-  3x^2+2x+-5
+  3x^2 + 2x + -5
   """
   coeffs = coeffs[::-1]
   degree = len(coeffs) - 1
@@ -738,7 +735,7 @@ def poly_string(coeffs):
   for i, coeff in enumerate(coeffs):
     coeff = du.utils.format_num(coeff)
     if i < degree - 1:
-      string_rep += '{}x^{}+'.format(coeff, degree - i)
+      string_rep += '{}x^{} + '.format(coeff, degree - i)
     elif i < degree:
       string_rep += f'{coeff}x + '
     else:
@@ -767,7 +764,6 @@ def simple_polynomial_regression_animate():
   parser.add_argument('-gr',type=int,help='1 to show loss',default=0)
   parser.add_argument('-show_opt',\
       help='show optimal learning parameters and quit',action='store_true')
-  parser.add_argument('-standardize', help='center and normalize',action='store_true')
   args = parser.parse_args()
 
   degree = args.deg
@@ -797,9 +793,9 @@ def simple_polynomial_regression_animate():
   plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
   xs_ = torch.arange(float(int(x_width)+1)) - x_width/h_scale;
   plt.plot(xs_, 2*xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,
-      label='y = 2x*cos(x/10)-{}'.format(v_shift))
+      label=f'y = 2x*cos(x/10)-{v_shift}')
   plt.scatter(xs.tolist(),ys.tolist(),s=9,
-      label='y = 2x*cos(x/10)-{}+10*N(0,1)'.format(v_shift))
+      label=f'y = 2x*cos(x/10)-{v_shift}+10*N(0,1)')
 
   for epoch in range(int((1-args.train_first)*args.epochs)):
     model = dulib.train(
@@ -818,15 +814,21 @@ def simple_polynomial_regression_animate():
     plt.clf()
     plt.title('epoch: {}/{}'.\
         format(int(args.train_first*args.epochs+epoch+1),args.epochs))
-    plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
-    plt.scatter(xs.tolist(),ys.tolist(),s=9,
-        label='y = 2x*cos(x/10)-{}+10*N(0,1)'.format(v_shift))
+    plt.xlabel('x',size='larger'); plt.ylabel('y',size='larger')
     plt.plot(xs_, 2*xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,
-        label='y = 2x*cos(x/10)-{}'.format(v_shift))
+        label=f'y = 2x*cos(x/10) - {v_shift}')
+    plt.scatter(xs.tolist(), ys.tolist(), s=9,
+        label=f'y = 2x*cos(x/10) - {v_shift} + 10*N(0,1)')
     yhatss = model(du.models.polyize(xs_.unsqueeze(1),degree)).squeeze(1)
-    plt.plot(xs_, yhatss.detach(), c='red', lw=.9,
-        label=poly_string(coeffs).format(degree))
+    poly_str = poly_string(coeffs)
+    poly_str = poly_str + ' '*(45-len(poly_str))
+    plt.plot(xs_, yhatss.detach(), c='red', lw=.9, label=poly_str)
     plt.legend(loc=0)
+    #leg = plt.legend(loc=8)
+    #for t in leg.get_texts():
+    #    t.set_ha('left')
+
+
     try:
       fig.canvas.flush_events()
     except tkinter.TclError:
