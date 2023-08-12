@@ -745,95 +745,202 @@ def poly_string(coeffs):
 def simple_polynomial_regression_animate():
   """Program that plays a regression polynomial animation."""
   assert _display, 'no X-server found'
-  num_points = 20; x_width = 40.0; h_scale = 1.5; v_shift = 5
-  xs = x_width*torch.rand(num_points) - x_width /h_scale
-  ys = torch.normal(2*xs*torch.cos(xs/10)-v_shift, 10.0)
-  xss = xs.unsqueeze(1); yss = ys.unsqueeze(1)
 
   parser = argparse.ArgumentParser(
       description =\
-         'Simple poly regression via gradient descent'+
-         '\n  put lr = -1 to try optimal learning params',
+         'Simple poly regression via gradient descent. call this'+
+         'with lr set to -1 to try optimal learning parameters.',
       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('-deg',type=int,help='degree of poly',default=3)
-  parser.add_argument('-lr',type=float,help='learning rate',default=1e-9)
-  parser.add_argument('-mo',type=float,help='momentum',default=.999)
-  parser.add_argument('-epochs',type=int,help='epochs',default=5000)
-  parser.add_argument('-train_first',type=float,
-      help='train for this prop of epochs before graphing',default=0.5)
-  parser.add_argument('-gr',type=int,help='1 to show loss',default=0)
-  parser.add_argument('-show_opt',\
-      help='show optimal learning parameters and quit',action='store_true')
+  parser.add_argument('-deg', type=int,help='degree of poly', default=7)
+  parser.add_argument('-n', type=int, help='sample size', default=8)
+  parser.add_argument('-lr',type=float,help='learning rate',default=.1)
+  parser.add_argument('-mo',type=float,help='momentum',default=.9997)
+  parser.add_argument('-epochs',type=int,help='epochs',default=30000)
+  help_='train for this prop of epochs before graphing'
+  parser.add_argument('-pre_train', type=float, help=help_ ,default=0.3)
+  parser.add_argument('-graph_pre',type=int,help='1 to graph loss when pretraining',default=0)
+  parser.add_argument('-graph_post',type=int,help='1 to show loss',default=0)
+  help_='show optimal learning parameters and quit'
+  parser.add_argument('-show_opt', help=help_, action='store_true')
+  parser.add_argument('-stand', help="standardize x-values", action='store_false')
+  parser.add_argument('-step',type=int,help="step this many epochs when post training",default=100)
+  parser.add_argument('-seed', type=int,help="seed", default=111)
+  help_='roughly evenly distributed x-values'
+  parser.add_argument('-un_even', help=help_, action='store_true')
+  parser.add_argument('-l2_penalty',type=float,help="ridge regression",default=0)
+  parser.add_argument('-nonlin', help="use a non_linear model", action='store_true')
+  parser.add_argument('-cloud', help="show only point cloud", action='store_true')
   args = parser.parse_args()
 
+  if args.seed > 0:
+      torch.manual_seed(args.seed)
+
+  n = args.n
+  epochs = args.epochs
+  epochs = 1000 if epochs == 30000 and args.nonlin else args.epochs
+  ep_step = args.step
+  ep_step = 1 if ep_step == 100 and args.nonlin else args.step
+  pre_train = args.pre_train
+  pre_train = 0 if pre_train == .3 and args.nonlin else args.pre_train
+  cloud = args.cloud
+  pre_train = 0 if pre_train == .3 and args.cloud else pre_train
+  ep_step = 1 if ep_step == 100 and args.cloud else ep_step
+  epochs = 100 if epochs == 30000 and args.cloud else epochs
+
+  x_width = 110.0; h_scale = 1.5; err = 20
+
+  if args.un_even:
+    xs = x_width * torch.rand(n) - x_width/h_scale
+  else:
+    xs = x_width * torch.arange(n)/n + 5*torch.rand(n) - x_width/h_scale
+
+  ys = torch.normal(2*xs/(1.5+torch.cos(xs/10)), err)
+  xss = xs.unsqueeze(1)
+  yss = ys.unsqueeze(1)
+
   degree = args.deg
+
+  if args.nonlin:
+    model = du.models.DenseFFNet(degree, 1, (8,))
+  else:
+    model = du.models.SimpleLinReg(degree)
+  crit = nn.MSELoss()
+  #crit = nn.SmoothL1Loss()
+  print(model)
+  nm = model.numel_()
+
   xss = du.models.polyize(xss, degree)
-  print('degree is', degree)
+  if args.stand:
+    xss, xss_means = dulib.center(xss)
+    xss, xss_stdevs = dulib.normalize(xss)
+    yss, yss_means = dulib.center(yss)
+    yss, yss_stdevs = dulib.normalize(yss)
 
   if args.show_opt:
     print(dulib.optimize_ols(xss, verb=2))
     exit()
   if args.lr < 0 or args.mo < 0:
     learn_params = dulib.optimize_ols(xss, verb=1)
+    lr_ = du.utils.format_num(learn_params['lr'])
+    mo_ = round(learn_params['mo'], 10)
+    print(f"optimal lr: {lr_}, mo: {mo_}")
   else:
     learn_params = {'lr':args.lr, 'mo':args.mo}
+    print(f"learning rate {args.lr}; momentum {args.mo}")
 
-  model = du.models.SimpleLinReg(degree)
+  learn_params = torch.optim.SGD(
+      model.parameters(),
+      lr = learn_params['lr'],
+      momentum = learn_params['mo'],
+      weight_decay = args.l2_penalty
+  )
+
+  #learn_params = torch.optim.Adam(
+  #    model.parameters(),
+  #    lr = learn_params['lr'],
+  #    weight_decay=.001
+  #)
+
   model = dulib.train(
       model = model,
-      crit = nn.MSELoss(),
+      crit = crit,
       train_data = (xss, yss),
       learn_params = learn_params,
-      epochs = int(args.train_first*args.epochs),
-      graph = args.gr,
-      verb = 2,
+      epochs = int(pre_train*epochs),
+      graph = args.graph_pre,
+      verb = 3 if pre_train else 0,
       gpu = (-2,))
 
-  plt.ion(); fig, _ = plt.subplots()
-  plt.xlabel('x',size='larger');plt.ylabel('y',size='larger')
-  xs_ = torch.arange(float(int(x_width)+1)) - x_width/h_scale;
-  plt.plot(xs_, 2*xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,
-      label=f'y = 2x*cos(x/10)-{v_shift}')
-  plt.scatter(xs.tolist(),ys.tolist(),s=9,
-      label=f'y = 2x*cos(x/10)-{v_shift}+10*N(0,1)')
-
-  for epoch in range(int((1-args.train_first)*args.epochs)):
+  if args.graph_post:
     model = dulib.train(
         model = model,
-        crit = nn.MSELoss(),
+        crit = crit,
         train_data = (xss, yss),
         learn_params = learn_params,
-        epochs = 1,
+        epochs = int((1-pre_train)*epochs),
+        graph = args.graph_post,
+        verb = 3,
+        gpu = (-2,))
+    exit()
+
+  plt.ion();
+  fig, _ = plt.subplots(figsize=(10,7));
+  plt.rc('font',size=14)
+  plt.xlabel('x',size='large'); plt.ylabel('y',size='large')
+  delta = 1
+  start=min(xs)-delta; end=max(xs)+delta; step=(end-start)/100
+  xs_ = torch.arange(start, end + step, step)
+  plt.plot(xs_, 2*xs_/(1.5+torch.cos(xs_/10)), c='black', lw=1,
+      label=f'y = 2x/(3/2+cos(x/10))')
+  plt.scatter(xs.tolist(),ys.tolist(),s=30,label=f'y = 2x/(3/2+cos(x/10) + {err}*N(0,1)')
+
+  for epoch in range(round((1-pre_train)*epochs)//ep_step+1):
+    model = dulib.train(
+        model = model,
+        crit = crit,
+        train_data = (xss, yss),
+        learn_params = learn_params,
+        epochs = ep_step,
         verb = 0,
         gpu = (-2,))
-    params = list(model.parameters())
-    coeffs = [params[-1].item()]
-    for param in params[0].squeeze(0):
-      coeffs.append(param.item())
+    if args.stand and not args.nonlin:
+      params = list(model.parameters())
+      coeffs = [params[-1].item()]
+      for param in params[0].squeeze(0):
+        coeffs.append(param.item())
 
     plt.clf()
-    plt.title('epoch: {}/{}'.\
-        format(int(args.train_first*args.epochs+epoch+1),args.epochs))
-    plt.xlabel('x',size='larger'); plt.ylabel('y',size='larger')
-    plt.plot(xs_, 2*xs_*torch.cos(xs_/10)-v_shift, c='black', lw=.5,
-        label=f'y = 2x*cos(x/10) - {v_shift}')
-    plt.scatter(xs.tolist(), ys.tolist(), s=9,
-        label=f'y = 2x*cos(x/10) - {v_shift} + 10*N(0,1)')
-    yhatss = model(du.models.polyize(xs_.unsqueeze(1),degree)).squeeze(1)
-    poly_str = poly_string(coeffs)
-    poly_str = poly_str + ' '*(45-len(poly_str))
-    plt.plot(xs_, yhatss.detach(), c='red', lw=.9, label=poly_str)
-    plt.legend(loc=0)
-    #leg = plt.legend(loc=8)
-    #for t in leg.get_texts():
-    #    t.set_ha('left')
+    total_epoch = round(pre_train*epochs + ep_step*epoch)
+    plt.title(
+        f'training {nm} weights on {n} features; epoch: {total_epoch}/{epochs}',
+        size = 'large'
+    )
+    plt.xlabel('x',size='large'); plt.ylabel('y',size='large')
+    if not cloud:
+        plt.plot(xs_, 2*xs_/(1.5+torch.cos(xs_/10)), c='black', lw=1,
+            label=f'y = 2x/(3/2+cos(x/10))')
+    plt.scatter(xs.tolist(),ys.tolist(),s=30,
+        label=f'y = 2x/(3/2+cos(x/10)) + {err}*N(0,1)'
+    )
+    with torch.no_grad():
+      xss_ = du.models.polyize(xs_.unsqueeze(1), degree)
+      if args.stand:
+        xss_, _ = dulib.center(xss_, xss_means)
+        xss_, _ = dulib.normalize(xss_, xss_stdevs)
+        yss_, _ = dulib.center(xss_, yss_means)
+        yss_, _ = dulib.normalize(xss_, yss_stdevs)
+        yhatss = yss_stdevs * model(xss_).squeeze(1) + yss_means
+      else:
+        yhatss = model(xss_).squeeze(1)
 
+    if not args.stand:
+      poly_str = poly_string(coeffs)
+      if len(poly_str) <= 45:
+          poly_str = poly_str + ' '*(45-len(poly_str))
+      else:
+          while len(poly_str) > 45:
+              poly_str = ' '.join(poly_str.split()[:-2]) + ' ...'
+      #plt.plot(xs_, yhatss.detach(), c='red', lw=.9, label=poly_str)
+      #leg = plt.legend(loc=8)
+      #for t in leg.get_texts():
+      #    t.set_ha('left')
+    else:
+      poly_str = f"piecewise O(x^{degree})" if args.nonlin else f"O(x^{degree})"
+      if args.l2_penalty:
+          poly_str = poly_str + f"; reg. with {args.l2_penalty}*L2"
+    plt.plot(xs_, yhatss, c='red', lw=1.5, label=poly_str)
+    if not cloud:
+        plt.legend(loc=0)
+
+    #delta = 1
+    #plt.xlim(min(xs) - delta, max(xs) + delta)
 
     try:
       fig.canvas.flush_events()
     except tkinter.TclError:
       plt.ioff()
       exit()
+
   plt.ioff()
   plt.show()
 
