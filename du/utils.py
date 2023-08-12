@@ -237,8 +237,8 @@ def standard_args(desc = '', **kwargs):
 
   hstr='proportion(s) to train, and/or validate, and/or test on'
   if not isinstance(props, bool) and isinstance(props, tuple):
-    parser.add_argument('-props', type=int, help=hstr, metavar='props',
-        nargs='*', default=props)
+    parser.add_argument('-props', type=float, help=hstr,
+        metavar='props', nargs='*', default=props)
   elif isinstance(props, bool) and props:
     parser.add_argument('-props', type=int, help=hstr, metavar='props',
         nargs='*', required=True)
@@ -468,7 +468,7 @@ def format_num(number, digits=3):
   elif number > 999:
     number = float('{:.3g}'.format(number))
     mag = 0
-    while abs(number) >= 1000:
+    while abs(number) >= 1000 and mag < 4:
         mag += 1
         number /= 1000.0
     string='{}{}'.format('{:f}'.format(number).rstrip('0').rstrip('.'),['','K','M','B','T'][mag])

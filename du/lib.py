@@ -1062,7 +1062,7 @@ def _tuple2dataset(tup):
 class Data(torch.utils.data.Dataset):
     """Base class for data sets.
 
-    Simple example:
+    Simple examples:
     >>> import pandas as pd
     >>> data = {'num':list(range(12)),'let':list('abcdefghijkl')}
     >>> df = pd.DataFrame(data)
@@ -1074,6 +1074,12 @@ class Data(torch.utils.data.Dataset):
     >>> dataset = Data(df, maps, id_, double)
     >>> print(dataset[1])
     (1, 'bb')
+    >>> dataset = Data(df, maps, lambda x: x**2, None)
+    >>> print(dataset[2])
+    (4,)
+    >>> dataset = Data(df, maps, None, double)
+    >>> print(dataset[2])
+    ('cc',)
     """
     def __init__(self, df, maps, *transforms):
         """
@@ -1095,7 +1101,7 @@ class Data(torch.utils.data.Dataset):
         return len(self.df)
 
     def __getitem__(self, idx):
-        return tuple(tf(mp(self.df,idx)) for tf, mp in zip(self.tfs, self.mps) if tf is not None)
+        return tuple(tf(mp(self.df,idx)) for tf, mp in zip(self.tfs, self.mps) if tf)
 
 # keeping this since it's faster than DataLoader
 class _DataLoader:
@@ -2790,10 +2796,6 @@ def optimize_ols(feats, **kwargs):
   """
   du.utils._check_kwargs(kwargs,['with_mo','verb'])
 
-  #from scipy.linalg import eigh
-  from scipy.sparse.linalg import eigsh
-  from scipy.sparse import issparse
-
   with_mo = kwargs.get('with_mo', True)
   verb = kwargs.get('verb', 0)
 
@@ -2805,11 +2807,15 @@ def optimize_ols(feats, **kwargs):
   design_mat = feats.transpose(0,1).mm(feats)
   if verb > 1: print(design_mat)
   ##eigs, _ = torch.symeig(design_mat)
-  eigs = torch.linalg.eigvalsh(design_mat)
-  if not all(map(lambda x: x >= 0.0, eigs.tolist())):
+  #eigs = torch.linalg.eigvalsh(design_mat)
+  eigs = [complex(x).real for x in torch.linalg.eigvalsh(design_mat)]
+  #if not all(map(lambda x: x >= 0.0, eigs.tolist())):
+  nonneg_eigs = [x for x in eigs if x >= 0]
+  numneg = len(eigs) - len(nonneg_eigs)
+  if numneg > 0:
     if verb:
-      print('  warning: negative eigenvalues (most negative is {:.3g})'.\
-          format(min([x for x in eigs])))
+        print(f'  warning: {numneg} of {len(eigs)} negative eigenvalues ',end='' )
+        print(f'(most negative is {min(eigs):.3g})')
     problematic = True
 
   if problematic:
@@ -2826,10 +2832,13 @@ def optimize_ols(feats, **kwargs):
       is_sparse = issparse(design_mat)
       if verb: print(is_sparse)
       largest = eigsh(design_mat,1,which='LM',return_eigenvectors=False).item()
-      smallest=eigsh(design_mat,1,which='SA',return_eigenvectors=False,
-          sigma=1.0).item()
+      smallest=eigsh(design_mat,1,which='SA',return_eigenvectors=False, sigma=1.0).item()
+      largest = complex(largest).real
+      smallest = complex(smallest).real
+      smallest = 0.0 if smallest < 0.0 else smallest
   else:
-    eigs = eigs.tolist()
+    #eigs = eigs.tolist()
+    #eigs_ = [0.0 if x < 0.0 else complex(x).real for x in eigs]
     eigs_ = [0.0 if x < 0.0 else x for x in eigs]
     if len(eigs_) < len(eigs) and verb:
       print('lopped off non-positive eig. vals.')

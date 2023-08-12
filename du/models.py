@@ -288,7 +288,7 @@ class DenseFFNet(FFNet_):
               `lambda xss: log_softmax(xss, dim=1)`.
           (Here we used a lambda function solely so that we
           can provide the required `dim=1` to Torch's `log_`
-          `softmax`. Default: `None`.
+          `softmax`). Default: `None`.
       $means$ (`torch.Tensor`): A tensor typically holding the
           means of the training data. Default: `None`.
       $stdevs$ (`torch.Tensor`): A tensor typically holding
