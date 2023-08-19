@@ -34,7 +34,7 @@ pip3 install DUlib --user
 
 Or, install the latest development release with, e.g.:
 ```shell
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.7  --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.8  --user
 ```
 Notes
 * Safest practice is to replace **pip3** in the commands above (and below) with
@@ -430,6 +430,11 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
   * Fix deprecation warnings for e.g.**linalg**.
   * Documentation fixes.
   * Better control over graphing options.
+
+**Version 0.9.8**
+  * More deprecation warning fixes.
+  * Documentation fixes.
+  * Total rewrite of dulib_polyreg_anim.
 
 ## Modifying DUlib
 
