@@ -26,11 +26,11 @@ import inspect
 import math
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.7'
+__version__ = '0.9.8'
 __status__ = 'Development'
-__date__ = '11/18/22'
+__date__ = '08/19/23'
 __copyright__ = """
-  Copyright 2019-2022 Scott Simmons
+  Copyright 2019-2023 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
