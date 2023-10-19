@@ -171,6 +171,11 @@ def standard_args(desc = '', **kwargs):
         set up so that the switch `-ser` stores `True`. The help
         string returned is: ~toggle serializing the trained mo~
         ~del~. Default: `False`.
+    $pre$ (`bool`): Whether to have a commandline switch to specify
+        whether to load a pretrained model. If `True` the return-
+        ed `parser` object will be set up so that the switch `-ser`
+        stores `True`. The help string returned is ~toggle loading~
+        ~pre-trained model~. Default: `False`.
     $cm$ (`Union[None,bool]`): Whether to have a command-line switch
         to determine whether to show the confusion matrix. If
         this is `True`(resp. `False`), then the returned parser ob-
@@ -190,8 +195,9 @@ def standard_args(desc = '', **kwargs):
     (`argparse.ArgumentParser`). The parser object to which the
         calling program can add more names.
   """
-  _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','props','gpu','graph',
-      'ser','pred','widths','channels','verb','cm','print_lines','dropout'])
+  _check_kwargs(kwargs,['lr','mo','bs','epochs','seed','props','gpu',
+      'graph','ser','pre','pred','widths','channels','verb','cm',
+      'print_lines','dropout'])
   lr = kwargs.get('lr', False)
   mo = kwargs.get('mo', False)
   bs = kwargs.get('bs', False)
@@ -202,6 +208,7 @@ def standard_args(desc = '', **kwargs):
   gpu = kwargs.get('gpu', False)
   graph = kwargs.get('graph', False)
   ser = kwargs.get('ser', False)
+  pre = kwargs.get('pre', False)
   pred = kwargs.get('pred', False)
   widths = kwargs.get('widths',False)
   channels = kwargs.get('channels',False)
@@ -302,6 +309,10 @@ def standard_args(desc = '', **kwargs):
   if ser:
     hstr='toggle serializing the trained model'
     parser.add_argument('-ser', help=hstr, action='store_true')
+
+  if pre:
+    hstr='toggle loading pre-trained model'
+    parser.add_argument('-pre', help=hstr, action='store_true')
 
   if isinstance(cm, bool):
     hstr='toggle showing the confusion matrix'
