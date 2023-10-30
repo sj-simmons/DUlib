@@ -97,9 +97,9 @@ Set PAGER as above and you should be good to go on a Mac.
 import du.utils
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.8'
+__version__ = '0.9.9'
 __status__ = 'Development'
-__date__ = '08/19/23'
+__date__ = '10/30/23'
 __copyright__ = """
   Copyright 2019-2023 Scott Simmons
 

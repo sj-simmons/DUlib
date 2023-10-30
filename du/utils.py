@@ -26,9 +26,9 @@ import inspect
 import math
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.8'
+__version__ = '0.9.9'
 __status__ = 'Development'
-__date__ = '08/19/23'
+__date__ = '10/30/23'
 __copyright__ = """
   Copyright 2019-2023 Scott Simmons
 
@@ -455,6 +455,8 @@ def print_devices():
                 ("     Memory: %.2f GB\n"%(cuda.Device(i).total_memory()/1e9))
           return string
       print(aboutCudaDevices())
+  else:
+      print('The pycuda package is not installed.')
 
 def format_num(number, digits=3):
   """Format a small or a large number nicely.
