@@ -918,7 +918,7 @@ def coh_split(prop, *args, **kwargs):
       "All tensors must have same size in first axis."
   if randomize:
     indices = torch.randperm(len_[0])
-    args = [tensor.index_select(0, indices) for tensor in args]
+    args = [tensor[indices] for tensor in args]
   cutoff = int(prop * len_[0])
   split_args = [[tensor[:cutoff], tensor[cutoff:]] for tensor in args]
   return_args =[item for sublist in split_args for item in sublist]
@@ -1080,6 +1080,18 @@ class Data(torch.utils.data.Dataset):
     >>> dataset = Data(df, maps, None, double)
     >>> print(dataset[2])
     ('cc',)
+
+    Also:
+    >>> maps = (num_map,)
+    >>> dataset = Data(df, maps, id_)
+    >>> print(dataset[1])
+    (1,)
+
+    >>> from torch.utils.data import DataLoader
+    >>> for tup in DataLoader(dataset):
+    ...   print(tup[0])
+    ...   break
+    tensor([0])
     """
     def __init__(self, df, maps, *transforms):
         """
@@ -1096,9 +1108,10 @@ class Data(torch.utils.data.Dataset):
         self.df = df
         self.mps = maps
         self.tfs = transforms
+        self.len = len(df)
 
     def __len__(self):
-        return len(self.df)
+        return self.len
 
     def __getitem__(self, idx):
         return tuple(tf(mp(self.df,idx)) for tf, mp in zip(self.tfs, self.mps) if tf)
@@ -1110,7 +1123,7 @@ class _DataLoader:
   An instance of this can be used in the same way that one uses
   an instance of `DataLoader`. If you are not using transforms
   and the totality of your data fits in RAM, this can be faster
-  that `DataLoader`.
+  than `DataLoader`.
   """
 
   def __init__(self, data_tuple, batch_size, shuffle=False):
@@ -1179,9 +1192,7 @@ class _DataLoader:
     #minibatch = tuple([t.index_select(0,
     #    self.indices[self.idx: self.idx + self.batch_size]) for\
     #        t in self.dataset])
-    minibatch = tuple([t.index_select(0,
-        self.indices[self.idx: self.idx + self.batch_size]) for\
-            t in self.dataset.tup])
+    minibatch = tuple([t[self.indices[self.idx: self.idx + self.batch_size]] for t in self.dataset.tup])
     self.idx += self.batch_size
     return minibatch
 
@@ -2002,8 +2013,8 @@ def cross_validate(model, crit, train_data, k, **kwargs):
 
   # randomize
   indices = torch.randperm(len(feats))
-  xss = feats.index_select(0, indices)
-  yss = targs.index_select(0, indices)
+  xss = feats[indices]
+  yss = targs[indices]
 
   for idx in range(0, len(feats), chunklength):
 
