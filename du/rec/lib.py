@@ -45,11 +45,11 @@ import torch.nn.functional as F
 import du.utils
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.9'
+__version__ = '0.9.91'
 __status__ = 'Development'
-__date__ = '10/30/23'
+__date__ = '05/28/24'
 __copyright__ = """
-  Copyright 2019-2023 Scott Simmons
+  Copyright 2019-2024 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
