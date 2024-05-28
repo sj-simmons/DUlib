@@ -60,7 +60,7 @@ __license__= 'Apache 2.0'
 #  def update(self):
 #    pass
 
-def standard_args(desc = '', **kwargs):
+def standard_args(desc = '', epilog = '', **kwargs):
   """Factory for standard command line switches.
 
   Painlessly setup argparse command line switches for common
@@ -114,6 +114,7 @@ def standard_args(desc = '', **kwargs):
   Args:
     $desc$ (`str`): A short description of what the calling program
         does. Default: `''`.
+    $epilog$ (`str`): More notes. Default: `''`.
 
   Kwargs:
     $lr$ (`Union[bool,float]`): If `True`, then add a commandline
@@ -216,8 +217,11 @@ def standard_args(desc = '', **kwargs):
   print_lines = kwargs.get('print_lines',False)
   dropout = kwargs.get('dropout',False)
 
-  parser = argparse.ArgumentParser( description = desc, formatter_class =\
-      argparse.ArgumentDefaultsHelpFormatter)
+  parser = argparse.ArgumentParser(
+      description = desc,
+      epilog = epilog,
+      formatter_class = argparse.ArgumentDefaultsHelpFormatter
+  )
   parser.add_argument
 
   if isinstance(lr, float):
@@ -227,7 +231,7 @@ def standard_args(desc = '', **kwargs):
 
   if isinstance(mo, float):
     parser.add_argument('-mo', type=float, help='momentum', default=mo)
-  elif lr:
+  elif mo:
     parser.add_argument('-mo', type=float, help='momentum',required=True)
 
   hstr='the mini-batch size; set to -1 for (full) batch gradient descent'
