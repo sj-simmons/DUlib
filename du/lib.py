@@ -1114,7 +1114,61 @@ class Data(torch.utils.data.Dataset):
         return self.len
 
     def __getitem__(self, idx):
-        return tuple(tf(mp(self.df,idx)) for tf, mp in zip(self.tfs, self.mps) if tf)
+        return tuple(t(m(self.df,idx)) for t, m in zip(self.tfs, self.mps) if t)
+
+class Data2(torch.utils.data.Dataset):
+    """Base class for data sets (version 2).
+
+    Simple examples:
+    >>> import pandas as pd
+    >>> data = {'num':list(range(12)),'let':list('abcdefghijkl')}
+    >>> df = pd.DataFrame(data)
+    >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
+    >>> id_ = lambda x: x
+    >>> double = lambda x: x+x
+    >>> dataset = Data2(df, mp, id_, double)
+    >>> print(dataset[1])
+    (1, 'bb')
+    >>> dataset = Data2(df, mp, lambda x: x**2, None)
+    >>> print(dataset[2])
+    (4,)
+    >>> dataset = Data2(df, mp, None, double)
+    >>> print(dataset[2])
+    ('cc',)
+
+    Also:
+    >>> mp = lambda df, idx: (df.iloc[idx, 0],)
+    >>> dataset = Data2(df, mp, id_)
+    >>> print(dataset[1])
+    (1,)
+
+    >>> from torch.utils.data import DataLoader
+    >>> for tup in DataLoader(dataset):
+    ...   print(tup[0])
+    ...   break
+    tensor([0])
+    """
+    def __init__(self, df, mp, *transforms):
+        """
+        Args:
+          $df$ (`pandas.Dataframe`]) Dataframe holding the data.
+          $mp$ (`Tuple[FunctionType]`) A function that maps a
+              dataframe and an index (integer) to a tuple each
+              entry of which is a tensor of whatever is to be
+              returned in that position by '__getitem__'.
+          $transforms$ (`Transform)` One or more transformations
+              (see the `torchvision.transforms` library).
+        """
+        self.df = df
+        self.mp = mp
+        self.tfs = transforms
+        self.len = len(df)
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, idx):
+        return tuple(t(m) for t, m in zip(self.tfs, self.mp(self.df,idx)) if t)
 
 # keeping this since it's faster than DataLoader
 class _DataLoader:
