@@ -70,6 +70,17 @@ trained models.
      $maps$,       -tuple of fns determining how data is yielded
      $*transforms$)-augmentations
 
+  |RandomApply|
+               similar to torch.transforms RandomApply but can
+               apply the same transform to both input and output
+               (useful with e.g. imgs and masks)
+
+  |Data2|         encapsulate large or augmented data sets; extends
+                 `torch.utils.data.Dataset`.
+    ($df$,         -an instance of `pandas.Dataframe`
+     $maps$,       -tuple of fns determining how data is yielded
+     $*transforms$)-augmentations
+
   |FoldedData|   useful when cross-validating on augmented data
     ($df$,         -an instance of `pandas.Dataframe`
      $maps$,       -tuple of fns determining how data is yielded
@@ -301,6 +312,8 @@ import torch
 import torch.nn as nn
 import torch.utils.data
 import torchvision
+import numpy as np
+import matplotlib.pyplot as plt
 from types import FunctionType
 from typing import Dict
 from textwrap import dedent
@@ -1116,6 +1129,74 @@ class Data(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return tuple(t(m(self.df,idx)) for t, m in zip(self.tfs, self.mps) if t)
 
+#class Data2(torch.utils.data.Dataset):
+#    """Base class for data sets (version 2).
+#
+#    Simple examples:
+#    >>> import pandas as pd
+#    >>> data = {'num':list(range(12)),'let':list('abcdefghijkl')}
+#    >>> df = pd.DataFrame(data)
+#    >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
+#    >>> id_ = lambda x: x
+#    >>> double = lambda x: x+x
+#    >>> dataset = Data2(df, mp, id_, double)
+#    >>> print(dataset[1])
+#    (1, 'bb')
+#    >>> dataset = Data2(df, mp, lambda x: x**2, None)
+#    >>> print(dataset[2])
+#    (4,)
+#    >>> dataset = Data2(df, mp, None, double)
+#    >>> print(dataset[2])
+#    ('cc',)
+#
+#    Also:
+#    >>> mp = lambda df, idx: (df.iloc[idx, 0],)
+#    >>> dataset = Data2(df, mp, id_)
+#    >>> print(dataset[1])
+#    (1,)
+#
+#    >>> from torch.utils.data import DataLoader
+#    >>> for tup in DataLoader(dataset):
+#    ...   print(tup[0])
+#    ...   break
+#    tensor([0])
+#    """
+#    def __init__(self, df, mp, *transforms):
+#        """
+#        Args:
+#          $df$ (`pandas.Dataframe`]) Dataframe holding the data.
+#          $mp$ (`Tuple[FunctionType]`) A function that maps a
+#              dataframe and an index (integer) to a tuple each
+#              entry of which is a tensor of whatever is to be
+#              returned in that position by '__getitem__'.
+#          $transforms$ (`Transform)` One or more transformations
+#              (see the `torchvision.transforms` library).
+#        """
+#        self.df = df
+#        self.mp = mp
+#        self.tfs = transforms
+#        self.len = len(df)
+#
+#    def __len__(self):
+#        return self.len
+#
+#    def __getitem__(self, idx):
+#        return tuple(t(m) for t, m in zip(self.tfs, self.mp(self.df,idx)) if t)
+
+class RandomApply(nn.Module):
+    def __init__(self, transforms, p = None):
+        super().__init__()
+        self.tfs = transforms
+        self.p = p
+
+    def __call__(self, xs):
+        if self.p:
+            t = np.random.choice(self.tfs, p=self.p)
+        else:
+            t = np.random.choice(self.tfs)
+        return [t(x) for x in xs]
+
+# This version of Data2 specializes to the one above
 class Data2(torch.utils.data.Dataset):
     """Base class for data sets (version 2).
 
@@ -1126,13 +1207,14 @@ class Data2(torch.utils.data.Dataset):
     >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
     >>> id_ = lambda x: x
     >>> double = lambda x: x+x
-    >>> dataset = Data2(df, mp, id_, double)
+    >>> xf = lambda lst: (id_(lst[0]), double(lst[1]))
+    >>> dataset = Data2(df, mp, xf)
     >>> print(dataset[1])
     (1, 'bb')
-    >>> dataset = Data2(df, mp, lambda x: x**2, None)
+    >>> dataset = Data2(df, mp, lambda lst: (lst[0]**2, None))
     >>> print(dataset[2])
     (4,)
-    >>> dataset = Data2(df, mp, None, double)
+    >>> dataset = Data2(df, mp, lambda lst: (None, double(lst[1])))
     >>> print(dataset[2])
     ('cc',)
 
@@ -1147,8 +1229,22 @@ class Data2(torch.utils.data.Dataset):
     ...   print(tup[0])
     ...   break
     tensor([0])
+
+    Randomly apply same transform to both slots (like img and mask)
+    >>> import torchvision.transforms as T
+    >>> data = {'one': torch.arange(3), 'two':2*torch.arange(3)}
+    >>> df = pd.DataFrame(data)
+    >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
+    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)])
+    >>> dataset = Data2(df, mp, tfs)
+    >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
+    True
+    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], [.1, .9])
+    >>> dataset = Data2(df, mp, tfs)
+    >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
+    True
     """
-    def __init__(self, df, mp, *transforms):
+    def __init__(self, df, mp, transform):
         """
         Args:
           $df$ (`pandas.Dataframe`]) Dataframe holding the data.
@@ -1161,14 +1257,15 @@ class Data2(torch.utils.data.Dataset):
         """
         self.df = df
         self.mp = mp
-        self.tfs = transforms
+        self.tf = transform
         self.len = len(df)
 
     def __len__(self):
         return self.len
 
     def __getitem__(self, idx):
-        return tuple(t(m) for t, m in zip(self.tfs, self.mp(self.df,idx)) if t)
+        return tuple(filter(lambda x: x is not None, self.tf(self.mp(self.df,idx))))
+
 
 # keeping this since it's faster than DataLoader
 class _DataLoader:
@@ -1598,8 +1695,6 @@ def train(model, crit, train_data, **kwargs):
     learn_params.set_device(model_dev) # set the device for learn params
 
   if graph:
-    import matplotlib.pyplot as plt # Don't import these until now in case
-    import numpy as np              # someone no haz matplotlib or numpy.
     plt.ion()
     fig, ax1 = plt.subplots()
     ax1.set_xlabel('epoch', size='larger')

@@ -21,6 +21,8 @@ $classes$ are, as of this release,
   │  ├─ $standardize$     mean-center and normalize
   │  ├─ $online_means_stdevs$ online compute means and st devs
   │  ├─ $Data$            easily augment data
+  │  ├─ $RandomApply$     same transforms on in- and output
+  │  ├─ $Data2$           easily augment data (version 2)
   │  ├─ $FoldableData$    cross-validation with DataLoaders
   │  │  ~training:~
   │  ├─ $train$           train a model
