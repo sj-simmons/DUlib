@@ -40,9 +40,9 @@ import du.utils
 from du.models import FFNet_, denseFFhidden
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.91'
+__version__ = '0.9.92'
 __status__ = 'Development'
-__date__ = '05/28/24'
+__date__ = '06/01/24'
 __copyright__ = """
   Copyright 2019-2024 Scott Simmons
 
