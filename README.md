@@ -34,7 +34,7 @@ pip3 install DUlib --user
 
 Or, install the latest development release with, e.g.:
 ```shell
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.8  --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.92  --user
 ```
 Notes
 * Safest practice is to replace **pip3** in the commands above (and below) with
