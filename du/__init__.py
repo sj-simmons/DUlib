@@ -155,8 +155,8 @@ import du.utils
 
 __author__ = 'Scott Simmons'
 __status__ = 'Development'
-__date__ = '06/01/24'
-__version__ = '0.9.92'
+__date__ = '06/24/24'
+__version__ = '0.9.93'
 __copyright__ = """
   Copyright 2019-2024 Scott Simmons
 
