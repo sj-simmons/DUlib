@@ -1184,17 +1184,75 @@ class Data(torch.utils.data.Dataset):
 #        return tuple(t(m) for t, m in zip(self.tfs, self.mp(self.df,idx)) if t)
 
 class RandomApply(nn.Module):
+    """Randomply apply transformations
+
+    >>> ys = np.array([[1,2],[3,4]])
+    >>> lst = (ys, -ys)
+    >>> times2 = RandomApply([lambda xs: 2*xs, lambda xs: xs])
+    >>> xf = times2(lst)
+    >>> a = np.array_equal(xf[0], ys) and np.array_equal(xf[1], -ys)
+    >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -2*ys)
+    >>> any([a, b]) and not all([a, b])
+    True
+    """
+
     def __init__(self, transforms, p = None):
+        """takes a list of transforms"""
         super().__init__()
         self.tfs = transforms
+        if p:
+            assert len(p) == len(self.tfs)
         self.p = p
 
     def __call__(self, xs):
+        """this currently picks out only one transform to apply"""
         if self.p:
             t = np.random.choice(self.tfs, p=self.p)
         else:
             t = np.random.choice(self.tfs)
         return [t(x) for x in xs]
+
+class RandomApply2(nn.Module):
+    """Randomply apply transformations, version 2
+
+    >>> ys = np.array([[1,2],[3,4]])
+    >>> lst = (ys, -ys)
+    >>> x2 = lambda xs: 2*xs; id_ = lambda xs: xs
+    >>> times2 = RandomApply2([[x2, x2],[id_, id_]])
+    >>> xf = times2(lst)
+    >>> a = np.array_equal(xf[0], ys) and np.array_equal(xf[1], -ys)
+    >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -2*ys)
+    >>> any([a, b]) and not all([a, b])
+    True
+
+    >>> ys = np.array([[1,2],[3,4]])
+    >>> lst = (ys, -ys)
+    >>> x2 = lambda xs: 2*xs; x3 = lambda xs: 3*xs; id_ = lambda xs: xs
+    >>> times2or3 = RandomApply2([[x2, x3],[id_, id_]])
+    >>> xf = times2or3(lst)
+    >>> a = np.array_equal(xf[0], ys) and np.array_equal(xf[1], -ys)
+    >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -3*ys)
+    >>> any([a, b]) and not all([a, b])
+    True
+    """
+    def __init__(self, transforms, p = None):
+        """takes a list of list of transforms"""
+        super().__init__()
+        self.tfss = transforms
+        if p:
+            for tfs in self.tfss:
+                assert len(p) == len(tfs)
+        self.p = p
+
+    def __call__(self, xss):
+        for tfs in self.tfss:
+            assert len(tfs) == len(xss)
+        length = len(self.tfss)
+        if self.p:
+            idx = np.random.choice(length, p=self.p)
+        else:
+            idx = np.random.choice(length)
+        return [tf(xs) for tf, xs in zip(self.tfss[idx], xss)]
 
 # This version of Data2 specializes to the one above
 class Data2(torch.utils.data.Dataset):

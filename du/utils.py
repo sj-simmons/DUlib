@@ -174,7 +174,7 @@ def standard_args(desc = '', epilog = '', **kwargs):
         ~del~. Default: `False`.
     $pre$ (`bool`): Whether to have a commandline switch to specify
         whether to load a pretrained model. If `True` the return-
-        ed `parser` object will be set up so that the switch `-ser`
+        ed `parser` object will be set up so that the switch `-pre`
         stores `True`. The help string returned is ~toggle loading~
         ~pre-trained model~. Default: `False`.
     $cm$ (`Union[None,bool]`): Whether to have a command-line switch
