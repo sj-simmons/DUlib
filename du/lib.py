@@ -1075,6 +1075,10 @@ def _tuple2dataset(tup):
 class Data(torch.utils.data.Dataset):
     """Base class for data sets.
 
+    The following cleans up output in the presence of a GPU
+    >>> item = lambda x: x.item() if type(x) == np.int64 else x
+    >>> tupitem = lambda tup: tuple(map(item, tup))
+
     Simple examples:
     >>> import pandas as pd
     >>> data = {'num':list(range(12)),'let':list('abcdefghijkl')}
@@ -1085,19 +1089,19 @@ class Data(torch.utils.data.Dataset):
     >>> id_ = lambda x: x
     >>> double = lambda x: x+x
     >>> dataset = Data(df, maps, id_, double)
-    >>> print(dataset[1])
+    >>> tupitem(dataset[1])
     (1, 'bb')
     >>> dataset = Data(df, maps, lambda x: x**2, None)
-    >>> print(dataset[2])
+    >>> tupitem(dataset[2])
     (4,)
     >>> dataset = Data(df, maps, None, double)
-    >>> print(dataset[2])
+    >>> tupitem(dataset[2])
     ('cc',)
 
     Also:
     >>> maps = (num_map,)
     >>> dataset = Data(df, maps, id_)
-    >>> print(dataset[1])
+    >>> tupitem(dataset[1])
     (1,)
 
     >>> from torch.utils.data import DataLoader
@@ -1184,7 +1188,11 @@ class Data(torch.utils.data.Dataset):
 #        return tuple(t(m) for t, m in zip(self.tfs, self.mp(self.df,idx)) if t)
 
 class RandomApply(nn.Module):
-    """Randomply apply transformations
+    """Randomply apply a transformation
+
+    Apply the same randomly chosen (specified by p) transform to
+    each item in the iterable on which an instance of this is
+    called.
 
     >>> ys = np.array([[1,2],[3,4]])
     >>> lst = (ys, -ys)
@@ -1205,7 +1213,7 @@ class RandomApply(nn.Module):
         self.p = p
 
     def __call__(self, xs):
-        """this currently picks out only one transform to apply"""
+        """this picks out only one transform to apply"""
         if self.p:
             t = np.random.choice(self.tfs, p=self.p)
         else:
@@ -1213,7 +1221,11 @@ class RandomApply(nn.Module):
         return [t(x) for x in xs]
 
 class RandomApply2(nn.Module):
-    """Randomply apply transformations, version 2
+    """Randomply apply transformations
+
+    Pick a random (specified by p) a list of transforms and apply
+    each transformation to the corresponding item in the iterable
+    on which and instance of this is called.
 
     >>> ys = np.array([[1,2],[3,4]])
     >>> lst = (ys, -ys)
@@ -1258,6 +1270,12 @@ class RandomApply2(nn.Module):
 class Data2(torch.utils.data.Dataset):
     """Base class for data sets (version 2).
 
+    This version can incorporate interactions between slots.
+
+    The following cleans up output in the presence of a GPU
+    >>> item = lambda x: x.item() if type(x) == np.int64 else x
+    >>> tupitem = lambda tup: tuple(map(item, tup))
+
     Simple examples:
     >>> import pandas as pd
     >>> data = {'num':list(range(12)),'let':list('abcdefghijkl')}
@@ -1267,19 +1285,21 @@ class Data2(torch.utils.data.Dataset):
     >>> double = lambda x: x+x
     >>> xf = lambda lst: (id_(lst[0]), double(lst[1]))
     >>> dataset = Data2(df, mp, xf)
-    >>> print(dataset[1])
+    >>> len(dataset)
+    12
+    >>> tupitem(dataset[1])
     (1, 'bb')
     >>> dataset = Data2(df, mp, lambda lst: (lst[0]**2, None))
-    >>> print(dataset[2])
+    >>> tupitem(dataset[2])
     (4,)
     >>> dataset = Data2(df, mp, lambda lst: (None, double(lst[1])))
-    >>> print(dataset[2])
+    >>> tupitem(dataset[2])
     ('cc',)
 
     Also:
     >>> mp = lambda df, idx: (df.iloc[idx, 0],)
     >>> dataset = Data2(df, mp, id_)
-    >>> print(dataset[1])
+    >>> tupitem(dataset[1])
     (1,)
 
     >>> from torch.utils.data import DataLoader
@@ -1295,12 +1315,36 @@ class Data2(torch.utils.data.Dataset):
     >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
     >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)])
     >>> dataset = Data2(df, mp, tfs)
+    >>> len(dataset)
+    3
     >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
     True
-    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], [.1, .9])
+    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], p=[.9, .1])
     >>> dataset = Data2(df, mp, tfs)
     >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
     True
+
+    Randomly apply different transform to each slots
+    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], p=[.9, .1])
+    >>> dataset = Data2(df, mp, tfs)
+    >>> len(dataset)
+    3
+    >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
+    True
+
+    Randomly apply different transform to each slots
+    >>> neg, x2, x3 = T.Lambda(lambda x: -x), T.Lambda(lambda x: 2*x), T.Lambda(lambda x: 3*x)
+    >>> tfs = RandomApply2([[neg, x2], [x3, neg]], p=[.5, .5])
+    >>> dataset = Data2(df, mp, tfs)
+    >>> len(dataset)
+    3
+    >>> tup = dataset[1]; tup == (-1, 4) or tup == (3, -2)
+    True
+
+    >>> for tup in DataLoader(dataset):
+    ...   pass
+    >>> tup[0] == torch.tensor([6]) or tup[0] == torch.tensor([-2])
+    tensor([True])
     """
     def __init__(self, df, mp, transform):
         """
@@ -2013,6 +2057,17 @@ class FoldedData:
 
     Simple examples and tests:
 
+    The following cleans up output in the presence of a GPU
+    >>> item = lambda x: x.item() if type(x) == np.int64 else x
+    >>> tupitem = lambda tup: tuple(map(item, tup))
+    >>> tupitem((np.int64(3),))
+    (3,)
+    >>> lstitem = lambda lst: list(map(tupitem, lst))
+    >>> lstitem([(np.int64(3),np.int64(4))])
+    [(3, 4)]
+    >>> lstitem([(np.int64(3),'b')])
+    [(3, 'b')]
+
     >>> import pandas as pd
     >>> data = {'num':list(range(9)),'let':list('abcdefghi')}
     >>> df = pd.DataFrame(data)
@@ -2022,8 +2077,8 @@ class FoldedData:
     >>> id_ = lambda x: x
     >>> dataset=FoldedData(df,maps,(id_,id_),3,randomize=False)
     >>> for traindata, testdata in dataset:
-    ...     print(list(traindata))
-    ...     print(list(testdata))
+    ...     lstitem(list(traindata))
+    ...     lstitem(list(testdata))
     [(3, 'd'), (4, 'e'), (5, 'f'), (6, 'g'), (7, 'h'), (8, 'i')]
     [(0, 'a'), (1, 'b'), (2, 'c')]
     [(0, 'a'), (1, 'b'), (2, 'c'), (6, 'g'), (7, 'h'), (8, 'i')]
@@ -2036,20 +2091,29 @@ class FoldedData:
     >>> ();dataset=FoldedData(df,maps,(id_,id_),2,randomize=False);()
     (...)
     >>> for traindata, testdata in dataset:
-    ...     print(list(traindata))
-    ...     print(list(testdata))
+    ...     lstitem(list(traindata))
+    ...     lstitem(list(testdata))
     [(4, 'e'), (5, 'f'), (6, 'g')]
     [(0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')]
     [(0, 'a'), (1, 'b'), (2, 'c'), (3, 'd')]
     [(4, 'e'), (5, 'f'), (6, 'g')]
+
+    The following cleans up output in the presence of a GPU
+    >>> item = lambda x: x.item() if type(x) == np.int64 else x
+    >>> tupitem = lambda tup: tuple(map(item, tup))
+    >>> tupitem((np.int64(3),))
+    (3,)
+    >>> lstitem = lambda lst: list(map(tupitem, lst))
+    >>> lstitem([(np.int64(3),np.int64(4))])
+    [(3, 4)]
 
     >>> data = {'num':list(range(11)),'let':list('abcdefghijk')}
     >>> df = pd.DataFrame(data)
     >>> ();dataset=FoldedData(df,maps,(id_,),3,randomize=False);()
     (...)
     >>> for traindata, testdata in dataset:
-    ...     print(list(traindata))
-    ...     print(list(testdata))
+    ...     lstitem(list(traindata))
+    ...     lstitem(list(testdata))
     [(4,), (5,), (6,), (7,), (8,), (9,), (10,)]
     [(0,), (1,), (2,), (3,)]
     [(0,), (1,), (2,), (3,), (8,), (9,), (10,)]
