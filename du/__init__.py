@@ -2,11 +2,16 @@ __doc__ =\
 """
 tools from `The DL@DU Project`.
 
+One can use color highlighting when reading the documetation
+for this module by using the -c switch when calling pd, e.g.:
+
+  pd -c du
+
 If you see escape characters around words in the tree diagram
 below, exit reading this and, at your commandline, issue the
 following command. Troubleshoot and return here.
 
-  pd du.highlight
+  pd -c du.highlight
 
 The |module| structure, along with the (non-helper) $functions$ and
 $classes$ are, as of this release,
@@ -173,4 +178,4 @@ __copyright__ = """
   limitations under the License.
 """
 __license__= 'Apache 2.0'
-__doc__ = du.utils._markup(__doc__)
+#__doc__ = du.utils._markup(__doc__)

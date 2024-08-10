@@ -72,8 +72,9 @@ from reprlib import Repr
 from traceback import format_exception_only
 from du.utils import _markup
 
-
 # --------------------------------------------------------- common routines
+
+COLORS = False
 
 def pathdirs():
     """Convert sys.path into a list of absolute, existing, unique paths."""
@@ -89,7 +90,8 @@ def pathdirs():
 
 def getdoc(object):
     """Get the doc string or comments for an object."""
-    result = _markup(inspect.getdoc(object)) or _markup(inspect.getcomments(object))
+    result = _markup(inspect.getdoc(object), strip = not COLORS) or\
+             _markup(inspect.getcomments(object), strip = not COLORS)
     return result and re.sub('^ *\n', '', result.rstrip()) or ''
 
 def splitdoc(doc):
@@ -2589,6 +2591,8 @@ def cli():
     import getopt
     class BadUsage(Exception): pass
 
+    global COLORS
+
     # Scripts don't get the current directory in their path by default
     # unless they are run with the '-m' switch
     if '' not in sys.path:
@@ -2598,7 +2602,8 @@ def cli():
         sys.path.insert(0, '.')
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'bk:p:w')
+        #opts, args = getopt.getopt(sys.argv[1:], 'bk:p:w')
+        opts, args = getopt.getopt(sys.argv[1:], 'bk:p:w:c')
         writing = False
         start_server = False
         open_browser = False
@@ -2615,6 +2620,8 @@ def cli():
                 port = val
             if opt == '-w':
                 writing = True
+            if opt == '-c':
+                COLORS = True
 
         if start_server:
             if port is None:
@@ -2663,6 +2670,10 @@ def cli():
     Start an HTTP server on an arbitrary unused port and open a Web browser
     to interactively browse documentation.  The -p option can be used with
     the -b option to explicitly specify the server port.
+
+{cmd} -c
+    Use colorful markdown via ansi character escape sequences (must be
+    supported by your terminal).
 
 {cmd} -w <name> ...
     Write out the HTML documentation for a module to a file in the current

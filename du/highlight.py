@@ -5,7 +5,7 @@ word "bold" is bolded, "red" is red, and so on, then highlight-
 ing is working. At your command-line, issue the following for a
 brief introduction to DUlib and its usage:
 
-  pd du
+  pd -c du
 
 But if, below, the words "underline", "bold", "red", etc. are
 hard to read because they are wrapped in escape sequences, then
@@ -53,7 +53,7 @@ This aids in quickly and easily finding APIs for this library.
 Instead of reading this in an IDE, try issuing the following at
 your command-line:
 
-  pd du.highlight
+  pd -c du.highlight
 
 Another basic problem might stem from running the command above
 from PowerShell in Windows. As of 2022, straight PowerShell
@@ -93,6 +93,12 @@ check this with
 
 Set PAGER as above and you should be good to go on a Mac.
 
+Lastly, you can always strip away escape characters when read-
+ing this or any page in the documentation for this module by
+simply using pd without the -c switch. For example:
+
+  pd du.lib
+
 '''
 import du.utils
 
@@ -116,4 +122,4 @@ __copyright__ = """
   limitations under the License.
 """
 __license__= 'Apache 2.0'
-__doc__ = du.utils._markup(__doc__)
+#__doc__ = du.utils._markup(__doc__)

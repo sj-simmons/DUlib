@@ -1089,6 +1089,8 @@ class Data(torch.utils.data.Dataset):
     >>> id_ = lambda x: x
     >>> double = lambda x: x+x
     >>> dataset = Data(df, maps, id_, double)
+    >>> len(dataset)
+    12
     >>> tupitem(dataset[1])
     (1, 'bb')
     >>> dataset = Data(df, maps, lambda x: x**2, None)
