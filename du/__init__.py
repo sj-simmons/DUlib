@@ -26,8 +26,9 @@ $classes$ are, as of this release,
   │  ├─ $standardize$     mean-center and normalize
   │  ├─ $online_means_stdevs$ online compute means and st devs
   │  ├─ $Data$            easily augment data
-  │  ├─ $RandomApply$     same transforms on in- and output
-  │  ├─ $Data2$           easily augment data (version 2)
+  │  ├─ $RandomApply$     apply same transforms on in/output
+  │  ├─ $Data2$           adaptively augment data
+  │  ├─ $RandomApply2$    differnt transforms on in/output
   │  ├─ $FoldableData$    cross-validation with DataLoaders
   │  │  ~training:~
   │  ├─ $train$           train a model
@@ -64,7 +65,9 @@ $classes$ are, as of this release,
   │  └─ |examples|
   ├─ |utils| !potentially helpful utilites!
   │  ├─ $standard_args$   easily set command-line options
-  │  └─ $args2string$     easily make a logging string
+  │  ├─ $args2string$     easily make a logging string
+  │  ├─ $print_devices$   print the devices available
+  │  └─ $get_device$      get a device
   └─ |highlight|          highlighting conventions for docs
 
 !Quick Start!

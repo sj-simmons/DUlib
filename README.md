@@ -34,7 +34,7 @@ pip3 install DUlib --user
 
 Or, install the latest development release with, e.g.:
 ```shell
-pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.93  --user
+pip3 install git+https://github.com/sj-simmons/DUlib.git@v0.9.95  --user
 ```
 Notes
 * Safest practice is to replace **pip3** in the commands above (and below) with
@@ -70,6 +70,12 @@ You can now
 * have a look at the module structure of DUlib:
   ```bash
   pd du
+  ```
+
+  Note: depending on your terminal you can read documentation with color
+  highlighting:
+  ```bash
+  pd -c du
   ```
   If, instead of seeing readable text with color highlighting
   (something like [this](#highlight)), you see
@@ -208,7 +214,7 @@ It's also possible that you are missing some shared **tk** system library.
 
 If, while you were working through the
 [Quickstart](#quickstart)
-guide, the output of command `pd du` was littered with escape sequences,
+guide, the output of command `pd -c du` was littered with escape sequences,
 then you should try setting your TERM and/or PAGER environment variables.
 
 On a newish Mac, you likely just need to set PAGER:
@@ -230,7 +236,10 @@ export TERM=screen-256color
 Once you get highlighting working, add the correct command to your *~/.profile*.
 
 You can see all the highlighting conventions used in DUlib's docs with
-`pd du.highlight`.
+`pd -c du.highlight`.
+
+Remember, that one can simply strip all escape sequences from the docs by using
+`pd` instead of `pd -c`.
 
 ## Release history
 
@@ -435,6 +444,11 @@ with: `pip3 show DUlib` (or `pip show DUlib`, if necessary)
   * More deprecation warning fixes.
   * Documentation fixes.
   * Total rewrite of dulib_polyreg_anim.
+
+**Version 0.9.95** (Aug., 2024)
+  * **Data2** added, which extends PyTorch's **Dataset** class and generalizes **Data**.
+  * **RandomApply** and **RandomApply2**, which can be employed to generalize PyTorch's
+    machinery for randomly applying transforms in instances of **DataLoader**.
 
 ## Modifying DUlib
 

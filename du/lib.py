@@ -70,16 +70,22 @@ trained models.
      $maps$,       -tuple of fns determining how data is yielded
      $*transforms$)-augmentations
 
-  |RandomApply|
-               similar to torch.transforms RandomApply but can
-               apply the same transform to both input and output
-               (useful with e.g. imgs and masks)
+  |RandomApply|  similar to torch.transforms RandomApply but can
+               apply the same random transform to both input and
+               output (useful with e.g. imgs and masks)
+    ($transforms$,-list of transforms to be applied
+     $p$)         -list determining a discrete probability dist.
 
   |Data2|         encapsulate large or augmented data sets; extends
                  `torch.utils.data.Dataset`.
     ($df$,         -an instance of `pandas.Dataframe`
-     $maps$,       -tuple of fns determining how data is yielded
+     $map_$,       -function determining how data is yielded
      $*transforms$)-augmentations
+
+  |RandomApply2| similar to RandomApply but can apply different
+               transforms to input and output.
+    ($transforms$,-list of transforms to be applied
+     $p$)         -list determining a discrete probability dist.
 
   |FoldedData|   useful when cross-validating on augmented data
     ($df$,         -an instance of `pandas.Dataframe`
@@ -1204,6 +1210,10 @@ class RandomApply(nn.Module):
     >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -2*ys)
     >>> any([a, b]) and not all([a, b])
     True
+    >>> times2 = RandomApply([lambda xs: 2*xs, lambda xs: xs], p=[1,0])
+    >>> xf = times2(lst)
+    >>> np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -2*ys)
+    True
     """
 
     def __init__(self, transforms, p = None):
@@ -1215,25 +1225,71 @@ class RandomApply(nn.Module):
         self.p = p
 
     def __call__(self, xs):
-        """this picks out only one transform to apply"""
+        """this picks only one transform to apply"""
         if self.p:
             t = np.random.choice(self.tfs, p=self.p)
         else:
             t = np.random.choice(self.tfs)
         return [t(x) for x in xs]
 
-class RandomApply2(nn.Module):
-    """Randomply apply transformations
+#class RandomApply2(nn.Module):
+#    """Randomly apply transformations
+#
+#    Pick a random (specified by p) a list of transforms and apply
+#    each transformation to the corresponding item in the iterable
+#    on which and instance of this is called.
+#
+#    >>> ys = np.array([[1,2],[3,4]])
+#    >>> lst = (ys, -ys)
+#    >>> x2 = lambda xs: 2*xs; id_ = lambda xs: xs
+#    >>> times2 = RandomApply2([[x2, x2],[id_, id_]])
+#    >>> xf = times2(lst)
+#    >>> a = np.array_equal(xf[0], ys) and np.array_equal(xf[1], -ys)
+#    >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -2*ys)
+#    >>> any([a, b]) and not all([a, b])
+#    True
+#
+#    >>> ys = np.array([[1,2],[3,4]])
+#    >>> lst = (ys, -ys)
+#    >>> x2 = lambda xs: 2*xs; x3 = lambda xs: 3*xs; id_ = lambda xs: xs
+#    >>> times2or3 = RandomApply2([[x2, x3],[id_, id_]])
+#    >>> xf = times2or3(lst)
+#    >>> a = np.array_equal(xf[0], ys) and np.array_equal(xf[1], -ys)
+#    >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -3*ys)
+#    >>> any([a, b]) and not all([a, b])
+#    True
+#    """
+#    def __init__(self, transforms, p = None):
+#        """takes a list of list of transforms"""
+#        super().__init__()
+#        self.tfss = transforms
+#        if p:
+#            for tfs in self.tfss:
+#                assert len(p) == len(tfs)
+#        self.p = p
+#
+#    def __call__(self, xss):
+#        for tfs in self.tfss:
+#            assert len(tfs) == len(xss)
+#        length = len(self.tfss)
+#        if self.p:
+#            idx = np.random.choice(length, p=self.p)
+#        else:
+#            idx = np.random.choice(length)
+#        return [tf(xs) for tf, xs in zip(self.tfss[idx], xss)]
 
-    Pick a random (specified by p) a list of transforms and apply
-    each transformation to the corresponding item in the iterable
-    on which and instance of this is called.
+class RandomApply2(nn.Module):
+    """Randomly apply transformations
+
+    Pick and apply a random (specified by p) transform a list of
+    transforms.
 
     >>> ys = np.array([[1,2],[3,4]])
-    >>> lst = (ys, -ys)
+    >>> tup = (ys, -ys)
     >>> x2 = lambda xs: 2*xs; id_ = lambda xs: xs
-    >>> times2 = RandomApply2([[x2, x2],[id_, id_]])
-    >>> xf = times2(lst)
+    >>> #times2 = RandomApply2([[x2, x2],[id_, id_]])
+    >>> times2 = RandomApply2([lambda tup: (x2(tup[0]), x2(tup[1])), lambda tup: tup])
+    >>> xf = times2(tup)
     >>> a = np.array_equal(xf[0], ys) and np.array_equal(xf[1], -ys)
     >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -2*ys)
     >>> any([a, b]) and not all([a, b])
@@ -1242,7 +1298,7 @@ class RandomApply2(nn.Module):
     >>> ys = np.array([[1,2],[3,4]])
     >>> lst = (ys, -ys)
     >>> x2 = lambda xs: 2*xs; x3 = lambda xs: 3*xs; id_ = lambda xs: xs
-    >>> times2or3 = RandomApply2([[x2, x3],[id_, id_]])
+    >>> times2or3 = RandomApply2([lambda tup: (x2(tup[0]), x3(tup[1])), lambda tup: tup])
     >>> xf = times2or3(lst)
     >>> a = np.array_equal(xf[0], ys) and np.array_equal(xf[1], -ys)
     >>> b = np.array_equal(xf[0], 2*ys) and np.array_equal(xf[1], -3*ys)
@@ -1250,31 +1306,132 @@ class RandomApply2(nn.Module):
     True
     """
     def __init__(self, transforms, p = None):
-        """takes a list of list of transforms"""
         super().__init__()
         self.tfss = transforms
-        if p:
-            for tfs in self.tfss:
-                assert len(p) == len(tfs)
+        #if p:
+        #    for tfs in self.tfss:
+        #        assert len(p) == len(tfs)
         self.p = p
 
     def __call__(self, xss):
-        for tfs in self.tfss:
-            assert len(tfs) == len(xss)
+        #for tfs in self.tfss:
+        #    assert len(tfs) == len(xss)
         length = len(self.tfss)
         if self.p:
             idx = np.random.choice(length, p=self.p)
         else:
             idx = np.random.choice(length)
-        return [tf(xs) for tf, xs in zip(self.tfss[idx], xss)]
+        return self.tfss[idx](xss)
 
 # This version of Data2 specializes to the one above
+# This is not what you want
+#class Data2(torch.utils.data.Dataset):
+#    """Base class for data sets (version 2).
+#
+#    This version can incorporate interactions between slots.
+#
+#    The following cleans up output in the presence of a GPU
+#    >>> item = lambda x: x.item() if type(x) == np.int64 else x
+#    >>> tupitem = lambda tup: tuple(map(item, tup))
+#
+#    Simple examples:
+#    >>> import pandas as pd
+#    >>> data = {'num':list(range(12)),'let':list('abcdefghijkl')}
+#    >>> df = pd.DataFrame(data)
+#    >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
+#    >>> id_ = lambda x: x
+#    >>> double = lambda x: x+x
+#    >>> xf = lambda lst: (id_(lst[0]), double(lst[1]))
+#    >>> dataset = Data2(df, mp, xf)
+#    >>> len(dataset)
+#    12
+#    >>> tupitem(dataset[1])
+#    (1, 'bb')
+#    >>> dataset = Data2(df, mp, lambda lst: (lst[0]**2, None))
+#    >>> tupitem(dataset[2])
+#    (4,)
+#    >>> dataset = Data2(df, mp, lambda lst: (None, double(lst[1])))
+#    >>> tupitem(dataset[2])
+#    ('cc',)
+#
+#    Also:
+#    >>> mp = lambda df, idx: (df.iloc[idx, 0],)
+#    >>> dataset = Data2(df, mp, id_)
+#    >>> tupitem(dataset[1])
+#    (1,)
+#
+#    >>> from torch.utils.data import DataLoader
+#    >>> for tup in DataLoader(dataset):
+#    ...   print(tup[0])
+#    ...   break
+#    tensor([0])
+#
+#    Randomly apply same transform to both slots (like img and mask)
+#    >>> import torchvision.transforms as T
+#    >>> data = {'one': torch.arange(3), 'two':2*torch.arange(3)}
+#    >>> df = pd.DataFrame(data)
+#    >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
+#    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)])
+#    >>> dataset = Data2(df, mp, tfs)
+#    >>> len(dataset)
+#    3
+#    >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
+#    True
+#    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], p=[.9, .1])
+#    >>> dataset = Data2(df, mp, tfs)
+#    >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
+#    True
+#
+#    Randomly apply different transform to each slots
+#    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], p=[.9, .1])
+#    >>> dataset = Data2(df, mp, tfs)
+#    >>> len(dataset)
+#    3
+#    >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
+#    True
+#
+#    Randomly apply different transform to each slots
+#    >>> neg, x2, x3 = T.Lambda(lambda x: -x), T.Lambda(lambda x: 2*x), T.Lambda(lambda x: 3*x)
+#    >>> tfs = RandomApply2([[neg, x2], [x3, neg]], p=[.5, .5])
+#    >>> dataset = Data2(df, mp, tfs)
+#    >>> len(dataset)
+#    3
+#    >>> tup = dataset[1]; tup == (-1, 4) or tup == (3, -2)
+#    True
+#
+#    >>> for tup in DataLoader(dataset):
+#    ...   pass
+#    >>> tup[0] == torch.tensor([6]) or tup[0] == torch.tensor([-2])
+#    tensor([True])
+#    """
+#    def __init__(self, df, mp, transform):
+#        """
+#        Args:
+#          $df$ (`pandas.Dataframe`]) Dataframe holding the data.
+#          $mp$ (`Tuple[FunctionType]`) A function that maps a
+#              dataframe and an index (integer) to a tuple each
+#              entry of which is a tensor of whatever is to be
+#              returned in that position by '__getitem__'.
+#          $transforms$ (`Transform)` One or more transformations
+#              (see the `torchvision.transforms` library).
+#        """
+#        self.df = df
+#        self.mp = mp
+#        self.tf = transform
+#        self.len = len(df)
+#
+#    def __len__(self):
+#        return self.len
+#
+#    def __getitem__(self, idx):
+#        return tuple(filter(lambda x: x is not None, self.tf(self.mp(self.df,idx))))
+
 class Data2(torch.utils.data.Dataset):
     """Base class for data sets (version 2).
 
     This version can incorporate interactions between slots.
 
-    The following cleans up output in the presence of a GPU
+    The following just cleans up output in the presence of a GPU
     >>> item = lambda x: x.item() if type(x) == np.int64 else x
     >>> tupitem = lambda tup: tuple(map(item, tup))
 
@@ -1298,6 +1455,16 @@ class Data2(torch.utils.data.Dataset):
     >>> tupitem(dataset[2])
     ('cc',)
 
+    One can adaptively transfrom:
+    >>> def double_even(lst):
+    ...   if lst[0] % 2 == 0:
+    ...       return (lst[0], double(lst[1]))
+    ...   else:
+    ...       return (lst[0], lst[1])
+    >>> dataset = Data2(df, mp, double_even)
+    >>> tupitem(dataset[2]), tupitem(dataset[3])
+    ((2, 'cc'), (3, 'd'))
+
     Also:
     >>> mp = lambda df, idx: (df.iloc[idx, 0],)
     >>> dataset = Data2(df, mp, id_)
@@ -1310,49 +1477,59 @@ class Data2(torch.utils.data.Dataset):
     ...   break
     tensor([0])
 
-    Randomly apply same transform to both slots (like img and mask)
+    Randomly apply same transform to both slots (like img and mask):
     >>> import torchvision.transforms as T
+    >>> neg = T.Lambda(lambda x: -x)
+    >>> x2 = T.Lambda(lambda x: 2*x)
+    >>> x3 = T.Lambda(lambda x: 3*x)
     >>> data = {'one': torch.arange(3), 'two':2*torch.arange(3)}
     >>> df = pd.DataFrame(data)
     >>> mp = lambda df, idx: (df.iloc[idx, 0], df.iloc[idx, 1])
-    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)])
+    >>> tfs = RandomApply([neg, x2])
     >>> dataset = Data2(df, mp, tfs)
     >>> len(dataset)
     3
     >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
     True
-    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], p=[.9, .1])
+    >>> tfs = RandomApply([neg, x2], p=[.9, .1])
     >>> dataset = Data2(df, mp, tfs)
     >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
     True
 
-    Randomly apply different transform to each slots
-    >>> tfs = RandomApply([T.Lambda(lambda xs: -xs), T.Lambda(lambda xs: 2*xs)], p=[.9, .1])
+    Randomly apply the same transform to each slot:
+    >>> tfs = RandomApply([neg, x2], p=[.9, .1])
     >>> dataset = Data2(df, mp, tfs)
     >>> len(dataset)
     3
     >>> tup = dataset[1]; tup == (-1, -2) or tup == (2, 4)
     True
 
-    Randomly apply different transform to each slots
-    >>> neg, x2, x3 = T.Lambda(lambda x: -x), T.Lambda(lambda x: 2*x), T.Lambda(lambda x: 3*x)
-    >>> tfs = RandomApply2([[neg, x2], [x3, neg]], p=[.5, .5])
+    Randomly apply different transforms to each slot:
+    >>> tfs = RandomApply2([
+    ...     lambda t: (neg(t[0]), x2(t[1])),
+    ...     lambda t: (x3(t[0]), neg(t[1])
+    ... )], p=[.5, .5])
     >>> dataset = Data2(df, mp, tfs)
     >>> len(dataset)
     3
     >>> tup = dataset[1]; tup == (-1, 4) or tup == (3, -2)
     True
 
+    The previous example can be organized like this:
+
+    Let us check that an example works with DataLoaders:
     >>> for tup in DataLoader(dataset):
     ...   pass
     >>> tup[0] == torch.tensor([6]) or tup[0] == torch.tensor([-2])
     tensor([True])
+
+    Randomly apply an adaptive transform:
     """
-    def __init__(self, df, mp, transform):
+    def __init__(self, df, map_, transform):
         """
         Args:
           $df$ (`pandas.Dataframe`]) Dataframe holding the data.
-          $mp$ (`Tuple[FunctionType]`) A function that maps a
+          $map_$ (`Tuple[FunctionType]`) A function that maps a
               dataframe and an index (integer) to a tuple each
               entry of which is a tensor of whatever is to be
               returned in that position by '__getitem__'.
@@ -1360,7 +1537,7 @@ class Data2(torch.utils.data.Dataset):
               (see the `torchvision.transforms` library).
         """
         self.df = df
-        self.mp = mp
+        self.map_ = map_
         self.tf = transform
         self.len = len(df)
 
@@ -1368,8 +1545,7 @@ class Data2(torch.utils.data.Dataset):
         return self.len
 
     def __getitem__(self, idx):
-        return tuple(filter(lambda x: x is not None, self.tf(self.mp(self.df,idx))))
-
+        return tuple(filter(lambda x: x is not None, self.tf(self.map_(self.df,idx))))
 
 # keeping this since it's faster than DataLoader
 class _DataLoader:
