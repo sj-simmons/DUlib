@@ -26,15 +26,5 @@ To upgrade to the newest release of DUlib in the presence of a previously instal
 
     pip3 install -U DUlib --user
 
-DUlib's documentation is read via a retooling of pydoc3 that includes custom highlighting. Issue the
-following command to check that your terminal accepts escape sequences compatible with DUlib's syntax
-highlighting and, if necessary, read notes on troubleshooting::
-
-    pd du.highlight
-
-If all is well, read introductory usage remarks with the command::
-
-    pd du
-
 See the `upstream repo <https://github.com/sj-simmons/DUlib>`_ for detailed installation and trouble-shooting
 notes as well as release information.

@@ -326,11 +326,11 @@ from textwrap import dedent
 import du.utils
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.95'
+__version__ = '0.9.96'
 __status__ = 'Development'
-__date__ = '08/10/24'
+__date__ = '10/28/24'
 __copyright__ = """
-  Copyright 2019-2024 Scott Simmons
+  Copyright 2019-2025 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -1313,7 +1313,7 @@ class RandomApply2(nn.Module):
         #        assert len(p) == len(tfs)
         self.p = p
 
-    def __call__(self, xss):
+    def __call__(self, tup):
         #for tfs in self.tfss:
         #    assert len(tfs) == len(xss)
         length = len(self.tfss)
@@ -1321,7 +1321,7 @@ class RandomApply2(nn.Module):
             idx = np.random.choice(length, p=self.p)
         else:
             idx = np.random.choice(length)
-        return self.tfss[idx](xss)
+        return self.tfss[idx](tup)
 
 # This version of Data2 specializes to the one above
 # This is not what you want

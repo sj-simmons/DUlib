@@ -40,11 +40,11 @@ import du.utils
 from du.models import FFNet_, denseFFhidden
 
 __author__ = 'Scott Simmons'
-__version__ = '0.9.95'
+__version__ = '0.9.96'
 __status__ = 'Development'
-__date__ = '08/10/24'
+__date__ = '10/28/24'
 __copyright__ = """
-  Copyright 2019-2024 Scott Simmons
+  Copyright 2019-2025 Scott Simmons
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
